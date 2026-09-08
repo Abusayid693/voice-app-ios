@@ -43,6 +43,17 @@ struct ContentView: View {
     @State private var downloadedBytes: Int64 = 0
     @State private var totalBytes: Int64?
     @State private var downloadFileProgress: String?
+    // Set only once a real download event fires (see applyDownloadProgress).
+    // Models persist on disk across app launches (FluidAudio caches them in
+    // Application Support), so `ensureModels()` is cheap and network-free on
+    // a fresh launch even though nothing is loaded into this process's RAM
+    // yet — gating the download UI on this instead of an in-memory
+    // "isAvailable" flag keeps it from showing a fake "Downloading…" for
+    // what's actually just a fast on-disk load.
+    @State private var didDownload = false
+
+    @State private var timeToFirstAudio: TimeInterval?
+    @State private var streamChunkProgress: String?
 
     private let kokoroManager = KokoroAneManager()
     // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
@@ -52,6 +63,18 @@ struct ContentView: View {
     // ignored under .ane (those variants are fp16-only).
     private let pocketManager = PocketTtsManager(language: .english, placement: .ane)
     @State private var audioPlayer: AVAudioPlayer?
+
+    // PocketTTS streams 80ms frames rather than one complete WAV, so
+    // playback goes through AVAudioEngine/AVAudioPlayerNode (which accepts
+    // buffers incrementally) instead of AVAudioPlayer (which needs the
+    // whole file up front).
+    private let audioEngine = AVAudioEngine()
+    private let playerNode = AVAudioPlayerNode()
+    private let streamFormat = AVAudioFormat(
+        commonFormat: .pcmFormatFloat32,
+        sampleRate: Double(PocketTtsConstants.audioSampleRate),
+        channels: 1,
+        interleaved: false)!
 
     var body: some View {
         NavigationStack {
@@ -106,7 +129,7 @@ struct ContentView: View {
                 Section("Status") {
                     LabeledContent("State", value: status)
 
-                    if !isWarmInit, isBusy, initSeconds == nil {
+                    if didDownload, isBusy, initSeconds == nil {
                         ProgressView(value: downloadFraction)
                         LabeledContent("Downloaded") {
                             Text(downloadProgressLabel)
@@ -120,6 +143,14 @@ struct ContentView: View {
                         LabeledContent(isWarmInit ? "Init (warm)" : "Init (cold, incl. download)") {
                             Text(String(format: "%.2fs", initSeconds))
                         }
+                    }
+                    if let timeToFirstAudio {
+                        LabeledContent("Time to first audio") {
+                            Text(String(format: "%.2fs", timeToFirstAudio))
+                        }
+                    }
+                    if let streamChunkProgress {
+                        LabeledContent("Chunk", value: streamChunkProgress)
                     }
                     if let synthSeconds {
                         LabeledContent("Synthesis") {
@@ -152,6 +183,7 @@ struct ContentView: View {
     }
 
     private func resetRunState() {
+        stopAllPlayback()
         isBusy = true
         downloadFraction = 0
         downloadedBytes = 0
@@ -159,6 +191,15 @@ struct ContentView: View {
         downloadFileProgress = nil
         initSeconds = nil
         synthSeconds = nil
+        timeToFirstAudio = nil
+        streamChunkProgress = nil
+        didDownload = false
+    }
+
+    private func stopAllPlayback() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+        playerNode.stop()
     }
 
     private func runKokoroAne() {
@@ -170,31 +211,24 @@ struct ContentView: View {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
 
-                let wasAvailable = await kokoroManager.isAvailable()
-                isWarmInit = wasAvailable
-
+                status = "Checking cache…"
                 let initStart = Date()
-                if wasAvailable {
-                    status = "Loading…"
-                } else {
-                    status = "Fetching model size…"
-                    totalBytes = await fetchEnglishKokoroTotalBytes()
-
-                    status = "Downloading model…"
-                    // Pre-download with progress reporting, then hand off to
-                    // manager.initialize() — it will find the files already
-                    // cached and skip straight to the (fast) load step.
-                    try await KokoroAneResourceDownloader.ensureModels(
-                        variant: .english,
-                        progressHandler: { progress in
-                            Task { @MainActor in
-                                // Repo downloads reserve 0-0.5 of the fraction
-                                // for a CoreML compile phase that never fires
-                                // for these pre-compiled .mlmodelc bundles.
-                                self.applyDownloadProgress(progress, phaseWeight: 0.5)
-                            }
-                        })
-                }
+                // ensureModels() checks the on-disk cache first — if this
+                // engine was already downloaded in a previous app launch,
+                // this returns almost instantly with no network activity at
+                // all, and the progress handler below never fires.
+                try await KokoroAneResourceDownloader.ensureModels(
+                    variant: .english,
+                    progressHandler: { progress in
+                        Task { @MainActor in
+                            // Repo downloads reserve 0-0.5 of the fraction
+                            // for a CoreML compile phase that never fires
+                            // for these pre-compiled .mlmodelc bundles.
+                            self.applyDownloadProgress(
+                                progress, phaseWeight: 0.5, fetchTotal: self.fetchEnglishKokoroTotalBytes)
+                        }
+                    })
+                isWarmInit = !didDownload
 
                 status = "Loading models…"
                 try await kokoroManager.initialize()
@@ -223,40 +257,43 @@ struct ContentView: View {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
 
-                let wasAvailable = await pocketManager.isAvailable
-                isWarmInit = wasAvailable
-
+                status = "Checking cache…"
                 let initStart = Date()
-                if wasAvailable {
-                    status = "Loading…"
-                } else {
-                    status = "Fetching model size…"
-                    totalBytes = await fetchPocketTtsTotalBytes()
-
-                    status = "Downloading model…"
-                    try await PocketTtsResourceDownloader.ensureModels(
-                        language: .english,
-                        placement: .ane,
-                        progressHandler: { progress in
-                            Task { @MainActor in
-                                // Subdirectory downloads (PocketTTS's language
-                                // packs) span the whole 0...1 fraction — no
-                                // separate compile phase to reserve room for.
-                                self.applyDownloadProgress(progress, phaseWeight: 1.0)
-                            }
-                        })
-                }
+                try await PocketTtsResourceDownloader.ensureModels(
+                    language: .english,
+                    placement: .ane,
+                    progressHandler: { progress in
+                        Task { @MainActor in
+                            // Subdirectory downloads (PocketTTS's language
+                            // packs) span the whole 0...1 fraction — no
+                            // separate compile phase to reserve room for.
+                            self.applyDownloadProgress(
+                                progress, phaseWeight: 1.0, fetchTotal: self.fetchPocketTtsTotalBytes)
+                        }
+                    })
+                isWarmInit = !didDownload
 
                 status = "Loading models…"
                 try await pocketManager.initialize()
                 initSeconds = Date().timeIntervalSince(initStart)
 
-                status = "Synthesizing…"
-                let synthStart = Date()
-                let data = try await pocketManager.synthesize(text: text, voice: voice)
-                synthSeconds = Date().timeIntervalSince(synthStart)
+                status = "Synthesizing (streaming)…"
+                try preparePlaybackEngine()
+                playerNode.play()
 
-                try playWav(data)
+                let synthStart = Date()
+                let stream = try await pocketManager.synthesizeStreaming(text: text, voice: voice)
+                var receivedFirstFrame = false
+                for try await frame in stream {
+                    if !receivedFirstFrame {
+                        receivedFirstFrame = true
+                        timeToFirstAudio = Date().timeIntervalSince(synthStart)
+                        status = "Playing (streaming)…"
+                    }
+                    streamChunkProgress = "\(frame.chunkIndex + 1) / \(frame.chunkCount)"
+                    schedule(frame)
+                }
+                synthSeconds = Date().timeIntervalSince(synthStart)
                 status = "Idle"
             } catch {
                 status = "Error: \(error.localizedDescription)"
@@ -272,8 +309,40 @@ struct ContentView: View {
         player.play()
     }
 
+    private func preparePlaybackEngine() throws {
+        if !audioEngine.attachedNodes.contains(playerNode) {
+            audioEngine.attach(playerNode)
+            audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: streamFormat)
+        }
+        if !audioEngine.isRunning {
+            try audioEngine.start()
+        }
+    }
+
+    /// Converts one 80ms `AudioFrame` (raw Float32 samples) into a PCM
+    /// buffer and hands it to the player node — scheduling returns
+    /// immediately, so playback runs concurrently with the next frame's
+    /// generation rather than waiting for the whole utterance.
+    private func schedule(_ frame: PocketTtsSynthesizer.AudioFrame) {
+        guard
+            let buffer = AVAudioPCMBuffer(
+                pcmFormat: streamFormat, frameCapacity: AVAudioFrameCount(frame.samples.count))
+        else { return }
+        buffer.frameLength = AVAudioFrameCount(frame.samples.count)
+        frame.samples.withUnsafeBufferPointer { src in
+            buffer.floatChannelData![0].update(from: src.baseAddress!, count: src.count)
+        }
+        playerNode.scheduleBuffer(buffer)
+    }
+
     @MainActor
-    private func applyDownloadProgress(_ progress: DownloadProgress, phaseWeight: Double) {
+    private func applyDownloadProgress(
+        _ progress: DownloadProgress, phaseWeight: Double, fetchTotal: @escaping () async -> Int64?
+    ) {
+        if !didDownload {
+            didDownload = true
+            Task { @MainActor in totalBytes = await fetchTotal() }
+        }
         downloadFraction = min(1, progress.fractionCompleted / phaseWeight)
         if let totalBytes {
             downloadedBytes = Int64(downloadFraction * Double(totalBytes))
