@@ -11,7 +11,17 @@ targets:
   KokoroAneTest:
     type: application
     platform: iOS
-    sources: [Sources]
+    sources:
+      - path: Sources
+      # Locally-converted (laishere/kokoro-coreml) Kokoro-ANE models, staged
+      # for a one-off custom-voice test — see DependencyContainer.swift.
+      # `type: folder` forces Xcode to copy this as a single folder
+      # reference (atomic directory copy), not process/flatten it the way
+      # the default source-scanning would with the individual files inside
+      # each already-compiled .mlmodelc bundle.
+      - path: CustomKokoroModel
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: FluidAudio
         product: FluidAudio

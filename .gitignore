@@ -4,5 +4,9 @@ xcuserdata/
 DerivedData/
 .build/
 
+# Locally-converted Kokoro-ANE test models (~93MB) — regeneratable, see
+# ENG_CONTEXT.md "Custom Kokoro-ANE model bundle" for the exact recipe.
+local-tts/native-ios/CustomKokoroModel/
+
 # macOS
 .DS_Store
