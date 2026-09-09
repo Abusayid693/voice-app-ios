@@ -39,6 +39,7 @@ Sources/
       Views/
         TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel
         TextEntrySheet.swift      // DONE
+        KokoroChunkPlayerView.swift // DONE — Kokoro's play/pause + segmented chunk bar
       ViewModels/
         TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration
       Services/
@@ -46,6 +47,8 @@ Sources/
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback
       Models/
         Engine.swift               // DONE
+        ChunkState.swift           // DONE — .waiting/.generated/.playing, drives the chunk bar's colors
+        KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
