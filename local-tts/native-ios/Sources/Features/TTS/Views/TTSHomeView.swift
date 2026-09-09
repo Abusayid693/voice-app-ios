@@ -3,11 +3,12 @@ import SwiftUI
 struct TTSHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
 
-    // Kokoro's chunk playback keeps running after isBusy drops back to
-    // false (that only covers the download/init phase) — lock engine/voice
-    // switching for its whole active session, not just the initial setup.
+    // Kokoro playback keeps running after isBusy drops back to false (that
+    // only covers the download/init phase) — lock engine/voice switching
+    // while any track is actively playing or buffering, not just during
+    // the initial setup.
     private var isEngineLocked: Bool {
-        viewModel.isBusy || viewModel.isKokoroPlaying || viewModel.isKokoroBuffering
+        viewModel.isBusy || viewModel.kokoroGenerations.contains { $0.isPlaying || $0.isBuffering }
     }
 
     var body: some View {
@@ -26,7 +27,12 @@ struct TTSHomeView: View {
                 Section("Voice") {
                     switch viewModel.engine {
                     case .kokoroAne:
-                        LabeledContent("Voice", value: TTSViewModel.kokoroVoice)
+                        Picker("Voice", selection: $viewModel.kokoroVoice) {
+                            ForEach(TTSViewModel.kokoroVoices, id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .disabled(isEngineLocked)
                     case .pocketTts:
                         Picker("Voice", selection: $viewModel.pocketVoice) {
                             ForEach(TTSViewModel.pocketVoices, id: \.self) { name in
@@ -56,7 +62,7 @@ struct TTSHomeView: View {
                     .buttonStyle(.plain)
 
                     if viewModel.engine == .kokoroAne {
-                        Button(action: viewModel.generateKokoro) {
+                        Button(action: { viewModel.generateKokoro() }) {
                             if viewModel.isBusy {
                                 ProgressView()
                                     .frame(maxWidth: .infinity)
@@ -72,7 +78,7 @@ struct TTSHomeView: View {
                 Section {
                     switch viewModel.engine {
                     case .kokoroAne:
-                        KokoroChunkPlayerView(viewModel: viewModel)
+                        KokoroGenerationListView(viewModel: viewModel)
                     case .pocketTts:
                         Button(action: viewModel.runDownloadAndSpeak) {
                             if viewModel.isBusy {
