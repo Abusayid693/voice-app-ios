@@ -288,8 +288,25 @@ struct TTSHomeView: View {
                 try preparePlaybackEngine()
                 playerNode.play()
 
+                // PocketTTS has no built-in number/date/currency expansion
+                // (unlike Kokoro-ANE, which runs this internally) — it just
+                // tokenizes raw text, so "$5" or "12/12/2024" would be
+                // spelled out letter by letter rather than spoken as "five
+                // dollars" / "December twelfth twenty twenty-four" without
+                // this.
+                // TextNormalizer.shared wraps the same NeMo FST engine Kokoro
+                // uses internally, exposed here as a public, reusable utility.
+                // It's a synchronous native call with no `await`, so it runs
+                // detached rather than inline — a very long input could
+                // otherwise block whichever actor this Task inherited (and
+                // stall the UI) instead of yielding like the rest of this
+                // pipeline does.
+                let spokenText = await Task.detached {
+                    TextNormalizer.shared.tnNormalizeSentence(text)
+                }.value
+
                 let synthStart = Date()
-                let stream = try await pocketManager.synthesizeStreaming(text: text, voice: voice)
+                let stream = try await pocketManager.synthesizeStreaming(text: spokenText, voice: voice)
                 var receivedFirstFrame = false
                 for try await frame in stream {
                     if !receivedFirstFrame {
