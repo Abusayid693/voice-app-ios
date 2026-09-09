@@ -26,34 +26,34 @@ Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate;
 ```
 Sources/
   App/
-    KokoroAneTestApp.swift        // @main — creates AppCoordinator + DependencyContainer, injects both via environment
-    AppCoordinator.swift          // ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
-    DependencyContainer.swift     // owns shared long-lived instances (managers, AVAudioEngine, etc.), created once
+    KokoroAneTestApp.swift        // @main — creates DependencyContainer, constructs TTSViewModel, passes it into TTSHomeView's init
+    AppCoordinator.swift          // NOT YET BUILT — ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
+    DependencyContainer.swift     // owns shared long-lived instances (managers, AVAudioEngine, etc.), created once — DONE
   Features/
-    Onboarding/
+    Onboarding/                   // NOT YET BUILT
       Views/
         OnboardingView.swift
       ViewModels/
         OnboardingViewModel.swift
     TTS/
       Views/
-        TTSHomeView.swift
-        TextEntrySheet.swift
+        TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel
+        TextEntrySheet.swift      // DONE
       ViewModels/
-        TTSViewModel.swift
+        TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration
       Services/
-        KokoroEngineService.swift
-        PocketEngineService.swift
+        KokoroEngineService.swift   // DONE
+        PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback
       Models/
-        Engine.swift
+        Engine.swift               // DONE
   Core/
     Networking/
-      HuggingFaceTreeSizeFetcher.swift
+      HuggingFaceTreeSizeFetcher.swift  // DONE
   Resources/
-    Info.plist
+    Info.plist                    // DONE
 ```
 
-**Current status (update this line when it changes):** this target tree is planned but not yet executed — as of this writing the code still lives flat in `Sources/ContentView.swift` (pre-MVVM, View owns all state/logic directly). The migration plan (three staged commits: pure relocation → onboarding/AppCoordinator → ViewModel+Services extraction) lives at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md` until executed, at which point this file becomes the source of truth and that plan file can be discarded.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services (Views/ViewModels/Services/Models all populated, `TTSHomeView` binds to `TTSViewModel` via constructor-injected `@ObservedObject`, no environment injection used since there's only one consumer). `App/DependencyContainer.swift` and `Core/Networking/HuggingFaceTreeSizeFetcher.swift` done. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding flow exists — the app opens straight to `TTSHomeView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not.
 
 ## Adding a new feature/screen
 
