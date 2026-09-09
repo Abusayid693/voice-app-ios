@@ -3,6 +3,13 @@ import SwiftUI
 struct TTSHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
 
+    // Kokoro's chunk playback keeps running after isBusy drops back to
+    // false (that only covers the download/init phase) — lock engine/voice
+    // switching for its whole active session, not just the initial setup.
+    private var isEngineLocked: Bool {
+        viewModel.isBusy || viewModel.isKokoroPlaying || viewModel.isKokoroBuffering
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -13,7 +20,7 @@ struct TTSHomeView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .disabled(viewModel.isBusy)
+                    .disabled(isEngineLocked)
                 }
 
                 Section("Voice") {
@@ -26,7 +33,7 @@ struct TTSHomeView: View {
                                 Text(name).tag(name)
                             }
                         }
-                        .disabled(viewModel.isBusy)
+                        .disabled(isEngineLocked)
                     }
                 }
 
@@ -47,19 +54,37 @@ struct TTSHomeView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+
+                    if viewModel.engine == .kokoroAne {
+                        Button(action: viewModel.generateKokoro) {
+                            if viewModel.isBusy {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Generate")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .disabled(viewModel.text.isEmpty)
+                    }
                 }
 
                 Section {
-                    Button(action: viewModel.runDownloadAndSpeak) {
-                        if viewModel.isBusy {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("Download & Speak")
-                                .frame(maxWidth: .infinity)
+                    switch viewModel.engine {
+                    case .kokoroAne:
+                        KokoroChunkPlayerView(viewModel: viewModel)
+                    case .pocketTts:
+                        Button(action: viewModel.runDownloadAndSpeak) {
+                            if viewModel.isBusy {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Text("Download & Speak")
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
+                        .disabled(viewModel.isBusy || viewModel.text.isEmpty)
                     }
-                    .disabled(viewModel.isBusy || viewModel.text.isEmpty)
                 }
 
                 Section("Status") {

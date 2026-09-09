@@ -15,8 +15,11 @@
 		7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */; };
 		A31090C8406142856F289B20 /* TextEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E463AF022C12D3968F17F19E /* TextEntrySheet.swift */; };
 		A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */; };
+		B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */; };
 		B43FF140251F0F882F5521C4 /* TTSHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F031436CEB5A91169A486C /* TTSHomeView.swift */; };
 		B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */; };
+		F5E22F759DBF0FE53BDC2512 /* KokoroChunkPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C26C85F64F1942EF4D973F9A /* KokoroChunkPlayerView.swift */; };
+		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,9 +29,12 @@
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
+		B4839B571DC8F7200C26BC98 /* ChunkState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkState.swift; sourceTree = "<group>"; };
 		BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
 		C07EEB3027B4E022D555A931 /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
+		C26C85F64F1942EF4D973F9A /* KokoroChunkPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroChunkPlayerView.swift; sourceTree = "<group>"; };
 		C8DE7BD70ACE70EDC00A3D47 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroTextChunker.swift; sourceTree = "<group>"; };
 		E463AF022C12D3968F17F19E /* TextEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEntrySheet.swift; sourceTree = "<group>"; };
 		F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuggingFaceTreeSizeFetcher.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -92,7 +98,9 @@
 		6DA8670089AD533B23ED1957 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				B4839B571DC8F7200C26BC98 /* ChunkState.swift */,
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
+				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -152,6 +160,7 @@
 		F798BD9344162208797F7243 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				C26C85F64F1942EF4D973F9A /* KokoroChunkPlayerView.swift */,
 				E463AF022C12D3968F17F19E /* TextEntrySheet.swift */,
 				42F031436CEB5A91169A486C /* TTSHomeView.swift */,
 			);
@@ -222,11 +231,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */,
 				7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */,
 				053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */,
 				189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */,
 				A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */,
+				F5E22F759DBF0FE53BDC2512 /* KokoroChunkPlayerView.swift in Sources */,
 				B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */,
+				B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
 				B43FF140251F0F882F5521C4 /* TTSHomeView.swift in Sources */,
 				2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */,

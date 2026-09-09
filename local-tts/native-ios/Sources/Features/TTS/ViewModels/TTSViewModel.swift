@@ -46,6 +46,26 @@ final class TTSViewModel: ObservableObject {
     @Published var streamChunkProgress: String?
     @Published var isTextSheetPresented = false
 
+    // MARK: - Kokoro chunk player
+
+    @Published var kokoroChunkStates: [ChunkState] = []
+    @Published var kokoroChunkIndex = 0
+    @Published var isKokoroPlaying = false
+    @Published var isKokoroBuffering = false
+
+    // Append-only across multiple "Generate" taps — each tap adds more
+    // chunks to the end rather than replacing what's here, so previously
+    // generated audio stays in the list to be played while new audio is
+    // still being produced.
+    private var kokoroChunkTexts: [String] = []
+    private var kokoroChunkAudio: [Data?] = []
+    private var kokoroGenerationCursor = 0
+    private var kokoroModelsReady = false
+    private var kokoroPendingPlayIndex: Int?
+    private var kokoroGenerationTask: Task<Void, Never>?
+    private var kokoroPlayer: AVAudioPlayer?
+    private var kokoroPlayerDelegate: KokoroChunkPlaybackDelegate?
+
     private let kokoroService: KokoroEngineService
     private let pocketService: PocketEngineService
     private var audioPlayer: AVAudioPlayer?
@@ -69,10 +89,19 @@ final class TTSViewModel: ObservableObject {
         String(format: "%.0f", Double(bytes) / 1_048_576)
     }
 
+    /// Entry point for the full-screen text sheet's single "Listen" button
+    /// (PocketTTS has just one action; Kokoro's main screen splits Generate
+    /// and Play into separate controls — this chains them so "Listen" still
+    /// works as one tap: generate the current text, then play it as soon as
+    /// it's ready, unless something is already playing).
     func runDownloadAndSpeak() {
         switch engine {
         case .kokoroAne:
-            runKokoroAne()
+            let startIndex = kokoroChunkTexts.count
+            generateKokoro()
+            if kokoroChunkTexts.count > startIndex, !isKokoroPlaying {
+                playKokoroChunk(at: startIndex)
+            }
         case .pocketTts:
             runPocketTts()
         }
@@ -96,46 +125,165 @@ final class TTSViewModel: ObservableObject {
         audioPlayer?.stop()
         audioPlayer = nil
         pocketService.stopPlayback()
+
+        kokoroGenerationTask?.cancel()
+        kokoroGenerationTask = nil
+        kokoroPlayer?.stop()
+        kokoroPlayer = nil
+        kokoroPlayerDelegate = nil
+        kokoroChunkTexts = []
+        kokoroChunkAudio = []
+        kokoroChunkStates = []
+        kokoroChunkIndex = 0
+        kokoroGenerationCursor = 0
+        kokoroModelsReady = false
+        kokoroPendingPlayIndex = nil
+        isKokoroPlaying = false
+        isKokoroBuffering = false
     }
 
-    private func runKokoroAne() {
-        resetRunState()
-        let voice = Self.kokoroVoice
+    // MARK: - Kokoro: Generate (always appends new audio to the list)
 
-        Task {
+    /// Chunks the current text and appends it to the (persistent, growing)
+    /// playback list, then makes sure the background generation loop is
+    /// running to fill in the new chunks' audio. Never clears or replaces
+    /// what's already there — repeated taps just add more to play.
+    func generateKokoro() {
+        let chunks = KokoroTextChunker.chunk(text)
+        guard !chunks.isEmpty else { return }
+
+        kokoroChunkTexts.append(contentsOf: chunks)
+        kokoroChunkAudio.append(contentsOf: Array(repeating: nil, count: chunks.count))
+        kokoroChunkStates.append(contentsOf: Array(repeating: .waiting, count: chunks.count))
+
+        ensureKokoroGenerationRunning()
+    }
+
+    /// One persistent worker loop, not one-per-Generate-tap: it drains
+    /// `kokoroChunkTexts` by index and simply re-checks the count each
+    /// iteration, so if `generateKokoro()` appends more while this is
+    /// already running, it keeps going instead of needing to be restarted.
+    private func ensureKokoroGenerationRunning() {
+        guard kokoroGenerationTask == nil else { return }
+
+        kokoroGenerationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.kokoroGenerationTask = nil }
             do {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
 
-                status = "Checking cache…"
-                let initStart = Date()
-                try await kokoroService.ensureModels(progressHandler: { progress in
-                    Task { @MainActor in
-                        // Repo downloads reserve 0-0.5 of the fraction for a
-                        // CoreML compile phase that never fires for these
-                        // pre-compiled .mlmodelc bundles.
-                        self.applyDownloadProgress(
-                            progress, phaseWeight: 0.5, fetchTotal: self.fetchEnglishKokoroTotalBytes)
-                    }
-                })
-                isWarmInit = !didDownload
+                if !kokoroModelsReady {
+                    isBusy = true
+                    status = "Checking cache…"
+                    let initStart = Date()
+                    try await kokoroService.ensureModels(progressHandler: { progress in
+                        Task { @MainActor in
+                            self.applyDownloadProgress(
+                                progress, phaseWeight: 0.5, fetchTotal: self.fetchEnglishKokoroTotalBytes)
+                        }
+                    })
+                    isWarmInit = !didDownload
 
-                status = "Loading models…"
-                try await kokoroService.initialize()
-                initSeconds = Date().timeIntervalSince(initStart)
+                    status = "Loading models…"
+                    try await kokoroService.initialize()
+                    initSeconds = Date().timeIntervalSince(initStart)
+                    kokoroModelsReady = true
+                    isBusy = false
+                }
 
                 status = "Synthesizing…"
-                let synthStart = Date()
-                let data = try await kokoroService.synthesize(text: text, voice: voice)
-                synthSeconds = Date().timeIntervalSince(synthStart)
+                while kokoroGenerationCursor < kokoroChunkTexts.count {
+                    let index = kokoroGenerationCursor
+                    try Task.checkCancellation()
+                    let data = try await kokoroService.synthesize(
+                        text: kokoroChunkTexts[index], voice: Self.kokoroVoice)
+                    try Task.checkCancellation()
 
-                try playWav(data)
+                    kokoroChunkAudio[index] = data
+                    if kokoroChunkStates[index] == .waiting {
+                        kokoroChunkStates[index] = .generated
+                    }
+                    if kokoroPendingPlayIndex == index {
+                        kokoroPendingPlayIndex = nil
+                        playKokoroChunk(at: index)
+                    }
+                    kokoroGenerationCursor += 1
+                }
                 status = "Idle"
+            } catch is CancellationError {
+                // Cleared by a reset (e.g. switching engines) — nothing to report.
             } catch {
                 status = "Error: \(error.localizedDescription)"
+                isBusy = false
+                isKokoroBuffering = false
             }
-            isBusy = false
         }
+    }
+
+    // MARK: - Kokoro: Play (walks the accumulated list; independent of Generate)
+
+    func toggleKokoroPlayback() {
+        guard !kokoroChunkTexts.isEmpty else { return }
+        if isKokoroBuffering {
+            return
+        } else if isKokoroPlaying {
+            kokoroPlayer?.pause()
+            isKokoroPlaying = false
+        } else if kokoroPlayer != nil {
+            kokoroPlayer?.play()
+            isKokoroPlaying = true
+        } else {
+            playKokoroChunk(at: kokoroChunkIndex)
+        }
+    }
+
+    private func playKokoroChunk(at index: Int) {
+        kokoroChunkIndex = index
+        guard let data = kokoroChunkAudio[index] else {
+            kokoroPendingPlayIndex = index
+            isKokoroBuffering = true
+            return
+        }
+        do {
+            let player = try AVAudioPlayer(data: data)
+            let delegate = KokoroChunkPlaybackDelegate { [weak self] in
+                Task { @MainActor in self?.advanceKokoroChunk() }
+            }
+            player.delegate = delegate
+            kokoroPlayerDelegate = delegate
+            kokoroPlayer = player
+
+            kokoroChunkStates[index] = .playing
+            isKokoroBuffering = false
+            isKokoroPlaying = true
+            status = "Playing chunk \(index + 1) of \(kokoroChunkTexts.count)…"
+            player.play()
+        } catch {
+            status = "Error: \(error.localizedDescription)"
+        }
+    }
+
+    private func advanceKokoroChunk() {
+        let finishedIndex = kokoroChunkIndex
+        if kokoroChunkStates.indices.contains(finishedIndex) {
+            kokoroChunkStates[finishedIndex] = .generated
+        }
+        let nextIndex = finishedIndex + 1
+        guard nextIndex < kokoroChunkTexts.count else {
+            // Reached the end of what's been queued so far — not "finished
+            // forever": a later Generate call can still append more, and
+            // Play will pick up from index 0 again (replay) if tapped with
+            // nothing new added.
+            isKokoroPlaying = false
+            isKokoroBuffering = false
+            status = "Idle"
+            kokoroPlayer = nil
+            kokoroPlayerDelegate = nil
+            kokoroChunkIndex = 0
+            return
+        }
+        playKokoroChunk(at: nextIndex)
     }
 
     private func runPocketTts() {
@@ -186,13 +334,6 @@ final class TTSViewModel: ObservableObject {
         }
     }
 
-    private func playWav(_ data: Data) throws {
-        status = "Playing"
-        let player = try AVAudioPlayer(data: data)
-        audioPlayer = player
-        player.play()
-    }
-
     private func applyDownloadProgress(
         _ progress: DownloadProgress, phaseWeight: Double, fetchTotal: @escaping () async -> Int64?
     ) {
@@ -241,5 +382,20 @@ final class TTSViewModel: ObservableObject {
         return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
             url: "https://huggingface.co/api/models/FluidInference/pocket-tts-coreml/tree/main/v2.1/english?recursive=true",
             matching: { path in required.contains { path.hasPrefix($0) } })
+    }
+}
+
+/// Bridges `AVAudioPlayerDelegate`'s completion callback to a plain closure
+/// so `TTSViewModel` can advance to the next chunk without conforming to
+/// `NSObject` itself.
+private final class KokoroChunkPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
+    private let onFinish: () -> Void
+
+    init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        onFinish()
     }
 }
