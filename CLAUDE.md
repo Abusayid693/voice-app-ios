@@ -39,7 +39,7 @@ Sources/
       Views/
         TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel
         TextEntrySheet.swift      // DONE
-        KokoroChunkPlayerView.swift // DONE — Kokoro's play/pause + segmented chunk bar
+        KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar
       ViewModels/
         TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration
       Services/
@@ -47,13 +47,15 @@ Sources/
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback
       Models/
         Engine.swift               // DONE
-        ChunkState.swift           // DONE — .waiting/.generated/.playing, drives the chunk bar's colors
+        ChunkState.swift           // DONE — .waiting/.generated/.playing/.failed, drives each row's segmented bar colors
         KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap
+        KokoroGeneration.swift     // DONE — one independent track (Generate tap): its sub-chunks, audio, play state
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
   Resources/
     Info.plist                    // DONE
+CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md to regenerate; project.yml bundles it as a `type: folder` resource
 ```
 
 **Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services (Views/ViewModels/Services/Models all populated, `TTSHomeView` binds to `TTSViewModel` via constructor-injected `@ObservedObject`, no environment injection used since there's only one consumer). `App/DependencyContainer.swift` and `Core/Networking/HuggingFaceTreeSizeFetcher.swift` done. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding flow exists — the app opens straight to `TTSHomeView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not.
