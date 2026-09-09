@@ -8,17 +8,12 @@ private enum Engine: String, CaseIterable {
 }
 
 struct ContentView: View {
-    // Only af_heart is currently published in the ANE HF repo; the rest of
-    // the standard Kokoro-82M English voice set is listed for testing, but
-    // will fail to download until FluidAudio publishes them there.
-    private static let kokoroVoices = [
-        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore",
-        "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
-        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael",
-        "am_onyx", "am_puck", "am_santa",
-        "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
-        "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
-    ]
+    // af_heart is the only voice published in the ANE HF repo — the SDK's
+    // own docs confirm this is a hard model-conversion constraint (the
+    // compiled PostAlbert/Prosody/Noise/Vocoder stages are tied to this
+    // voice's embedding), not just a missing download, so there's nothing
+    // else worth offering here.
+    private static let kokoroVoice = "af_heart"
 
     // All 26 published in constants_bin/ for the English v2.1 pack — these
     // are real, no missing-asset gap like the Kokoro voices above.
@@ -30,7 +25,6 @@ struct ContentView: View {
     ]
 
     @State private var engine: Engine = .kokoroAne
-    @State private var kokoroVoice = "af_heart"
     @State private var pocketVoice = "alba"
     @State private var text = "Hello from FluidAudio!"
     @State private var status = "Idle"
@@ -54,6 +48,7 @@ struct ContentView: View {
 
     @State private var timeToFirstAudio: TimeInterval?
     @State private var streamChunkProgress: String?
+    @State private var isTextSheetPresented = false
 
     private let kokoroManager = KokoroAneManager()
     // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
@@ -92,12 +87,7 @@ struct ContentView: View {
                 Section("Voice") {
                     switch engine {
                     case .kokoroAne:
-                        Picker("Voice", selection: $kokoroVoice) {
-                            ForEach(Self.kokoroVoices, id: \.self) { name in
-                                Text(name).tag(name)
-                            }
-                        }
-                        .disabled(isBusy)
+                        LabeledContent("Voice", value: Self.kokoroVoice)
                     case .pocketTts:
                         Picker("Voice", selection: $pocketVoice) {
                             ForEach(Self.pocketVoices, id: \.self) { name in
@@ -109,8 +99,22 @@ struct ContentView: View {
                 }
 
                 Section("Text") {
-                    TextField("Text to speak", text: $text, axis: .vertical)
-                        .lineLimit(3...6)
+                    Button {
+                        isTextSheetPresented = true
+                    } label: {
+                        HStack {
+                            Text(text.isEmpty ? "Tap to enter text" : text)
+                                .foregroundStyle(text.isEmpty ? .secondary : .primary)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.tertiary)
+                                .font(.caption)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Section {
@@ -161,6 +165,14 @@ struct ContentView: View {
             }
             .navigationTitle("FluidAudio TTS Test")
         }
+        .fullScreenCover(isPresented: $isTextSheetPresented) {
+            TextEntrySheet(
+                text: $text,
+                isBusy: isBusy,
+                onListen: runDownloadAndSpeak,
+                onClose: { isTextSheetPresented = false }
+            )
+        }
     }
 
     private var downloadProgressLabel: String {
@@ -204,7 +216,7 @@ struct ContentView: View {
 
     private func runKokoroAne() {
         resetRunState()
-        let voice = kokoroVoice
+        let voice = Self.kokoroVoice
 
         Task {
             do {
@@ -401,6 +413,39 @@ struct ContentView: View {
                 .reduce(0) { $0 + ($1.size ?? 0) }
         } catch {
             return nil
+        }
+    }
+}
+
+private struct TextEntrySheet: View {
+    @Binding var text: String
+    var isBusy: Bool
+    var onListen: () -> Void
+    var onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            TextEditor(text: $text)
+                .font(.title3)
+                .padding(4)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: onListen) {
+                            if isBusy {
+                                ProgressView()
+                            } else {
+                                Label("Listen", systemImage: "waveform")
+                            }
+                        }
+                        .disabled(isBusy || text.isEmpty)
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                        }
+                    }
+                }
         }
     }
 }
