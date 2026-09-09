@@ -8,7 +8,7 @@ For *how to organize new code*, see `CLAUDE.md` instead (architecture convention
 
 A standalone native iOS validation harness (`local-tts/native-ios/`, xcodegen-generated Xcode project — no Expo, no CocoaPods, deliberately separate from any other app) for testing two on-device TTS engines from [FluidInference/FluidAudio](https://github.com/FluidInference/FluidAudio)'s Swift SDK, on real hardware. Origin: a separate Expo app ("Voicenote") needs real, on-device TTS; wiring FluidAudio's Swift Package into that Expo/CocoaPods build is a real, risky change (`useFrameworks: dynamic`). This app exists to de-risk that decision first — confirm the engines actually work well, how big the downloads are, how fast synthesis is, and what the real constraints are — before touching the Expo app's working CPU TTS path at all. See `plan.md` at repo root for the original planning doc.
 
-Signing: Apple Development team `Q2F3H94YUP`. Bundle id `com.rehanchoudhury.kokoroanetest`. iOS 17 deployment target, Swift 5.0.
+Signing: `project.yml` specifies Apple Development team `Q2F3H94YUP`, but the committed `.xcodeproj` currently has `V667L4VT6C` (Xcode changed this outside of any session, likely via automatic signing when opened directly in Xcode) — these are **out of sync**. Since `xcodegen generate` regenerates the `.xcodeproj` from `project.yml`, running it again will silently revert the team back to `Q2F3H94YUP`. Reconcile these (update `project.yml` to match whichever team actually works) before the next regenerate, or the signing will break again. Bundle id `com.rehanchoudhury.kokoroanetest`. iOS 17 deployment target, Swift 5.0.
 
 ## The two engines
 
@@ -32,6 +32,12 @@ Playback: **streaming**, not buffered — `synthesizeStreaming()` yields 80ms `A
 
 **Known unresolved issue**: a small audible glitch/overlap at chunk boundaries within one long synthesis (the KV cache resets per chunk internally in the SDK). A fix was attempted (insert ~300ms silence buffer at each chunk boundary) and **explicitly reverted** at the user's request — do not re-attempt this exact approach without new direction; it works mechanically (verified building) but was undone before being kept. If revisiting, reconsider a smaller gap value and/or a crossfade instead of hard silence.
 
+## Pronunciation control / text normalization
+
+Kokoro-ANE: no SSML (`<phoneme>`/`<sub>`/`<say-as>`), no markdown `[word](/ipa/)` overrides — neither exists for `KokoroAneManager`. It does have a real custom-lexicon API (`setEnglishCustomLexicon([String: String])` / `setMandarinCustomLexicon(_:)`), not currently wired into the app. It already normalizes numbers/dates/currency internally before synthesis.
+
+PocketTTS: no built-in number/date/currency normalization — added to the app. `TextNormalizer.shared.tnNormalizeSentence(_:)` (same native NeMo FST engine Kokoro uses internally, exposed here as a public API) runs on the input text in `runPocketTts()` before `synthesizeStreaming()`, so `"$5"` → "five dollars", `"12/12/2024"` → spoken date form, etc. Runs via `Task.detached` since it's a synchronous native call with no `await` — keeps a long input from blocking whichever actor the calling `Task` inherited.
+
 ## Download progress UI (both engines)
 
 FluidAudio's own `ProgressHandler`/`DownloadProgress` only reports a fraction (`fractionCompleted: Double`, `phase: .listing/.downloading(completedFiles:totalFiles:)/.compiling`) — **no raw byte totals**. To show "X / Y MB," the app queries HuggingFace's public tree API directly (`https://huggingface.co/api/models/<repo>/tree/main/<path>?recursive=true`) and sums file sizes itself, filtered to just the files the chosen precision/placement config actually downloads (verified against `ModelNames.swift`'s `requiredModels(precision:placement:)` source, not guessed).
@@ -42,13 +48,14 @@ Progress-fraction weighting differs by download path (confirmed by reading `Mode
 
 ## UI structure (as of this writing — see `CLAUDE.md` for target structure)
 
-Currently a single flat `ContentView.swift` (~455 lines, pre-MVVM — the View owns all `@State` and business logic directly, no ViewModel/Service layer yet). One screen: Engine picker (segmented, Kokoro-ANE/PocketTTS) → Voice section (fixed label for Kokoro, real picker for PocketTTS) → tappable text row → "Download & Speak" → Status section (download progress, init timing, streaming metrics). Tapping the text row opens `TextEntrySheet`, a `.fullScreenCover` (full-screen slide-up modal) with a large `TextEditor`, a "Listen" button (waveform icon, top-left, triggers the same run flow) and a close "X" (top-right).
+Restructuring to feature-first MVVM+Services (per `CLAUDE.md`'s target tree) is in progress, staged as three commits to isolate risk. **Commit 1/3 (pure file relocation, zero logic change) is done**: `Sources/` is now `App/`, `Features/TTS/{Views,Models}`, `Resources/` — `TTSHomeView.swift` (renamed from `ContentView.swift`), `TextEntrySheet.swift`, and `Engine.swift` live under `Features/TTS/`. The View still owns all `@State` and business logic directly (no ViewModel/Service layer yet — that's commit 3). One screen: Engine picker (segmented, Kokoro-ANE/PocketTTS) → Voice section (fixed label for Kokoro, real picker for PocketTTS) → tappable text row → "Download & Speak" → Status section (download progress, init timing, streaming metrics). Tapping the text row opens `TextEntrySheet`, a `.fullScreenCover` (full-screen slide-up modal) with a large `TextEditor`, a "Listen" button (waveform icon, top-left, triggers the same run flow) and a close "X" (top-right).
 
-**A restructuring to feature-first MVVM+Services is planned but not yet executed** (see `CLAUDE.md`'s target tree). Staged as three commits to isolate risk: (1) pure file relocation/rename, zero logic change; (2) add `AppCoordinator` + a placeholder onboarding flow gating the existing screen; (3) extract the actual business logic into `TTSViewModel` + `KokoroEngineService`/`PocketEngineService` + `DependencyContainer` — this last step is flagged as the highest-risk one since it touches the working streaming/download code paths (`AVAudioEngine` lifecycle, actor-isolated `Task { @MainActor in }` closures) and needs full regression testing on both engines afterward.
+**Commits 2 and 3 not yet done**: (2) add `AppCoordinator` + a placeholder onboarding flow gating the existing screen; (3) extract the business logic into `TTSViewModel` + `KokoroEngineService`/`PocketEngineService` + `DependencyContainer` — flagged as the highest-risk step since it touches the working streaming/download code paths (`AVAudioEngine` lifecycle, actor-isolated `Task { @MainActor in }` closures) and needs full regression testing on both engines afterward. Full plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`.
 
 ## Open items / things a future session should know before touching this
 
+- Signing team drift between `project.yml` and the committed `.xcodeproj` — see "What this app is" above. Fix before running `xcodegen generate` again.
 - Kokoro-ANE has no phoneme-length guard (510 cap) — long text will error, not gracefully degrade.
 - PocketTTS chunk-boundary glitch is unresolved (see above — a fix was tried and reverted).
 - PocketTTS voice accent (American vs. other English) is unverified — check on-device before claiming anything about it.
-- The MVVM+Services restructuring plan exists but hasn't been executed — check git log / this file's "Current status" pointer in `CLAUDE.md` before assuming the target tree already matches reality.
+- MVVM+Services restructuring: commit 1/3 done, commits 2-3 not started (see "UI structure" above).
