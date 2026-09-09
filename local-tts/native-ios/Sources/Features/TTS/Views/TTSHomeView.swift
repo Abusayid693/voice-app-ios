@@ -2,12 +2,7 @@ import AVFoundation
 import FluidAudio
 import SwiftUI
 
-private enum Engine: String, CaseIterable {
-    case kokoroAne = "Kokoro-ANE"
-    case pocketTts = "PocketTTS"
-}
-
-struct ContentView: View {
+struct TTSHomeView: View {
     // af_heart is the only voice published in the ANE HF repo — the SDK's
     // own docs confirm this is a hard model-conversion constraint (the
     // compiled PostAlbert/Prosody/Noise/Vocoder stages are tied to this
@@ -417,39 +412,6 @@ struct ContentView: View {
     }
 }
 
-private struct TextEntrySheet: View {
-    @Binding var text: String
-    var isBusy: Bool
-    var onListen: () -> Void
-    var onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            TextEditor(text: $text)
-                .font(.title3)
-                .padding(4)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: onListen) {
-                            if isBusy {
-                                ProgressView()
-                            } else {
-                                Label("Listen", systemImage: "waveform")
-                            }
-                        }
-                        .disabled(isBusy || text.isEmpty)
-                    }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                        }
-                    }
-                }
-        }
-    }
-}
-
 #Preview {
-    ContentView()
+    TTSHomeView()
 }

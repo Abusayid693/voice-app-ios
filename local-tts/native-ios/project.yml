@@ -16,7 +16,7 @@ targets:
       - package: FluidAudio
         product: FluidAudio
     info:
-      path: Sources/Info.plist
+      path: Sources/Resources/Info.plist
       properties:
         UILaunchScreen: {}
         UIApplicationSceneManifest:

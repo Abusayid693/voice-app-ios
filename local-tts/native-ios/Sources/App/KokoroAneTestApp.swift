@@ -4,7 +4,7 @@ import SwiftUI
 struct KokoroAneTestApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TTSHomeView()
         }
     }
 }
