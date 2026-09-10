@@ -78,7 +78,7 @@ struct ImportHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(96)), GridItem(.fixed(96))], spacing: 16) {
+                LazyHGrid(rows: [GridItem(.fixed(64)), GridItem(.fixed(64))], spacing: 12) {
                     ForEach(voiceTiles) { tile in
                         VoiceTileView(tile: tile)
                     }
@@ -193,24 +193,37 @@ private struct VoiceTile: Identifiable {
     let isAvailable: Bool
 }
 
+/// One row per voice: cover image, name + engine label, play button at the
+/// trailing end — mirrors the mockup's trending-voice row layout.
 private struct VoiceTileView: View {
     let tile: VoiceTile
 
     var body: some View {
-        VStack(spacing: 6) {
+        HStack(spacing: 10) {
             avatar
-                .frame(width: 56, height: 56)
+                .frame(width: 44, height: 44)
                 .clipShape(Circle())
-            Text(tile.name)
-                .font(.caption)
-                .bold()
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tile.name)
+                    .font(.subheadline)
+                    .bold()
+                    .foregroundStyle(Color.appPrimaryText)
+                    .lineLimit(1)
+                Text(tile.engineLabel)
+                    .font(.caption2)
+                    .foregroundStyle(Color.appTertiaryText)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "play.circle.fill")
+                .font(.title2)
                 .foregroundStyle(Color.appPrimaryText)
-                .lineLimit(1)
-            Text(tile.engineLabel)
-                .font(.caption2)
-                .foregroundStyle(Color.appTertiaryText)
         }
-        .frame(width: 84)
+        .padding(.horizontal, 10)
+        .frame(width: 220, height: 56)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.appSecondaryBackground))
         .opacity(tile.isAvailable ? 1 : 0.6)
     }
 
@@ -231,7 +244,9 @@ private struct VoiceTileView: View {
 /// gradient placeholder — picked deterministically from the voice's name,
 /// not re-randomized on every redraw — for voices that aren't available yet.
 private enum VoiceCoverArt {
-    private static let assetNames = ["VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5"]
+    private static let assetNames = [
+        "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
+    ]
 
     private static let gradientPairs: [[Color]] = [
         [.pink, .purple], [.blue, .teal], [.orange, .red],

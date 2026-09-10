@@ -38,3 +38,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: Q2F3H94YUP
+        # No custom app icon exists — without this, xcodegen's default
+        # ASSETCATALOG_COMPILER_APPICON_NAME (AppIcon) was a silent no-op
+        # while Sources/Resources/Assets.xcassets didn't exist, but now
+        # that a real catalog exists (voice covers) the asset compiler
+        # runs and warns it can't find an "AppIcon" set inside it.
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
