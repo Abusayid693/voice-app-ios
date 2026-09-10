@@ -89,6 +89,17 @@ final class TTSViewModel: ObservableObject {
 
     private static let pocketPackDownloadedDefaultsKey = "pocketPackDownloaded"
 
+    // MARK: - Import screen: voice preview playback (bundled clips, no synthesis)
+
+    // Which voice (if any) is currently playing its preview clip — drives
+    // the Trending voices row's play/pause icon.
+    @Published private(set) var previewingVoiceID: String?
+    // Deliberately separate from kokoroPlayer/pocketService's engine — a
+    // preview never touches either engine's state, so it can't collide
+    // with an in-progress "Write text" generation.
+    private var previewPlayer: AVAudioPlayer?
+    private var previewPlayerDelegate: PreviewPlaybackDelegate?
+
     // MARK: - Kokoro: one independent track per "Generate" tap
 
     // Append-only, like a playlist — each Generate tap adds a new track
@@ -196,6 +207,47 @@ final class TTSViewModel: ObservableObject {
             status = "Idle"
         } catch {
             status = "Pocket TTS pack download failed: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Import screen: voice preview playback
+
+    /// Plays (or stops, if already playing) a voice's bundled preview clip
+    /// — pure file playback, no synthesis, so this never touches
+    /// kokoroService/pocketService and can't collide with an in-progress
+    /// "Write text" generation. No-ops if the clip isn't bundled yet (e.g.
+    /// Pocket voices before their pass — see ENG_CONTEXT.md).
+    func togglePreview(voiceName: String, engine: Engine) {
+        let wasPlayingThisVoice = previewingVoiceID == voiceName
+        previewPlayer?.stop()
+        previewPlayer = nil
+        previewPlayerDelegate = nil
+        previewingVoiceID = nil
+        guard !wasPlayingThisVoice else { return }
+
+        let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
+        guard let url = Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)
+        else { return }
+
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback)
+            try AVAudioSession.sharedInstance().setActive(true)
+            let player = try AVAudioPlayer(contentsOf: url)
+            let delegate = PreviewPlaybackDelegate { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.previewingVoiceID == voiceName else { return }
+                    self.previewingVoiceID = nil
+                    self.previewPlayer = nil
+                    self.previewPlayerDelegate = nil
+                }
+            }
+            player.delegate = delegate
+            previewPlayerDelegate = delegate
+            previewPlayer = player
+            previewingVoiceID = voiceName
+            player.play()
+        } catch {
+            previewingVoiceID = nil
         }
     }
 
@@ -552,6 +604,21 @@ final class TTSViewModel: ObservableObject {
 /// so `TTSViewModel` can advance to the next chunk without conforming to
 /// `NSObject` itself.
 private final class KokoroChunkPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
+    private let onFinish: () -> Void
+
+    init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        onFinish()
+    }
+}
+
+/// Same bridge as `KokoroChunkPlaybackDelegate`, for the dedicated voice
+/// preview player — kept separate so the two AVAudioPlayer instances never
+/// share a delegate.
+private final class PreviewPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
     private let onFinish: () -> Void
 
     init(onFinish: @escaping () -> Void) {

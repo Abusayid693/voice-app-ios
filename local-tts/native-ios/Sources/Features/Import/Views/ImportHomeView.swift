@@ -74,9 +74,13 @@ struct ImportHomeView: View {
     // placeholder below.
     private var voiceTiles: [VoiceTile] {
         TTSViewModel.kokoroVoices.map {
-            VoiceTile(id: "kokoro-\($0)", name: $0, engineLabel: "Kokoro-ANE", isAvailable: viewModel.isKokoroPackReady)
+            VoiceTile(
+                id: "kokoro-\($0)", name: $0, engine: .kokoroAne, engineLabel: "Kokoro-ANE",
+                isAvailable: viewModel.isKokoroPackReady)
         } + TTSViewModel.pocketVoices.map {
-            VoiceTile(id: "pocket-\($0)", name: $0, engineLabel: "Pocket TTS", isAvailable: viewModel.isPocketPackDownloaded)
+            VoiceTile(
+                id: "pocket-\($0)", name: $0, engine: .pocketTts, engineLabel: "Pocket TTS",
+                isAvailable: viewModel.isPocketPackDownloaded)
         }
     }
 
@@ -86,7 +90,7 @@ struct ImportHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile)
+                        VoiceTileView(tile: tile, viewModel: viewModel)
                     }
                 }
                 .padding(.vertical, 4)
@@ -107,14 +111,25 @@ struct ImportHomeView: View {
                         .foregroundStyle(Color.appSecondaryText)
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(trendingBooksViewModel.books.prefix(5)) { book in
-                        TrendingBookCard(book: book)
-                    }
-                    if trendingBooksViewModel.isLoading {
-                        ProgressView()
-                            .frame(width: 110, height: 110)
+            if let loadErrorMessage = trendingBooksViewModel.loadErrorMessage, trendingBooksViewModel.books.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(loadErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(Color.appSecondaryText)
+                    Button("Retry") { Task { await trendingBooksViewModel.retry() } }
+                        .font(.caption)
+                        .buttonStyle(.bordered)
+                }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(trendingBooksViewModel.books.prefix(5)) { book in
+                            TrendingBookCard(book: book)
+                        }
+                        if trendingBooksViewModel.isLoading {
+                            ProgressView()
+                                .frame(width: 110, height: 110)
+                        }
                     }
                 }
             }
@@ -198,6 +213,7 @@ private struct VoiceTile: Identifiable {
     // kept separate from the display name so cover-art selection stays keyed
     // off the same stable identifier regardless of how it's shown.
     let name: String
+    let engine: Engine
     let engineLabel: String
     let isAvailable: Bool
 
@@ -216,9 +232,14 @@ private struct VoiceTile: Identifiable {
 }
 
 /// One row per voice: cover image, name + engine label, play button at the
-/// trailing end — mirrors the mockup's trending-voice row layout.
+/// trailing end — mirrors the mockup's trending-voice row layout. The play
+/// button plays that voice's bundled preview clip (see
+/// TTSViewModel.togglePreview) — a no-op if the clip isn't bundled yet.
 private struct VoiceTileView: View {
     let tile: VoiceTile
+    @ObservedObject var viewModel: TTSViewModel
+
+    private var isPreviewing: Bool { viewModel.previewingVoiceID == tile.name }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -239,9 +260,14 @@ private struct VoiceTileView: View {
 
             Spacer(minLength: 8)
 
-            Image(systemName: "play.circle.fill")
-                .font(.title2)
-                .foregroundStyle(Color.appPrimaryText)
+            Button {
+                viewModel.togglePreview(voiceName: tile.name, engine: tile.engine)
+            } label: {
+                Image(systemName: isPreviewing ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(Color.appPrimaryText)
+            }
+            .disabled(!tile.isAvailable)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

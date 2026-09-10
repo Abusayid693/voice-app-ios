@@ -20,7 +20,13 @@ final class GutendexBookService {
     }
 
     func fetchPopularBooks(url: URL?) async throws -> Page {
-        let (data, _) = try await URLSession.shared.data(from: url ?? Self.firstPageURL)
+        // Default URLSession timeout is 60s — for a "what's trending" row
+        // that's long enough to look permanently stuck rather than failed;
+        // fail fast so the UI can show a retry instead of an endless
+        // spinner.
+        var request = URLRequest(url: url ?? Self.firstPageURL)
+        request.timeoutInterval = 15
+        let (data, _) = try await URLSession.shared.data(for: request)
         let response = try JSONDecoder().decode(GutendexResponse.self, from: data)
         let books = response.results.map(TrendingBook.init(gutendex:))
         return Page(books: books, nextPageURL: response.next)
