@@ -48,7 +48,7 @@ struct VoicePreviewSheet: View {
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(Color.appBackground.ignoresSafeArea())
+        .background(backgroundLayer)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .preferredColorScheme(.dark)
@@ -66,6 +66,23 @@ struct VoicePreviewSheet: View {
         } else {
             VoiceCoverArt.placeholderGradient(for: tile.name)
         }
+    }
+
+    /// The sheet's own cover art, blown up to fill the background at low
+    /// opacity (blurred + scrimmed so the foreground text/controls stay
+    /// legible over any cover) — the same ambient-art treatment Music/
+    /// Podcasts-style players use behind their now-playing screen.
+    private var backgroundLayer: some View {
+        ZStack {
+            Color.appBackground
+            coverArt
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .blur(radius: 30)
+                .opacity(0.4)
+            Color.appBackground.opacity(0.55)
+        }
+        .ignoresSafeArea()
     }
 }
 
