@@ -15,7 +15,23 @@ final class DependencyContainer {
     // voice actually works. KokoroAneResourceDownloader.ensureVoicePack
     // finds each voice's .bin already present here and never touches the
     // network.
-    let kokoroManager: KokoroAneManager = {
+    let kokoroManager: KokoroAneManager
+    // The writable directory backing `kokoroManager` above (nil if the
+    // bundled copy failed and it fell back to the plain default manager).
+    // `KokoroEngineService` needs this too — `KokoroAneResourceDownloader
+    // .ensureModels()` defaults to a *different* cache directory when given
+    // no override, which would otherwise check/download into a path this
+    // manager never reads from.
+    let kokoroModelDirectory: URL?
+    // True once the bundled CustomKokoroModel/ was found and successfully
+    // copied into Application Support — i.e. the Kokoro pack is ready with
+    // no network involved at all. Drives the Setup screen's "already
+    // downloaded" state for Kokoro.
+    let isKokoroPackBundled: Bool
+
+    private static func makeKokoroManager() -> (
+        manager: KokoroAneManager, directory: URL?, isBundled: Bool
+    ) {
         // Bundle.main.url(forResource:withExtension:) proved unreliable for
         // locating this folder reference on-device (silently returned nil,
         // which fell back to the plain default manager and 404'd trying
@@ -25,7 +41,7 @@ final class DependencyContainer {
         // the bundle's top level, sibling to the executable).
         let bundledDir = Bundle.main.bundleURL.appendingPathComponent("CustomKokoroModel")
         guard FileManager.default.fileExists(atPath: bundledDir.path) else {
-            return KokoroAneManager()
+            return (KokoroAneManager(), nil, false)
         }
         // The app's own .app bundle is read-only at runtime, but CoreML's
         // ANE compilation step needs to write analytics/cache data back
@@ -36,12 +52,19 @@ final class DependencyContainer {
         // our bundled models there once (skipped on later launches) so
         // the same thing works for this custom build.
         guard let writableDir = DependencyContainer.writableCopy(ofBundled: bundledDir) else {
-            return KokoroAneManager()
+            return (KokoroAneManager(), nil, false)
         }
         // defaultVoice is mostly moot — TTSViewModel always passes an
         // explicit voice — but af_heart is a sane fallback.
-        return KokoroAneManager(defaultVoice: "af_heart", directory: writableDir)
-    }()
+        return (KokoroAneManager(defaultVoice: "af_heart", directory: writableDir), writableDir, true)
+    }
+
+    init() {
+        let setup = DependencyContainer.makeKokoroManager()
+        kokoroManager = setup.manager
+        kokoroModelDirectory = setup.directory
+        isKokoroPackBundled = setup.isBundled
+    }
 
     private static func writableCopy(ofBundled bundledDir: URL) -> URL? {
         guard

@@ -1,0 +1,25 @@
+import SwiftUI
+
+/// Minimal stand-in for a tab that has no real screen yet (Explore,
+/// Library, Voices) — reused rather than one near-identical file per tab.
+struct PlaceholderTabView: View {
+    let title: String
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 8) {
+                Image(systemName: "hourglass")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("\(title) coming soon")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .navigationTitle(title)
+        }
+    }
+}
+
+#Preview {
+    PlaceholderTabView(title: "Explore")
+}

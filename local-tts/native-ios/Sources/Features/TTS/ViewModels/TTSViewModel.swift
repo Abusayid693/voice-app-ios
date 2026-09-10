@@ -65,6 +65,30 @@ final class TTSViewModel: ObservableObject {
     @Published var streamChunkProgress: String?
     @Published var isTextSheetPresented = false
 
+    // MARK: - Import screen: voice-pack setup + new sheet flags
+
+    // True once the bundled CustomKokoroModel/ was found and copied into
+    // Application Support (see DependencyContainer) — for virtually every
+    // install this is already true the instant TTSViewModel exists, since
+    // the copy happens synchronously before any UI shows. Only changes
+    // afterward in the rare case that bundle copy failed and
+    // downloadKokoroPackIfNeeded() later succeeds.
+    @Published var isKokoroPackReady: Bool
+    // Unlike Kokoro, PocketTTS has no bundled fallback — this reflects a
+    // real ~500MB network download the user must opt into via Setup.
+    // Persisted so a relaunch doesn't forget it's already downloaded (the
+    // SDK has no cheap, side-effect-free "is this on disk" check to ask
+    // instead — see downloadPocketPackIfNeeded()).
+    @Published var isPocketPackDownloaded: Bool
+
+    // Separate from isTextSheetPresented (the Home tab's own sheet flag) so
+    // the two tabs' modals don't fight over one bool.
+    @Published var isSetupPresented = false
+    @Published var isWriteTextPresented = false
+    @Published var isVoiceSettingsPresented = false
+
+    private static let pocketPackDownloadedDefaultsKey = "pocketPackDownloaded"
+
     // MARK: - Kokoro: one independent track per "Generate" tap
 
     // Append-only, like a playlist — each Generate tap adds a new track
@@ -84,12 +108,16 @@ final class TTSViewModel: ObservableObject {
     private var audioPlayer: AVAudioPlayer?
 
     init(dependencies: DependencyContainer) {
-        kokoroService = KokoroEngineService(manager: dependencies.kokoroManager)
+        kokoroService = KokoroEngineService(
+            manager: dependencies.kokoroManager, directory: dependencies.kokoroModelDirectory)
         pocketService = PocketEngineService(
             manager: dependencies.pocketManager,
             audioEngine: dependencies.audioEngine,
             playerNode: dependencies.playerNode,
             streamFormat: dependencies.streamFormat)
+        isKokoroPackReady = dependencies.isKokoroPackBundled
+        isPocketPackDownloaded = UserDefaults.standard.bool(
+            forKey: Self.pocketPackDownloadedDefaultsKey)
     }
 
     var downloadProgressLabel: String {
@@ -115,6 +143,59 @@ final class TTSViewModel: ObservableObject {
             }
         case .pocketTts:
             runPocketTts()
+        }
+    }
+
+    // MARK: - Import screen: Setup sheet actions
+
+    /// Only meaningfully does anything if the bundled-copy step in
+    /// DependencyContainer failed (isKokoroPackReady already false) — the
+    /// common case is already ready before this could ever be called, since
+    /// that copy happens synchronously at container init.
+    func downloadKokoroPackIfNeeded() async {
+        guard !isKokoroPackReady else { return }
+        status = "Downloading Kokoro pack…"
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            try await kokoroService.ensureModels(progressHandler: { [weak self] progress in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.applyDownloadProgress(
+                        progress, phaseWeight: 1.0, fetchTotal: self.fetchEnglishKokoroTotalBytes)
+                }
+            })
+            try await kokoroService.initialize()
+            isKokoroPackReady = true
+            status = "Idle"
+        } catch {
+            status = "Kokoro pack download failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// PocketTTS has no bundled fallback, so this is a real ~500MB network
+    /// download the user opts into from the Setup sheet. On success, the
+    /// "already downloaded" flag is persisted — there's no cheap on-disk
+    /// check to ask the SDK instead (see isPocketPackDownloaded's comment).
+    func downloadPocketPackIfNeeded() async {
+        guard !isPocketPackDownloaded else { return }
+        status = "Downloading Pocket TTS pack…"
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            try await pocketService.ensureModels(progressHandler: { [weak self] progress in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.applyDownloadProgress(
+                        progress, phaseWeight: 1.0, fetchTotal: self.fetchPocketTtsTotalBytes)
+                }
+            })
+            try await pocketService.initialize()
+            isPocketPackDownloaded = true
+            UserDefaults.standard.set(true, forKey: Self.pocketPackDownloadedDefaultsKey)
+            status = "Idle"
+        } catch {
+            status = "Pocket TTS pack download failed: \(error.localizedDescription)"
         }
     }
 

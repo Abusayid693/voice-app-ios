@@ -26,7 +26,9 @@ Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate;
 ```
 Sources/
   App/
-    KokoroAneTestApp.swift        // @main — creates DependencyContainer, constructs TTSViewModel, passes it into TTSHomeView's init
+    KokoroAneTestApp.swift        // @main — creates DependencyContainer + one shared TTSViewModel, passes it into RootTabView
+    RootTabView.swift             // DONE — 5-tab TabView shell (Home/Explore/Import/Library/Voices), Import selected by default
+    PlaceholderTabView.swift      // DONE — trivial "coming soon" content reused for Explore/Library/Voices tabs
     AppCoordinator.swift          // NOT YET BUILT — ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
     DependencyContainer.swift     // owns shared long-lived instances (managers, AVAudioEngine, etc.), created once — DONE
   Features/
@@ -35,15 +37,25 @@ Sources/
         OnboardingView.swift
       ViewModels/
         OnboardingViewModel.swift
+    Import/                       // DONE — consumer-facing redesigned home screen (the Import tab)
+      Views/
+        ImportHomeView.swift      // DONE — action grid + demo trending/projects rows + Setup entry point
+        SetupSheet.swift          // DONE — download Kokoro pack / Pocket TTS pack, independently
+        WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress
+        VoiceSettingsSheet.swift  // DONE — combined Kokoro+Pocket voice list, tagged available/not-available
+      Models/
+        VoicePack.swift           // DONE — enum { kokoro, pocket }, drives SetupSheet's two rows
+        DemoContent.swift         // DONE — static demo data: trending voices, trending books, projects placeholder rows
+      // No ViewModels/Services here — reuses TTS's TTSViewModel directly (same shared instance as the Home tab)
     TTS/
       Views/
-        TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel
-        TextEntrySheet.swift      // DONE
-        KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar
+        TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel; now hosted as the Home tab, not the app root
+        TextEntrySheet.swift      // DONE — still used by TTSHomeView's own flow (distinct from Import's WriteTextView)
+        KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar; reused inside WriteTextView too
       ViewModels/
-        TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration
+        TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration; single instance shared by the Home and Import tabs
       Services/
-        KokoroEngineService.swift   // DONE
+        KokoroEngineService.swift   // DONE — takes the manager's own directory so ensureModels() checks the right on-disk path
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback
       Models/
         Engine.swift               // DONE
@@ -58,7 +70,7 @@ Sources/
 CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md to regenerate; project.yml bundles it as a `type: folder` resource
 ```
 
-**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services (Views/ViewModels/Services/Models all populated, `TTSHomeView` binds to `TTSViewModel` via constructor-injected `@ObservedObject`, no environment injection used since there's only one consumer). `App/DependencyContainer.swift` and `Core/Networking/HuggingFaceTreeSizeFetcher.swift` done. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding flow exists — the app opens straight to `TTSHomeView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services (Views/ViewModels/Services/Models all populated, `TTSViewModel` is one instance shared across tabs via constructor injection — no environment injection). `App/DependencyContainer.swift` and `Core/Networking/HuggingFaceTreeSizeFetcher.swift` done. The app root is now `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library/Voices are `PlaceholderTabView` stand-ins). The new `Import` feature is a redesigned consumer-facing home screen: only "Write text" and the "Setup" voice-pack-download modal are functional, the rest (Paste a link/Upload a file/Scan text, Trending voices, What's trending, Create your own book, Projects) are static demo content per the current design pass. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
 
 ## Adding a new feature/screen
 

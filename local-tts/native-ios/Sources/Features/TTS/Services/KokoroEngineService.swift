@@ -7,9 +7,17 @@ import Foundation
 /// closure, matching FluidAudio's own `progressHandler` pattern.
 final class KokoroEngineService {
     private let manager: KokoroAneManager
+    // Must match the directory `manager` itself was constructed with
+    // (DependencyContainer's writable CustomKokoroModel copy) — passing nil
+    // here would make ensureModels() check FluidAudio's *default* cache
+    // directory instead, which this manager never reads from, and could
+    // trigger a spurious network download even though the bundled pack is
+    // already present.
+    private let directory: URL?
 
-    init(manager: KokoroAneManager) {
+    init(manager: KokoroAneManager, directory: URL?) {
         self.manager = manager
+        self.directory = directory
     }
 
     /// Checks the on-disk cache first — if this engine was already
@@ -17,7 +25,7 @@ final class KokoroEngineService {
     /// with no network activity at all, and `progressHandler` never fires.
     func ensureModels(progressHandler: ProgressHandler?) async throws {
         try await KokoroAneResourceDownloader.ensureModels(
-            variant: .english, progressHandler: progressHandler)
+            variant: .english, directory: directory, progressHandler: progressHandler)
     }
 
     func initialize() async throws {
