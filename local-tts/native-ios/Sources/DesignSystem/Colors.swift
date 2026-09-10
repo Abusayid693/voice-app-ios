@@ -19,3 +19,20 @@ extension Color {
             opacity: 1)
     }
 }
+
+extension LinearGradient {
+    /// Deterministic placeholder gradient keyed off a stable string seed
+    /// (a voice code, a book id) — the same seed always yields the same
+    /// colors, so a placeholder shown while real artwork loads (or because
+    /// it never loads) doesn't flicker to a different color on every
+    /// redraw.
+    static func stablePlaceholder(seed: String) -> LinearGradient {
+        let pairs: [[Color]] = [
+            [.pink, .purple], [.blue, .teal], [.orange, .red],
+            [.green, .mint], [.indigo, .cyan], [.yellow, .orange],
+        ]
+        let sum = seed.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        let pair = pairs[sum % pairs.count]
+        return LinearGradient(colors: pair, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+}

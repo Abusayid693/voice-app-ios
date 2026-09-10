@@ -7,6 +7,11 @@ import SwiftUI
 /// design pass.
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
+    // Owned here (not TTSViewModel) — book browsing is a separate concern
+    // from TTS orchestration, and outlives this view's re-renders as long
+    // as the Import tab stays alive, so "See all" resumes pagination
+    // instead of refetching from page 1.
+    @StateObject private var trendingBooksViewModel = TrendingBooksViewModel()
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -33,6 +38,7 @@ struct ImportHomeView: View {
                     setupButton
                 }
             }
+            .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
@@ -78,7 +84,7 @@ struct ImportHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(64)), GridItem(.fixed(64))], spacing: 12) {
+                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
                     ForEach(voiceTiles) { tile in
                         VoiceTileView(tile: tile)
                     }
@@ -90,25 +96,25 @@ struct ImportHomeView: View {
 
     private var whatsTrendingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What's trending").font(.headline).foregroundStyle(Color.appPrimaryText)
+            HStack {
+                Text("What's trending").font(.headline).foregroundStyle(Color.appPrimaryText)
+                Spacer()
+                NavigationLink {
+                    AllTrendingBooksView(viewModel: trendingBooksViewModel)
+                } label: {
+                    Text("See all")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.appSecondaryText)
+                }
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    ForEach(DemoContent.trendingBooks) { book in
-                        VStack(alignment: .leading, spacing: 6) {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(book.tint.gradient)
-                                .frame(width: 110, height: 150)
-                                .overlay {
-                                    Image(systemName: "book.closed.fill")
-                                        .font(.title)
-                                        .foregroundStyle(.white.opacity(0.85))
-                                }
-                            Text(book.title).font(.caption).bold().foregroundStyle(Color.appPrimaryText)
-                                .lineLimit(1)
-                            Text(book.subtitle).font(.caption2).foregroundStyle(Color.appSecondaryText)
-                                .lineLimit(1)
-                        }
-                        .frame(width: 110)
+                    ForEach(trendingBooksViewModel.books.prefix(5)) { book in
+                        TrendingBookCard(book: book)
+                    }
+                    if trendingBooksViewModel.isLoading {
+                        ProgressView()
+                            .frame(width: 110, height: 110)
                     }
                 }
             }
@@ -188,9 +194,25 @@ private struct ImportActionCard: View {
 
 private struct VoiceTile: Identifiable {
     let id: String
+    // Raw voice code passed to the engine (e.g. "af_alloy", "bill_boerst") —
+    // kept separate from the display name so cover-art selection stays keyed
+    // off the same stable identifier regardless of how it's shown.
     let name: String
     let engineLabel: String
     let isAvailable: Bool
+
+    // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
+    var displayName: String {
+        var raw = Substring(name)
+        for prefix in ["af_", "am_", "bf_", "bm_"] where raw.hasPrefix(prefix) {
+            raw.removeFirst(prefix.count)
+            break
+        }
+        return raw
+            .split(separator: "_")
+            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
+            .joined(separator: " ")
+    }
 }
 
 /// One row per voice: cover image, name + engine label, play button at the
@@ -201,11 +223,11 @@ private struct VoiceTileView: View {
     var body: some View {
         HStack(spacing: 10) {
             avatar
-                .frame(width: 44, height: 44)
+                .frame(width: 60, height: 60)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(tile.name)
+                Text(tile.displayName)
                     .font(.subheadline)
                     .bold()
                     .foregroundStyle(Color.appPrimaryText)
@@ -221,9 +243,10 @@ private struct VoiceTileView: View {
                 .font(.title2)
                 .foregroundStyle(Color.appPrimaryText)
         }
-        .padding(.horizontal, 10)
-        .frame(width: 220, height: 56)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.appSecondaryBackground))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(width: 268, height: 84)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
         .opacity(tile.isAvailable ? 1 : 0.6)
     }
 
@@ -248,23 +271,13 @@ private enum VoiceCoverArt {
         "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
     ]
 
-    private static let gradientPairs: [[Color]] = [
-        [.pink, .purple], [.blue, .teal], [.orange, .red],
-        [.green, .mint], [.indigo, .cyan], [.yellow, .orange],
-    ]
-
     static func assetName(for voiceName: String) -> String {
-        assetNames[stableIndex(for: voiceName, count: assetNames.count)]
+        let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return assetNames[sum % assetNames.count]
     }
 
     static func placeholderGradient(for voiceName: String) -> LinearGradient {
-        let pair = gradientPairs[stableIndex(for: voiceName, count: gradientPairs.count)]
-        return LinearGradient(colors: pair, startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    private static func stableIndex(for voiceName: String, count: Int) -> Int {
-        let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return sum % count
+        .stablePlaceholder(seed: voiceName)
     }
 }
 
