@@ -62,23 +62,28 @@ struct ImportHomeView: View {
         }
     }
 
+    // Every real voice from both packs, not just a curated few — shown
+    // regardless of download state (per the request to "show all voices
+    // available"); isAvailable just controls cover art vs. a gradient
+    // placeholder below.
+    private var voiceTiles: [VoiceTile] {
+        TTSViewModel.kokoroVoices.map {
+            VoiceTile(id: "kokoro-\($0)", name: $0, engineLabel: "Kokoro-ANE", isAvailable: viewModel.isKokoroPackReady)
+        } + TTSViewModel.pocketVoices.map {
+            VoiceTile(id: "pocket-\($0)", name: $0, engineLabel: "Pocket TTS", isAvailable: viewModel.isPocketPackDownloaded)
+        }
+    }
+
     private var trendingVoicesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
-            ForEach(DemoContent.trendingVoices) { voice in
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(voice.tint.gradient)
-                        .frame(width: 44, height: 44)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(voice.name).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                        Text(voice.subtitle).font(.caption).foregroundStyle(Color.appTertiaryText)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHGrid(rows: [GridItem(.fixed(96)), GridItem(.fixed(96))], spacing: 16) {
+                    ForEach(voiceTiles) { tile in
+                        VoiceTileView(tile: tile)
                     }
-                    Spacer()
-                    Image(systemName: "heart")
-                        .foregroundStyle(Color.appSecondaryText)
                 }
-                .contentShape(Rectangle())
+                .padding(.vertical, 4)
             }
         }
     }
@@ -178,6 +183,73 @@ private struct ImportActionCard: View {
             .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct VoiceTile: Identifiable {
+    let id: String
+    let name: String
+    let engineLabel: String
+    let isAvailable: Bool
+}
+
+private struct VoiceTileView: View {
+    let tile: VoiceTile
+
+    var body: some View {
+        VStack(spacing: 6) {
+            avatar
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+            Text(tile.name)
+                .font(.caption)
+                .bold()
+                .foregroundStyle(Color.appPrimaryText)
+                .lineLimit(1)
+            Text(tile.engineLabel)
+                .font(.caption2)
+                .foregroundStyle(Color.appTertiaryText)
+        }
+        .frame(width: 84)
+        .opacity(tile.isAvailable ? 1 : 0.6)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if tile.isAvailable {
+            Image(VoiceCoverArt.assetName(for: tile.name))
+                .resizable()
+                .scaledToFill()
+        } else {
+            VoiceCoverArt.placeholderGradient(for: tile.name)
+        }
+    }
+}
+
+/// Voice avatars: a real cover image (cycled from the 5 bundled
+/// `VoiceCoverN` assets) for voices whose pack is downloaded, or a
+/// gradient placeholder — picked deterministically from the voice's name,
+/// not re-randomized on every redraw — for voices that aren't available yet.
+private enum VoiceCoverArt {
+    private static let assetNames = ["VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5"]
+
+    private static let gradientPairs: [[Color]] = [
+        [.pink, .purple], [.blue, .teal], [.orange, .red],
+        [.green, .mint], [.indigo, .cyan], [.yellow, .orange],
+    ]
+
+    static func assetName(for voiceName: String) -> String {
+        assetNames[stableIndex(for: voiceName, count: assetNames.count)]
+    }
+
+    static func placeholderGradient(for voiceName: String) -> LinearGradient {
+        let pair = gradientPairs[stableIndex(for: voiceName, count: gradientPairs.count)]
+        return LinearGradient(colors: pair, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    private static func stableIndex(for voiceName: String, count: Int) -> Int {
+        let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return sum % count
     }
 }
 

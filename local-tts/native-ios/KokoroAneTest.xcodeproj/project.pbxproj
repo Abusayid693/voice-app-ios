@@ -10,6 +10,7 @@
 		00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */; };
 		041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851CC1471E60AC39DADD12C6 /* VoicePack.swift */; };
 		053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07EEB3027B4E022D555A931 /* Engine.swift */; };
+		1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */; };
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
@@ -55,6 +56,7 @@
 		C8DE7BD70ACE70EDC00A3D47 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroTextChunker.swift; sourceTree = "<group>"; };
 		D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGenerationListView.swift; sourceTree = "<group>"; };
+		E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTabView.swift; sourceTree = "<group>"; };
 		E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupSheet.swift; sourceTree = "<group>"; };
 		E463AF022C12D3968F17F19E /* TextEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEntrySheet.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 		7CDE99F84FBEA8EA437FCD4E /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */,
 				C8DE7BD70ACE70EDC00A3D47 /* Info.plist */,
 			);
 			path = Resources;
@@ -297,6 +300,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */,
 				5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

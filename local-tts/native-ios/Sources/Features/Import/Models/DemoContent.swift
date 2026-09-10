@@ -1,15 +1,9 @@
 import SwiftUI
 
-/// Static placeholder content for the Import screen's demo sections
-/// (Trending voices / What's trending / Projects) — no backing data source
-/// yet, intentionally, per the current design pass.
-
-struct DemoVoice: Identifiable {
-    let id = UUID()
-    let name: String
-    let subtitle: String
-    let tint: Color
-}
+/// Static placeholder content for the Import screen's remaining demo
+/// sections (What's trending / Projects) — no backing data source yet,
+/// intentionally, per the current design pass. Trending voices is real
+/// data (see ImportHomeView.voiceTiles), not demo content.
 
 struct DemoBook: Identifiable {
     let id = UUID()
@@ -26,11 +20,6 @@ struct DemoProject: Identifiable {
 }
 
 enum DemoContent {
-    static let trendingVoices: [DemoVoice] = [
-        DemoVoice(name: "Alexandra", subtitle: "Conversational and natural", tint: .pink),
-        DemoVoice(name: "Alex", subtitle: "Warm storyteller · informative", tint: .purple),
-    ]
-
     // Public-domain titles — drawn as SwiftUI placeholder covers below
     // rather than fetched cover art, to avoid adding image-loading
     // infrastructure for demo-only content.
