@@ -11,6 +11,9 @@ struct WriteTextView: View {
             VStack(spacing: 0) {
                 TextEditor(text: $viewModel.text)
                     .font(.title3)
+                    .foregroundStyle(Color.appPrimaryText)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.appBackground)
                     .padding(4)
 
                 progressArea
@@ -18,15 +21,18 @@ struct WriteTextView: View {
 
                 bottomBar
             }
+            .background(Color.appBackground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.isWriteTextPresented = false }) {
                         Image(systemName: "xmark")
+                            .foregroundStyle(Color.appPrimaryText)
                     }
                 }
             }
         }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
             VoiceSettingsSheet(viewModel: viewModel)
         }
@@ -53,16 +59,22 @@ struct WriteTextView: View {
 
     private var pocketStatusCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            LabeledContent("Status", value: viewModel.status)
+            LabeledContent("Status") {
+                Text(viewModel.status).foregroundStyle(Color.appSecondaryText)
+            }
+            .foregroundStyle(Color.appPrimaryText)
             if viewModel.isBusy, viewModel.initSeconds == nil {
                 ProgressView(value: viewModel.downloadFraction)
             }
             if let streamChunkProgress = viewModel.streamChunkProgress {
-                LabeledContent("Chunk", value: streamChunkProgress)
+                LabeledContent("Chunk") {
+                    Text(streamChunkProgress).foregroundStyle(Color.appSecondaryText)
+                }
+                .foregroundStyle(Color.appPrimaryText)
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.appSecondaryBackground))
     }
 
     private var bottomBar: some View {
@@ -72,8 +84,9 @@ struct WriteTextView: View {
             } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.title3)
+                    .foregroundStyle(Color.appPrimaryText)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .background(Circle().fill(Color.appSecondaryBackground))
             }
 
             Button(action: viewModel.runDownloadAndSpeak) {

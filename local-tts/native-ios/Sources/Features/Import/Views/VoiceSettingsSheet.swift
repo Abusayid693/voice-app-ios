@@ -24,6 +24,8 @@ struct VoiceSettingsSheet: View {
                         }
                     }
                 }
+                .listRowBackground(Color.appSecondaryBackground)
+
                 Section("Pocket TTS") {
                     ForEach(TTSViewModel.pocketVoices, id: \.self) { name in
                         voiceRow(
@@ -37,7 +39,10 @@ struct VoiceSettingsSheet: View {
                         }
                     }
                 }
+                .listRowBackground(Color.appSecondaryBackground)
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.appBackground)
             .navigationTitle("Voice")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -45,6 +50,7 @@ struct VoiceSettingsSheet: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     private func voiceRow(
@@ -57,14 +63,14 @@ struct VoiceSettingsSheet: View {
                 if isSelected {
                     Image(systemName: "checkmark").foregroundStyle(.blue)
                 } else if !isAvailable {
-                    Text("Not available").font(.caption).foregroundStyle(.secondary)
+                    Text("Not available").font(.caption).foregroundStyle(Color.appTertiaryText)
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isAvailable)
-        .foregroundStyle(isAvailable ? .primary : .secondary)
+        .foregroundStyle(isAvailable ? Color.appPrimaryText : Color.appSecondaryText)
     }
 }
 

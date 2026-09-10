@@ -26,6 +26,7 @@ struct ImportHomeView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
+            .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle("Import")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -33,6 +34,7 @@ struct ImportHomeView: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel)
         }
@@ -62,19 +64,19 @@ struct ImportHomeView: View {
 
     private var trendingVoicesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Trending voices").font(.headline)
+            Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
             ForEach(DemoContent.trendingVoices) { voice in
                 HStack(spacing: 12) {
                     Circle()
                         .fill(voice.tint.gradient)
                         .frame(width: 44, height: 44)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(voice.name).font(.subheadline).bold()
-                        Text(voice.subtitle).font(.caption).foregroundStyle(.secondary)
+                        Text(voice.name).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
+                        Text(voice.subtitle).font(.caption).foregroundStyle(Color.appTertiaryText)
                     }
                     Spacer()
                     Image(systemName: "heart")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appSecondaryText)
                 }
                 .contentShape(Rectangle())
             }
@@ -83,7 +85,7 @@ struct ImportHomeView: View {
 
     private var whatsTrendingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("What's trending").font(.headline)
+            Text("What's trending").font(.headline).foregroundStyle(Color.appPrimaryText)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(DemoContent.trendingBooks) { book in
@@ -96,8 +98,10 @@ struct ImportHomeView: View {
                                         .font(.title)
                                         .foregroundStyle(.white.opacity(0.85))
                                 }
-                            Text(book.title).font(.caption).bold().lineLimit(1)
-                            Text(book.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            Text(book.title).font(.caption).bold().foregroundStyle(Color.appPrimaryText)
+                                .lineLimit(1)
+                            Text(book.subtitle).font(.caption2).foregroundStyle(Color.appSecondaryText)
+                                .lineLimit(1)
                         }
                         .frame(width: 110)
                     }
@@ -111,14 +115,17 @@ struct ImportHomeView: View {
             HStack(spacing: 12) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title)
+                    .foregroundStyle(Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create your own book").font(.subheadline).bold()
-                    Text("Craft your own story in seconds").font(.caption).foregroundStyle(.secondary)
+                        .foregroundStyle(Color.appPrimaryText)
+                    Text("Craft your own story in seconds").font(.caption)
+                        .foregroundStyle(Color.appSecondaryText)
                 }
                 Spacer()
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -126,19 +133,21 @@ struct ImportHomeView: View {
 
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Projects").font(.headline)
+            Text("Projects").font(.headline).foregroundStyle(Color.appPrimaryText)
             ForEach(DemoContent.projects) { project in
                 HStack(spacing: 12) {
                     Circle()
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(Color.appSecondaryBackground)
                         .frame(width: 40, height: 40)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(project.title).font(.subheadline).bold()
-                        Text(project.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        Text(project.updatedLabel).font(.caption2).foregroundStyle(.tertiary)
+                        Text(project.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
+                        Text(project.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                            .lineLimit(1)
+                        Text(project.updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
                     }
                     Spacer()
                     Image(systemName: "play.circle.fill").font(.title2)
+                        .foregroundStyle(Color.appPrimaryText)
                 }
                 .contentShape(Rectangle())
             }
@@ -156,15 +165,17 @@ private struct ImportActionCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: systemImage)
                     .font(.title3)
+                    .foregroundStyle(Color.appPrimaryText)
                 Text(title)
                     .font(.subheadline)
                     .bold()
+                    .foregroundStyle(Color.appPrimaryText)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 80)
             .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
         }
         .buttonStyle(.plain)
     }

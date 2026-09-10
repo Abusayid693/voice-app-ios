@@ -14,10 +14,14 @@ struct SetupSheet: View {
                     ForEach(VoicePack.allCases) { pack in
                         packRow(for: pack)
                     }
+                    .listRowBackground(Color.appSecondaryBackground)
                 } footer: {
                     Text("Download each voice pack to make its voices available when writing.")
+                        .foregroundStyle(Color.appSecondaryText)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.appBackground)
             .navigationTitle("Setup")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -25,6 +29,7 @@ struct SetupSheet: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
@@ -33,8 +38,8 @@ struct SetupSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pack.title).font(.subheadline).bold()
-                    Text(pack.subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(pack.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
+                    Text(pack.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
                 }
                 Spacer()
                 if isReady {
@@ -51,7 +56,7 @@ struct SetupSheet: View {
                 ProgressView(value: viewModel.downloadFraction)
                 Text(viewModel.downloadProgressLabel)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.appSecondaryText)
             }
         }
         .padding(.vertical, 4)
