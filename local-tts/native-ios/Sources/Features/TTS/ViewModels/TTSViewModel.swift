@@ -92,13 +92,19 @@ final class TTSViewModel: ObservableObject {
     // MARK: - Import screen: voice preview playback (bundled clips, no synthesis)
 
     // Which voice (if any) is currently playing its preview clip — drives
-    // the Trending voices row's play/pause icon.
+    // the preview sheet's play/pause icon.
     @Published private(set) var previewingVoiceID: String?
+    // 0...1 playback position, and a 0...1 normalized live audio level
+    // (from AVAudioPlayer metering) — the preview sheet's progress track
+    // and the cover art's audio-reactive pulse bind to these directly.
+    @Published private(set) var previewProgress: Double = 0
+    @Published private(set) var previewLevel: Double = 0
     // Deliberately separate from kokoroPlayer/pocketService's engine — a
     // preview never touches either engine's state, so it can't collide
     // with an in-progress "Write text" generation.
     private var previewPlayer: AVAudioPlayer?
     private var previewPlayerDelegate: PreviewPlaybackDelegate?
+    private var previewMeterTask: Task<Void, Never>?
 
     // MARK: - Kokoro: one independent track per "Generate" tap
 
@@ -219,10 +225,7 @@ final class TTSViewModel: ObservableObject {
     /// Pocket voices before their pass — see ENG_CONTEXT.md).
     func togglePreview(voiceName: String, engine: Engine) {
         let wasPlayingThisVoice = previewingVoiceID == voiceName
-        previewPlayer?.stop()
-        previewPlayer = nil
-        previewPlayerDelegate = nil
-        previewingVoiceID = nil
+        stopPreview()
         guard !wasPlayingThisVoice else { return }
 
         let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
@@ -233,12 +236,11 @@ final class TTSViewModel: ObservableObject {
             try AVAudioSession.sharedInstance().setCategory(.playback)
             try AVAudioSession.sharedInstance().setActive(true)
             let player = try AVAudioPlayer(contentsOf: url)
+            player.isMeteringEnabled = true
             let delegate = PreviewPlaybackDelegate { [weak self] in
                 Task { @MainActor in
                     guard let self, self.previewingVoiceID == voiceName else { return }
-                    self.previewingVoiceID = nil
-                    self.previewPlayer = nil
-                    self.previewPlayerDelegate = nil
+                    self.stopPreview()
                 }
             }
             player.delegate = delegate
@@ -246,9 +248,49 @@ final class TTSViewModel: ObservableObject {
             previewPlayer = player
             previewingVoiceID = voiceName
             player.play()
+            startPreviewMetering(for: player)
         } catch {
             previewingVoiceID = nil
         }
+    }
+
+    /// Stops whatever preview is playing (if any) and resets the sheet's
+    /// progress/level state — called both when the user explicitly stops
+    /// and when a clip finishes on its own.
+    func stopPreview() {
+        previewMeterTask?.cancel()
+        previewMeterTask = nil
+        previewPlayer?.stop()
+        previewPlayer = nil
+        previewPlayerDelegate = nil
+        previewingVoiceID = nil
+        previewProgress = 0
+        previewLevel = 0
+    }
+
+    /// Polls AVAudioPlayer's metering ~15 times a second while the preview
+    /// plays, translating raw dB into a 0...1 level the cover art's
+    /// scale/opacity pulse binds to, plus 0...1 playback progress for the
+    /// track. Exits on its own once the player stops (finished or replaced).
+    private func startPreviewMetering(for player: AVAudioPlayer) {
+        previewMeterTask = Task { [weak self] in
+            while let self, !Task.isCancelled, self.previewPlayer === player, player.isPlaying {
+                player.updateMeters()
+                self.previewLevel = Self.normalizedLevel(fromDecibels: player.averagePower(forChannel: 0))
+                self.previewProgress = player.duration > 0 ? player.currentTime / player.duration : 0
+                try? await Task.sleep(nanoseconds: 66_000_000)
+            }
+        }
+    }
+
+    /// AVAudioPlayer's metering reports roughly -160 (silence) to 0 dB
+    /// (peak) — clamping to a much narrower, perceptually-useful floor
+    /// (typical speech rarely gets near 0 dB) keeps the pulse visible
+    /// instead of pinned near zero.
+    private static func normalizedLevel(fromDecibels power: Float) -> Double {
+        let floorDb: Float = -50
+        let clamped = max(power, floorDb)
+        return Double((clamped - floorDb) / -floorDb)
     }
 
     private func resetRunState() {

@@ -22,6 +22,16 @@ targets:
       - path: CustomKokoroModel
         type: folder
         buildPhase: resources
+      # Bundled voice-preview clips (Sources/Features/Import — see
+      # ENG_CONTEXT.md's "Voice previews" section). Same reasoning as
+      # CustomKokoroModel above: added under the plain `Sources` scan, this
+      # would be flattened (losing the Kokoro/Pocket subdirectories that
+      # TTSViewModel.togglePreview looks up via
+      # Bundle.main.url(forResource:withExtension:subdirectory:)) —
+      # `type: folder` preserves the real directory structure instead.
+      - path: VoicePreviews
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: FluidAudio
         product: FluidAudio

@@ -12,6 +12,10 @@ struct ImportHomeView: View {
     // as the Import tab stays alive, so "See all" resumes pagination
     // instead of refetching from page 1.
     @StateObject private var trendingBooksViewModel = TrendingBooksViewModel()
+    // Which voice's preview sheet is open, if any — pure navigation state
+    // for this screen, not shared elsewhere, so it lives here rather than
+    // on TTSViewModel.
+    @State private var selectedVoiceTile: VoiceTile?
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -46,6 +50,9 @@ struct ImportHomeView: View {
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
             WriteTextView(viewModel: viewModel)
+        }
+        .sheet(item: $selectedVoiceTile) { tile in
+            VoicePreviewSheet(tile: tile, viewModel: viewModel)
         }
     }
 
@@ -90,7 +97,9 @@ struct ImportHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile, viewModel: viewModel)
+                        VoiceTileView(tile: tile, viewModel: viewModel) {
+                            selectedVoiceTile = tile
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -207,7 +216,7 @@ private struct ImportActionCard: View {
     }
 }
 
-private struct VoiceTile: Identifiable {
+struct VoiceTile: Identifiable {
     let id: String
     // Raw voice code passed to the engine (e.g. "af_alloy", "bill_boerst") —
     // kept separate from the display name so cover-art selection stays keyed
@@ -231,48 +240,50 @@ private struct VoiceTile: Identifiable {
     }
 }
 
-/// One row per voice: cover image, name + engine label, play button at the
-/// trailing end — mirrors the mockup's trending-voice row layout. The play
-/// button plays that voice's bundled preview clip (see
-/// TTSViewModel.togglePreview) — a no-op if the clip isn't bundled yet.
+/// One row per voice: cover image, name + engine label, a play icon at the
+/// trailing end — mirrors the mockup's trending-voice row layout. Tapping
+/// anywhere on the row opens VoicePreviewSheet rather than playing inline;
+/// the icon just reflects whether this voice's preview is the one
+/// currently playing (started from that sheet).
 private struct VoiceTileView: View {
     let tile: VoiceTile
     @ObservedObject var viewModel: TTSViewModel
+    let onTap: () -> Void
 
     private var isPreviewing: Bool { viewModel.previewingVoiceID == tile.name }
 
     var body: some View {
-        HStack(spacing: 10) {
-            avatar
-                .frame(width: 60, height: 60)
-                .clipShape(Circle())
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                avatar
+                    .frame(width: 60, height: 60)
+                    .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tile.displayName)
-                    .font(.subheadline)
-                    .bold()
-                    .foregroundStyle(Color.appPrimaryText)
-                    .lineLimit(1)
-                Text(tile.engineLabel)
-                    .font(.caption2)
-                    .foregroundStyle(Color.appTertiaryText)
-            }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tile.displayName)
+                        .font(.subheadline)
+                        .bold()
+                        .foregroundStyle(Color.appPrimaryText)
+                        .lineLimit(1)
+                    Text(tile.engineLabel)
+                        .font(.caption2)
+                        .foregroundStyle(Color.appTertiaryText)
+                }
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            Button {
-                viewModel.togglePreview(voiceName: tile.name, engine: tile.engine)
-            } label: {
                 Image(systemName: isPreviewing ? "pause.circle.fill" : "play.circle.fill")
                     .font(.title2)
                     .foregroundStyle(Color.appPrimaryText)
             }
-            .disabled(!tile.isAvailable)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(width: 268, height: 84)
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(width: 268, height: 84)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
+        .buttonStyle(.plain)
+        .disabled(!tile.isAvailable)
         .opacity(tile.isAvailable ? 1 : 0.6)
     }
 
@@ -292,7 +303,7 @@ private struct VoiceTileView: View {
 /// `VoiceCoverN` assets) for voices whose pack is downloaded, or a
 /// gradient placeholder — picked deterministically from the voice's name,
 /// not re-randomized on every redraw — for voices that aren't available yet.
-private enum VoiceCoverArt {
+enum VoiceCoverArt {
     private static let assetNames = [
         "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
     ]

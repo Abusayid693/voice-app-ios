@@ -8,62 +8,36 @@
 
 /* Begin PBXBuildFile section */
 		00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */; };
-		00F2DB879585217E697472AE /* af_river.wav in Resources */ = {isa = PBXBuildFile; fileRef = 50FD452BE391258981EC76A2 /* af_river.wav */; };
-		01BABA2508E0026289FF0662 /* af_bella.wav in Resources */ = {isa = PBXBuildFile; fileRef = 775A9195439864E8AF99D6C4 /* af_bella.wav */; };
 		041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851CC1471E60AC39DADD12C6 /* VoicePack.swift */; };
 		053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07EEB3027B4E022D555A931 /* Engine.swift */; };
-		06AEAD1247795B7207ED536B /* am_michael.wav in Resources */ = {isa = PBXBuildFile; fileRef = BE68C04EB2E9D456BACE6405 /* am_michael.wav */; };
-		073A10232961132326BA6B2A /* af_heart.wav in Resources */ = {isa = PBXBuildFile; fileRef = FD7C83FC1221E954828C4FE8 /* af_heart.wav */; };
-		0AFE25160161D92811A1E9EB /* bf_alice.wav in Resources */ = {isa = PBXBuildFile; fileRef = E910E623D27A34E576A14958 /* bf_alice.wav */; };
 		1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */; };
-		158A617F11B0CDDB7A6E63C8 /* bm_lewis.wav in Resources */ = {isa = PBXBuildFile; fileRef = 31D051C32A0550C8699ED86E /* bm_lewis.wav */; };
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
-		1AC22E4440E8A0F3AAE26841 /* af_sky.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3B8029B66C23A11ECD228336 /* af_sky.wav */; };
-		1FD8963809DABB13FFE0EFB1 /* af_kore.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7D48E0B4646F3C299BD3CBF3 /* af_kore.wav */; };
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
-		280B8792B0A8016923B9B9FD /* af_aoede.wav in Resources */ = {isa = PBXBuildFile; fileRef = 0B884679D21F00964E52E465 /* af_aoede.wav */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
-		29A340A16FD1E0FF8A723142 /* bf_emma.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7D37325668D59CD8AF20176C /* bf_emma.wav */; };
 		2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */; };
-		31784544C6AE7CCFAFBF0677 /* am_fenrir.wav in Resources */ = {isa = PBXBuildFile; fileRef = A9AAF7F7517AEECA60BDCE7C /* am_fenrir.wav */; };
-		3DD13C2B3DC326599FF8BC50 /* bf_isabella.wav in Resources */ = {isa = PBXBuildFile; fileRef = 18E763EB8D29C10E3ADF6B1D /* bf_isabella.wav */; };
 		47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */; };
-		4932076B38EDF2742DD86314 /* am_onyx.wav in Resources */ = {isa = PBXBuildFile; fileRef = 5A6AAFCE5B113FCB6FDD68F6 /* am_onyx.wav */; };
 		5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */ = {isa = PBXBuildFile; fileRef = 336FA80C01B8751C4A246C5D /* CustomKokoroModel */; };
-		57AD0925D1B459C91FF832CA /* am_echo.wav in Resources */ = {isa = PBXBuildFile; fileRef = 835293C20E0A2D103C14FBBC /* am_echo.wav */; };
-		58C0BCE89A771149BD8EE95D /* bm_daniel.wav in Resources */ = {isa = PBXBuildFile; fileRef = 890A69D7E7C450D030E37395 /* bm_daniel.wav */; };
-		5B4A7B69FA5A5194046C1C08 /* am_puck.wav in Resources */ = {isa = PBXBuildFile; fileRef = C24F411BA895E718A72497C4 /* am_puck.wav */; };
-		5B54A118EB7270FC53AF982D /* am_santa.wav in Resources */ = {isa = PBXBuildFile; fileRef = 37092A443CCEC3546B6404BA /* am_santa.wav */; };
-		63E7C62FC8386A0D62C32ADB /* am_eric.wav in Resources */ = {isa = PBXBuildFile; fileRef = 4F0312921C3F90373CBD8995 /* am_eric.wav */; };
 		6AA586D1EF397B16E67E331D /* DemoContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
 		7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */; };
+		7BA3D073D03AC978E3131ABE /* VoicePreviews in Resources */ = {isa = PBXBuildFile; fileRef = CAFE6273C18A193545CA0FF7 /* VoicePreviews */; };
 		7CCF792E32580E0A413F0C91 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251025C4FD0961EB5F194C37 /* Colors.swift */; };
 		7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */; };
 		801C80FF1382D90ED246370E /* TrendingBookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9016A555EFF94E335E35D39C /* TrendingBookCard.swift */; };
 		846BCD15B53DBF85CD1BF2BB /* TrendingBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C3E7070E8D2293BE1EEC9E /* TrendingBook.swift */; };
-		86CED5ABC768A6FBE2E649E0 /* af_sarah.wav in Resources */ = {isa = PBXBuildFile; fileRef = 07068B392A81CE07C6A7D1C0 /* af_sarah.wav */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
-		90DB7734A4C60B50EF26FB37 /* bm_fable.wav in Resources */ = {isa = PBXBuildFile; fileRef = 2901B6E5E7D4F81260C89866 /* bm_fable.wav */; };
 		959A3EA4880EB5C09A60E4C3 /* TrendingBooksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */; };
 		95BAE181CEFF899DB13372AF /* AllTrendingBooksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D73267891CCDBCE38D83CBE2 /* AllTrendingBooksView.swift */; };
 		9AE50BFF7E4F47F323F182D5 /* GutendexBookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E835D4B284142A927D25FD97 /* GutendexBookService.swift */; };
 		A14CDE189527D09CED04A1B7 /* VoicePreviewLines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */; };
 		A31090C8406142856F289B20 /* TextEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E463AF022C12D3968F17F19E /* TextEntrySheet.swift */; };
 		A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */; };
-		A98010E915B77A0B664A55BB /* am_liam.wav in Resources */ = {isa = PBXBuildFile; fileRef = EF67D0C863075D2F2981F4F0 /* am_liam.wav */; };
 		B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */; };
-		B3B2115DB9983F5B765E7995 /* bf_lily.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7F41191D552B91263FE84575 /* bf_lily.wav */; };
 		B43FF140251F0F882F5521C4 /* TTSHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F031436CEB5A91169A486C /* TTSHomeView.swift */; };
-		B5226D5D28DA6DCA25AE379B /* am_adam.wav in Resources */ = {isa = PBXBuildFile; fileRef = 374E7D9B927DDAE8702E9040 /* am_adam.wav */; };
 		B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */; };
-		C77067117BA1E396655E1179 /* af_jessica.wav in Resources */ = {isa = PBXBuildFile; fileRef = 0DEEC5D970FA7BA494844AAC /* af_jessica.wav */; };
-		C9405DFCB42AC610CD54838D /* af_alloy.wav in Resources */ = {isa = PBXBuildFile; fileRef = 17AA7FC712BE6E4270A8ABCB /* af_alloy.wav */; };
+		BB75A4408D01E36AE4E242C6 /* VoicePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F951C1610075724A48F1647E /* VoicePreviewSheet.swift */; };
 		CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */; };
-		E88EDEB62AC139B6DC00BBF9 /* af_nicole.wav in Resources */ = {isa = PBXBuildFile; fileRef = 428D01E680918B34AC96C917 /* af_nicole.wav */; };
-		E947F5D52FD2DD82AC586EAB /* bm_george.wav in Resources */ = {isa = PBXBuildFile; fileRef = 11C2954BC2714D1236E19387 /* bm_george.wav */; };
 		EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */; };
-		ECC3FE10E4136A4C5251DA22 /* af_nova.wav in Resources */ = {isa = PBXBuildFile; fileRef = 249423212D61B85353403E6D /* af_nova.wav */; };
 		EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */; };
 		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
 /* End PBXBuildFile section */
@@ -71,53 +45,29 @@
 /* Begin PBXFileReference section */
 		03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettingsSheet.swift; sourceTree = "<group>"; };
 		05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewLines.swift; sourceTree = "<group>"; };
-		07068B392A81CE07C6A7D1C0 /* af_sarah.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_sarah.wav; sourceTree = "<group>"; };
-		0B884679D21F00964E52E465 /* af_aoede.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_aoede.wav; sourceTree = "<group>"; };
-		0DEEC5D970FA7BA494844AAC /* af_jessica.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_jessica.wav; sourceTree = "<group>"; };
-		11C2954BC2714D1236E19387 /* bm_george.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bm_george.wav; sourceTree = "<group>"; };
-		17AA7FC712BE6E4270A8ABCB /* af_alloy.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_alloy.wav; sourceTree = "<group>"; };
-		18E763EB8D29C10E3ADF6B1D /* bf_isabella.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bf_isabella.wav; sourceTree = "<group>"; };
 		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
-		249423212D61B85353403E6D /* af_nova.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_nova.wav; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		25C3E7070E8D2293BE1EEC9E /* TrendingBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBook.swift; sourceTree = "<group>"; };
-		2901B6E5E7D4F81260C89866 /* bm_fable.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bm_fable.wav; sourceTree = "<group>"; };
 		296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoContent.swift; sourceTree = "<group>"; };
 		3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroAneTestApp.swift; sourceTree = "<group>"; };
 		30A3AE469CA3D6649CCD731F /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
-		31D051C32A0550C8699ED86E /* bm_lewis.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bm_lewis.wav; sourceTree = "<group>"; };
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
-		37092A443CCEC3546B6404BA /* am_santa.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_santa.wav; sourceTree = "<group>"; };
-		374E7D9B927DDAE8702E9040 /* am_adam.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_adam.wav; sourceTree = "<group>"; };
-		3B8029B66C23A11ECD228336 /* af_sky.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_sky.wav; sourceTree = "<group>"; };
-		428D01E680918B34AC96C917 /* af_nicole.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_nicole.wav; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
-		4F0312921C3F90373CBD8995 /* am_eric.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_eric.wav; sourceTree = "<group>"; };
-		50FD452BE391258981EC76A2 /* af_river.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_river.wav; sourceTree = "<group>"; };
-		5A6AAFCE5B113FCB6FDD68F6 /* am_onyx.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_onyx.wav; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
-		775A9195439864E8AF99D6C4 /* af_bella.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_bella.wav; sourceTree = "<group>"; };
-		7D37325668D59CD8AF20176C /* bf_emma.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bf_emma.wav; sourceTree = "<group>"; };
-		7D48E0B4646F3C299BD3CBF3 /* af_kore.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_kore.wav; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
-		7F41191D552B91263FE84575 /* bf_lily.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bf_lily.wav; sourceTree = "<group>"; };
-		835293C20E0A2D103C14FBBC /* am_echo.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_echo.wav; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
-		890A69D7E7C450D030E37395 /* bm_daniel.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bm_daniel.wav; sourceTree = "<group>"; };
 		9016A555EFF94E335E35D39C /* TrendingBookCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBookCard.swift; sourceTree = "<group>"; };
 		99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBooksViewModel.swift; sourceTree = "<group>"; };
 		A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteTextView.swift; sourceTree = "<group>"; };
-		A9AAF7F7517AEECA60BDCE7C /* am_fenrir.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_fenrir.wav; sourceTree = "<group>"; };
 		B4839B571DC8F7200C26BC98 /* ChunkState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkState.swift; sourceTree = "<group>"; };
 		BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGeneration.swift; sourceTree = "<group>"; };
 		BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
-		BE68C04EB2E9D456BACE6405 /* am_michael.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_michael.wav; sourceTree = "<group>"; };
 		C07EEB3027B4E022D555A931 /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
-		C24F411BA895E718A72497C4 /* am_puck.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_puck.wav; sourceTree = "<group>"; };
 		C8DE7BD70ACE70EDC00A3D47 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroTextChunker.swift; sourceTree = "<group>"; };
+		CAFE6273C18A193545CA0FF7 /* VoicePreviews */ = {isa = PBXFileReference; lastKnownFileType = folder; path = VoicePreviews; sourceTree = SOURCE_ROOT; };
 		D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGenerationListView.swift; sourceTree = "<group>"; };
 		D73267891CCDBCE38D83CBE2 /* AllTrendingBooksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllTrendingBooksView.swift; sourceTree = "<group>"; };
 		E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -125,10 +75,8 @@
 		E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupSheet.swift; sourceTree = "<group>"; };
 		E463AF022C12D3968F17F19E /* TextEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEntrySheet.swift; sourceTree = "<group>"; };
 		E835D4B284142A927D25FD97 /* GutendexBookService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GutendexBookService.swift; sourceTree = "<group>"; };
-		E910E623D27A34E576A14958 /* bf_alice.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = bf_alice.wav; sourceTree = "<group>"; };
-		EF67D0C863075D2F2981F4F0 /* am_liam.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = am_liam.wav; sourceTree = "<group>"; };
 		F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuggingFaceTreeSizeFetcher.swift; sourceTree = "<group>"; };
-		FD7C83FC1221E954828C4FE8 /* af_heart.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = af_heart.wav; sourceTree = "<group>"; };
+		F951C1610075724A48F1647E /* VoicePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +125,7 @@
 				7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */,
 				E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */,
 				9016A555EFF94E335E35D39C /* TrendingBookCard.swift */,
+				F951C1610075724A48F1647E /* VoicePreviewSheet.swift */,
 				03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */,
 				A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */,
 			);
@@ -248,44 +197,8 @@
 			children = (
 				E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */,
 				C8DE7BD70ACE70EDC00A3D47 /* Info.plist */,
-				C745C0E27174A215A784BA6C /* VoicePreviews */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		8E9A58080AC4B776D3782C15 /* Kokoro */ = {
-			isa = PBXGroup;
-			children = (
-				17AA7FC712BE6E4270A8ABCB /* af_alloy.wav */,
-				0B884679D21F00964E52E465 /* af_aoede.wav */,
-				775A9195439864E8AF99D6C4 /* af_bella.wav */,
-				FD7C83FC1221E954828C4FE8 /* af_heart.wav */,
-				0DEEC5D970FA7BA494844AAC /* af_jessica.wav */,
-				7D48E0B4646F3C299BD3CBF3 /* af_kore.wav */,
-				428D01E680918B34AC96C917 /* af_nicole.wav */,
-				249423212D61B85353403E6D /* af_nova.wav */,
-				50FD452BE391258981EC76A2 /* af_river.wav */,
-				07068B392A81CE07C6A7D1C0 /* af_sarah.wav */,
-				3B8029B66C23A11ECD228336 /* af_sky.wav */,
-				374E7D9B927DDAE8702E9040 /* am_adam.wav */,
-				835293C20E0A2D103C14FBBC /* am_echo.wav */,
-				4F0312921C3F90373CBD8995 /* am_eric.wav */,
-				A9AAF7F7517AEECA60BDCE7C /* am_fenrir.wav */,
-				EF67D0C863075D2F2981F4F0 /* am_liam.wav */,
-				BE68C04EB2E9D456BACE6405 /* am_michael.wav */,
-				5A6AAFCE5B113FCB6FDD68F6 /* am_onyx.wav */,
-				C24F411BA895E718A72497C4 /* am_puck.wav */,
-				37092A443CCEC3546B6404BA /* am_santa.wav */,
-				E910E623D27A34E576A14958 /* bf_alice.wav */,
-				7D37325668D59CD8AF20176C /* bf_emma.wav */,
-				18E763EB8D29C10E3ADF6B1D /* bf_isabella.wav */,
-				7F41191D552B91263FE84575 /* bf_lily.wav */,
-				890A69D7E7C450D030E37395 /* bm_daniel.wav */,
-				2901B6E5E7D4F81260C89866 /* bm_fable.wav */,
-				11C2954BC2714D1236E19387 /* bm_george.wav */,
-				31D051C32A0550C8699ED86E /* bm_lewis.wav */,
-			);
-			path = Kokoro;
 			sourceTree = "<group>";
 		};
 		9A02FA37760CC6407BB21860 /* DesignSystem */ = {
@@ -326,14 +239,6 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
-		C745C0E27174A215A784BA6C /* VoicePreviews */ = {
-			isa = PBXGroup;
-			children = (
-				8E9A58080AC4B776D3782C15 /* Kokoro */,
-			);
-			path = VoicePreviews;
-			sourceTree = "<group>";
-		};
 		CB7D39C73A5D9F773FAF3F54 /* Core */ = {
 			isa = PBXGroup;
 			children = (
@@ -354,6 +259,7 @@
 			isa = PBXGroup;
 			children = (
 				336FA80C01B8751C4A246C5D /* CustomKokoroModel */,
+				CAFE6273C18A193545CA0FF7 /* VoicePreviews */,
 				BF369F6F170087D8BCCB6182 /* Sources */,
 				667BED9B659518709B9B9718 /* Products */,
 			);
@@ -436,34 +342,7 @@
 			files = (
 				1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */,
 				5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */,
-				C9405DFCB42AC610CD54838D /* af_alloy.wav in Resources */,
-				280B8792B0A8016923B9B9FD /* af_aoede.wav in Resources */,
-				01BABA2508E0026289FF0662 /* af_bella.wav in Resources */,
-				073A10232961132326BA6B2A /* af_heart.wav in Resources */,
-				C77067117BA1E396655E1179 /* af_jessica.wav in Resources */,
-				1FD8963809DABB13FFE0EFB1 /* af_kore.wav in Resources */,
-				E88EDEB62AC139B6DC00BBF9 /* af_nicole.wav in Resources */,
-				ECC3FE10E4136A4C5251DA22 /* af_nova.wav in Resources */,
-				00F2DB879585217E697472AE /* af_river.wav in Resources */,
-				86CED5ABC768A6FBE2E649E0 /* af_sarah.wav in Resources */,
-				1AC22E4440E8A0F3AAE26841 /* af_sky.wav in Resources */,
-				B5226D5D28DA6DCA25AE379B /* am_adam.wav in Resources */,
-				57AD0925D1B459C91FF832CA /* am_echo.wav in Resources */,
-				63E7C62FC8386A0D62C32ADB /* am_eric.wav in Resources */,
-				31784544C6AE7CCFAFBF0677 /* am_fenrir.wav in Resources */,
-				A98010E915B77A0B664A55BB /* am_liam.wav in Resources */,
-				06AEAD1247795B7207ED536B /* am_michael.wav in Resources */,
-				4932076B38EDF2742DD86314 /* am_onyx.wav in Resources */,
-				5B4A7B69FA5A5194046C1C08 /* am_puck.wav in Resources */,
-				5B54A118EB7270FC53AF982D /* am_santa.wav in Resources */,
-				0AFE25160161D92811A1E9EB /* bf_alice.wav in Resources */,
-				29A340A16FD1E0FF8A723142 /* bf_emma.wav in Resources */,
-				3DD13C2B3DC326599FF8BC50 /* bf_isabella.wav in Resources */,
-				B3B2115DB9983F5B765E7995 /* bf_lily.wav in Resources */,
-				58C0BCE89A771149BD8EE95D /* bm_daniel.wav in Resources */,
-				90DB7734A4C60B50EF26FB37 /* bm_fable.wav in Resources */,
-				E947F5D52FD2DD82AC586EAB /* bm_george.wav in Resources */,
-				158A617F11B0CDDB7A6E63C8 /* bm_lewis.wav in Resources */,
+				7BA3D073D03AC978E3131ABE /* VoicePreviews in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,6 +379,7 @@
 				959A3EA4880EB5C09A60E4C3 /* TrendingBooksViewModel.swift in Sources */,
 				041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */,
 				A14CDE189527D09CED04A1B7 /* VoicePreviewLines.swift in Sources */,
+				BB75A4408D01E36AE4E242C6 /* VoicePreviewSheet.swift in Sources */,
 				47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */,
 				7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */,
 			);
