@@ -1,0 +1,75 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug. Include screenshots if helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to '...'
+        2. Tap on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: false
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: TTS engine
+      description: Which engine was active when this happened, if relevant?
+      options:
+        - Kokoro-ANE
+        - Pocket TTS
+        - Cloned voice (Pocket TTS)
+        - Not applicable / not sure
+    validations:
+      required: false
+
+  - type: input
+    id: voice
+    attributes:
+      label: Voice
+      description: Which voice was selected, if relevant (e.g. af_heart, alba)?
+    validations:
+      required: false
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: e.g. iPhone 15 Pro, iPhone Simulator (iPhone 16)
+    validations:
+      required: true
+
+  - type: input
+    id: ios-version
+    attributes:
+      label: iOS version
+      placeholder: e.g. 17.5
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / console output
+      description: Paste any relevant Xcode console output or crash logs.
+      render: shell
+    validations:
+      required: false
