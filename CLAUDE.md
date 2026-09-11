@@ -63,6 +63,7 @@ Sources/
         VoicePacksView.swift       // DONE — per-engine downloaded/size status, computed from real on-disk directories
         StorageView.swift          // DONE — Kokoro/Pocket pack + cloned-voices size breakdown + total, all real (AppStorage.directorySize)
         AboutView.swift            // DONE — app version, read from the real bundle (CFBundleShortVersionString/CFBundleVersion)
+        OpenSourceCard.swift       // DONE — promo card below About: cover image header, open-source pitch, "Contribute" link to the repo; frosted-glass style (Material, not real iOS 26 Liquid Glass — see file header)
     VoiceClone/                   // DONE — record/clone/manage the user's own PocketTTS voices (Voices tab + Import's "Create your own voice")
       Views/
         VoicesTabView.swift       // DONE — list cloned voices, preview (live synth) / delete; "+" opens RecordVoiceView
@@ -97,7 +98,7 @@ Sources/
       DiskStorage.swift           // DONE — recursive on-disk directory sizing, used by Settings > Voice Packs/Storage
   Resources/
     Info.plist                    // DONE
-    Assets.xcassets                // DONE — voice cover art (VoiceCover1-6) used by Trending voices
+    Assets.xcassets                // DONE — voice cover art (VoiceCover1-6) used by Trending voices; SettingsCoverImage used by Settings' OpenSourceCard
 CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md to regenerate; project.yml bundles it as a `type: folder` resource
 VoicePreviews/
   Kokoro/*.wav                    // DONE — 28 bundled Kokoro voice-preview clips; project.yml bundles this as a `type: folder` resource (same reasoning as CustomKokoroModel)

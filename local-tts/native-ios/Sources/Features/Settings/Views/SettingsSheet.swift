@@ -30,6 +30,12 @@ struct SettingsSheet: View {
                     }
                 }
                 .listRowBackground(Color.appSecondaryBackground)
+
+                Section {
+                    OpenSourceCard()
+                        .listRowBackground(Color.appBackground)
+                        .listRowInsets(EdgeInsets())
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color.appBackground)
