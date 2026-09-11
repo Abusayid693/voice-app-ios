@@ -10,10 +10,12 @@ struct OpenSourceCard: View {
     private static let githubURL = URL(string: "https://github.com/Abusayid693/voice-app-ios")!
     private static let cardShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 
+    // Short and parallel on purpose — each needs to fit on one line
+    // without wrapping (see the `.lineLimit(1)` below).
     private static let points = [
-        "Fully open source — read or change any line of it",
-        "Runs on free, open-source TTS models",
-        "Free forever: no ads, no subscriptions, nothing to unlock",
+        "Fully open source",
+        "Free, open-source TTS models",
+        "No ads, no subscriptions, no bullshit",
     ]
 
     var body: some View {
@@ -28,12 +30,19 @@ struct OpenSourceCard: View {
                         Text(point)
                             .font(.subheadline)
                             .foregroundStyle(Color.appSecondaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
                     }
                 }
                 contributeButton
                     .padding(.top, 4)
             }
             .padding(16)
+            // Opaque, and the exact same color the header's scrim fades
+            // into below — matching colors on both sides of that boundary
+            // is what actually removes the seam, not just an approximate
+            // gradient/material blend.
+            .background(Color.appSecondaryBackground)
         }
         .background(.ultraThinMaterial, in: Self.cardShape)
         .overlay(Self.cardShape.strokeBorder(Color.white.opacity(0.12)))
@@ -49,23 +58,29 @@ struct OpenSourceCard: View {
                 .clipped()
 
             // Progressive blur: a blurred copy of the same image, revealed
-            // only near the bottom via a gradient mask, so the blur
-            // strengthens gradually toward the edge instead of applying
-            // uniformly everywhere.
+            // increasingly toward the bottom via a gradient mask, so the
+            // blur strengthens gradually approaching the edge instead of
+            // applying uniformly everywhere or cutting off abruptly.
             Image("SettingsCoverImage")
                 .resizable()
                 .scaledToFill()
                 .frame(height: 160)
                 .clipped()
-                .blur(radius: 16)
-                .mask(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
+                .blur(radius: 20)
+                .mask(
+                    LinearGradient(
+                        colors: [.clear, .black],
+                        startPoint: UnitPoint(x: 0.5, y: 0.35), endPoint: .bottom)
+                )
 
-            // Darkening scrim for text legibility — reaches fully opaque
-            // black right at the bottom edge (not just 0.8) so none of the
-            // light source photo bleeds through into a visible seam where
-            // the header meets the card's darker body below.
+            // Darkening scrim for text legibility, ending at the *exact*
+            // same flat color as the content section below
+            // (Color.appSecondaryBackground) rather than plain black — so
+            // the header visually blends straight into the card body
+            // instead of leaving a hard seam where a different tone would
+            // otherwise meet it.
             LinearGradient(
-                colors: [.clear, .black.opacity(0.5), .black],
+                colors: [.clear, Color.appSecondaryBackground.opacity(0.6), Color.appSecondaryBackground],
                 startPoint: .top, endPoint: .bottom)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -78,6 +93,8 @@ struct OpenSourceCard: View {
                 Text("Built in the open, for everyone")
                     .font(.title3.bold())
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .padding(16)
         }
