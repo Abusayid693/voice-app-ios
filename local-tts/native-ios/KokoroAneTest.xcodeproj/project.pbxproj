@@ -36,6 +36,7 @@
 		83975B79CB40408F447C561F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA21F0B398C4B3DA5EE02D6 /* AboutView.swift */; };
 		846BCD15B53DBF85CD1BF2BB /* TrendingBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C3E7070E8D2293BE1EEC9E /* TrendingBook.swift */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
+		87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */; };
 		8CCDD010CEB39749F8D06671 /* VoiceRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784AE95CAB2310D364034251 /* VoiceRecorderService.swift */; };
 		913CEBA126D84389FFDA21C5 /* VoicePacksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046CF8805E70FDE33206289F /* VoicePacksView.swift */; };
 		918CCAA9F1918E9F3B1C7CF1 /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2346E68205E6911A9AF347 /* StorageView.swift */; };
@@ -85,6 +86,7 @@
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		784AE95CAB2310D364034251 /* VoiceRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorderService.swift; sourceTree = "<group>"; };
+		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
 				BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */,
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
+				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -549,6 +552,7 @@
 				7C55558B9AC3B4289E4B7517 /* UploadVoiceView.swift in Sources */,
 				B48D061C014B0B1E8233E5CA /* VoiceCloneRoute.swift in Sources */,
 				CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */,
+				87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */,
 				041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */,
 				913CEBA126D84389FFDA21C5 /* VoicePacksView.swift in Sources */,
 				A14CDE189527D09CED04A1B7 /* VoicePreviewLines.swift in Sources */,

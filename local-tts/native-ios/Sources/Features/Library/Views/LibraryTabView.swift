@@ -76,7 +76,9 @@ struct LibraryTabView: View {
                 Text(generation.text)
                     .foregroundStyle(Color.appPrimaryText)
                     .lineLimit(2)
-                Text("\(generation.voiceName) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                Text(
+                    "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))"
+                )
                     .font(.caption)
                     .foregroundStyle(Color.appSecondaryText)
             }

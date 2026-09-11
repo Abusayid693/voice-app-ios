@@ -227,27 +227,62 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
     }
 
+    // Real generations (latest 5, newest first) once any exist; falls back
+    // to the static demo row + a "Create your own project" entry point
+    // (no action yet, matching createYourOwnBookRow's own no-op) while the
+    // library is still empty.
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Projects").font(.headline).foregroundStyle(Color.appPrimaryText)
-            ForEach(DemoContent.projects) { project in
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color.appSecondaryBackground)
-                        .frame(width: 40, height: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                        Text(project.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
-                            .lineLimit(1)
-                        Text(project.updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
-                    }
-                    Spacer()
-                    Image(systemName: "play.circle.fill").font(.title2)
-                        .foregroundStyle(Color.appPrimaryText)
+            if libraryViewModel.savedGenerations.isEmpty {
+                ForEach(DemoContent.projects) { project in
+                    projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
                 }
-                .contentShape(Rectangle())
+                createYourOwnProjectRow
+            } else {
+                ForEach(libraryViewModel.savedGenerations.prefix(5)) { generation in
+                    projectRow(
+                        title: VoiceDisplayName.forCode(generation.voiceName),
+                        subtitle: generation.text,
+                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                }
             }
         }
+    }
+
+    private func projectRow(title: String, subtitle: String, updatedLabel: String) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.appSecondaryBackground)
+                .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
+                Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                    .lineLimit(1)
+                Text(updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
+            }
+            Spacer()
+            Image(systemName: "play.circle.fill").font(.title2)
+                .foregroundStyle(Color.appPrimaryText)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var createYourOwnProjectRow: some View {
+        Button(action: {}) {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(Color.appPrimaryText)
+                Text("Create your own project").font(.subheadline).bold()
+                    .foregroundStyle(Color.appPrimaryText)
+                Spacer()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -288,17 +323,7 @@ struct VoiceTile: Identifiable {
     let isAvailable: Bool
 
     // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
-    var displayName: String {
-        var raw = Substring(name)
-        for prefix in ["af_", "am_", "bf_", "bm_"] where raw.hasPrefix(prefix) {
-            raw.removeFirst(prefix.count)
-            break
-        }
-        return raw
-            .split(separator: "_")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
+    var displayName: String { VoiceDisplayName.forCode(name) }
 }
 
 /// One row per voice: cover image, name + engine label, a play icon at the
