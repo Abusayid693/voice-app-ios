@@ -32,3 +32,7 @@ open KokoroAneTest.xcodeproj
 ```
 
 Requires Xcode with an iOS 17+ simulator or device. `CustomKokoroModel/` is gitignored (large, regeneratable) — see `ENG_CONTEXT.md` for the regeneration recipe if it's missing on a fresh clone.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
