@@ -18,7 +18,8 @@ struct UploadVoiceView: View {
 
             if !viewModel.hasRecording {
                 Button("Upload") { isFileImporterPresented = true }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.primary)
+                    .padding(.horizontal, 40)
             } else {
                 Text("Imported file")
                     .font(.title2)

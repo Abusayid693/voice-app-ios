@@ -49,12 +49,12 @@ struct VoiceSamplePreviewSection: View {
                 }
             } label: {
                 if viewModel.isCloning {
-                    ProgressView().frame(maxWidth: .infinity)
+                    ProgressView().tint(Color.primaryButtonText).frame(maxWidth: .infinity)
                 } else {
                     Text("Clone Voice").bold().frame(maxWidth: .infinity)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.primary)
             .disabled(viewModel.isCloning)
             .padding(.horizontal, 40)
         }

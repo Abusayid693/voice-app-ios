@@ -6,6 +6,7 @@ import SwiftUI
 struct VoicesTabView: View {
     @ObservedObject var viewModel: VoiceCloneViewModel
     @State private var isCreateVoicePresented = false
+    @State private var voiceCloneRoute: VoiceCloneRoute?
 
     var body: some View {
         NavigationStack {
@@ -46,11 +47,20 @@ struct VoicesTabView: View {
                     }
                 }
             }
+            .navigationDestination(item: $voiceCloneRoute) { route in
+                switch route {
+                case .instantClone:
+                    InstantCloneView(viewModel: viewModel) { voiceCloneRoute = nil }
+                case .upload:
+                    UploadVoiceView(viewModel: viewModel) { voiceCloneRoute = nil }
+                }
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $isCreateVoicePresented) {
-            CreateVoiceSheet(viewModel: viewModel) {
+            CreateVoiceSheet { route in
                 isCreateVoicePresented = false
+                voiceCloneRoute = route
             }
         }
     }

@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// Pushed from CreateVoiceSheet for .instantClone — record ~10s of speech
-/// (a suggested passage is shown to read aloud), then the shared
+/// Pushed as a real page (not inside the CreateVoiceSheet modal) for
+/// .instantClone — record ~10s of speech (a suggested passage is shown to
+/// read aloud, with a "Try another" shuffle), then the shared
 /// preview/name/Clone step.
 struct InstantCloneView: View {
     @ObservedObject var viewModel: VoiceCloneViewModel
     let onFinished: () -> Void
+    @State private var passageIndex = 0
 
     var body: some View {
         VStack(spacing: 28) {
@@ -25,14 +27,22 @@ struct InstantCloneView: View {
                 .foregroundStyle(Color.appPrimaryText)
 
             if !viewModel.hasRecording {
-                VStack(spacing: 6) {
+                VStack(spacing: 10) {
                     Text("Try reading this aloud")
                         .font(.caption)
                         .foregroundStyle(Color.appSecondaryText)
-                    Text(VoiceCloneViewModel.suggestedReadingText)
-                        .font(.subheadline)
+                    Text(currentPassage)
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(Color.appPrimaryText)
                         .multilineTextAlignment(.center)
+                    Button {
+                        passageIndex =
+                            (passageIndex + 1) % VoiceCloneViewModel.suggestedReadingPassages.count
+                    } label: {
+                        Label("Try another", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Color.appSecondaryText)
                 }
                 .padding(.horizontal, 32)
             }
@@ -51,6 +61,10 @@ struct InstantCloneView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private var currentPassage: String {
+        VoiceCloneViewModel.suggestedReadingPassages[passageIndex]
+    }
+
     private var timerLabel: String {
         let totalSeconds = Int(viewModel.recordingDuration)
         return String(format: "0:%02d", totalSeconds)
@@ -63,8 +77,9 @@ struct InstantCloneView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
         } else if !viewModel.hasRecording {
-            Button("Record") { viewModel.startRecording() }
-                .buttonStyle(.borderedProminent)
+            Button("Create Clone") { viewModel.startRecording() }
+                .buttonStyle(.primary)
+                .padding(.horizontal, 40)
         }
     }
 }

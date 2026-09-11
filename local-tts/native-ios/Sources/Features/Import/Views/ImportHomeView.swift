@@ -18,6 +18,7 @@ struct ImportHomeView: View {
     // on TTSViewModel.
     @State private var selectedVoiceTile: VoiceTile?
     @State private var isCreateVoicePresented = false
+    @State private var voiceCloneRoute: VoiceCloneRoute?
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -46,6 +47,14 @@ struct ImportHomeView: View {
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
+            .navigationDestination(item: $voiceCloneRoute) { route in
+                switch route {
+                case .instantClone:
+                    InstantCloneView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                case .upload:
+                    UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                }
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
@@ -55,8 +64,9 @@ struct ImportHomeView: View {
             WriteTextView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
         }
         .sheet(isPresented: $isCreateVoicePresented) {
-            CreateVoiceSheet(viewModel: voiceCloneViewModel) {
+            CreateVoiceSheet { route in
                 isCreateVoicePresented = false
+                voiceCloneRoute = route
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in

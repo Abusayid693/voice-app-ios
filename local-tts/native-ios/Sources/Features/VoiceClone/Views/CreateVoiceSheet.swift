@@ -1,54 +1,40 @@
 import SwiftUI
 
 /// Bottom sheet reached from the Voices tab's "+ New voice"/toolbar "+"
-/// and Import's "Create your own voice" row — offers Instant Clone or
-/// Upload file, each a real push within this sheet's own NavigationStack
-/// (so it behaves the same regardless of which tab presented it, and a
-/// pushed screen's own `dismiss()` only pops here rather than closing the
-/// whole sheet — that's why InstantCloneView/UploadVoiceView call
-/// `onFinished` instead, for the presenter to close the sheet itself).
+/// and Import's "Create your own voice" row — a pure chooser between
+/// Instant Clone and Upload file. It does not navigate itself: picking an
+/// option reports the choice up via `onSelect`, and the presenter (which
+/// owns the real NavigationStack) dismisses this sheet and pushes the
+/// chosen screen as a real page — see VoicesTabView/ImportHomeView.
 struct CreateVoiceSheet: View {
-    @ObservedObject var viewModel: VoiceCloneViewModel
-    let onFinished: () -> Void
-    @State private var path: [VoiceCloneRoute] = []
-    @State private var detentSelection: PresentationDetent = .medium
+    let onSelect: (VoiceCloneRoute) -> Void
 
     var body: some View {
-        NavigationStack(path: $path) {
-            VStack(spacing: 16) {
-                optionRow(
-                    title: "Instant Clone", subtitle: "Record a short sample now",
-                    systemImage: "mic.fill"
-                ) {
-                    path.append(.instantClone)
-                }
-                optionRow(
-                    title: "Upload file", subtitle: "Use an existing recording",
-                    systemImage: "square.and.arrow.up"
-                ) {
-                    path.append(.upload)
-                }
-                Spacer()
+        VStack(spacing: 16) {
+            Text("Create Voice")
+                .font(.headline)
+                .foregroundStyle(Color.appPrimaryText)
+                .padding(.top, 8)
+
+            optionRow(
+                title: "Instant Clone", subtitle: "Record a short sample now",
+                systemImage: "mic.fill"
+            ) {
+                onSelect(.instantClone)
             }
-            .padding()
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Create Voice")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: VoiceCloneRoute.self) { route in
-                switch route {
-                case .instantClone:
-                    InstantCloneView(viewModel: viewModel, onFinished: onFinished)
-                case .upload:
-                    UploadVoiceView(viewModel: viewModel, onFinished: onFinished)
-                }
+            optionRow(
+                title: "Upload file", subtitle: "Use an existing recording",
+                systemImage: "square.and.arrow.up"
+            ) {
+                onSelect(.upload)
             }
+
+            Spacer()
         }
+        .padding()
+        .background(Color.appBackground.ignoresSafeArea())
+        .presentationDetents([.medium])
         .preferredColorScheme(.dark)
-        .presentationDetents([.medium, .large], selection: $detentSelection)
-        .onAppear { viewModel.discardRecording() }
-        .onChange(of: path) { _, newValue in
-            detentSelection = newValue.isEmpty ? .medium : .large
-        }
     }
 
     private func optionRow(
@@ -78,7 +64,6 @@ struct CreateVoiceSheet: View {
 #Preview {
     Text("Host")
         .sheet(isPresented: .constant(true)) {
-            CreateVoiceSheet(
-                viewModel: VoiceCloneViewModel(dependencies: DependencyContainer()), onFinished: {})
+            CreateVoiceSheet { _ in }
         }
 }
