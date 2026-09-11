@@ -41,6 +41,11 @@ final class TTSViewModel: ObservableObject {
         }
     }
     @Published var pocketVoice = "alba"
+    // Set by VoiceSettingsSheet's "My Voices" section — when non-nil (and
+    // engine == .pocketTts), runPocketTts() synthesizes with this cloned
+    // voice's conditioning data instead of the named `pocketVoice` preset.
+    // Picking any normal voice clears this back to nil.
+    @Published var selectedClonedVoice: ClonedVoice?
     @Published var text = "Hello from FluidAudio!"
     @Published var status = "Idle"
     @Published var isBusy = false
@@ -546,6 +551,7 @@ final class TTSViewModel: ObservableObject {
     private func runPocketTts() {
         resetRunState()
         let voice = pocketVoice
+        let clonedVoice = selectedClonedVoice
         let inputText = text
 
         Task {
@@ -571,7 +577,13 @@ final class TTSViewModel: ObservableObject {
                 try pocketService.preparePlayback()
 
                 let synthStart = Date()
-                let stream = try await pocketService.synthesizeStreaming(text: inputText, voice: voice)
+                let stream: AsyncThrowingStream<PocketTtsSynthesizer.AudioFrame, Error>
+                if let clonedVoice {
+                    let voiceData = try pocketService.loadClonedVoice(from: clonedVoice.fileURL)
+                    stream = try await pocketService.synthesizeStreaming(text: inputText, voiceData: voiceData)
+                } else {
+                    stream = try await pocketService.synthesizeStreaming(text: inputText, voice: voice)
+                }
                 var receivedFirstFrame = false
                 for try await frame in stream {
                     if !receivedFirstFrame {

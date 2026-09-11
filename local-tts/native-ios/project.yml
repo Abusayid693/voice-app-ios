@@ -41,6 +41,9 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # Voice cloning (Features/VoiceClone) records a short in-app sample
+        # via AVAudioRecorder — required or the app crashes on first mic use.
+        NSMicrophoneUsageDescription: Used to record a short sample of your voice to create a cloned voice.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest

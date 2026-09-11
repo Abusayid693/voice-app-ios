@@ -10,6 +10,12 @@ extension Color {
     static let appSecondaryText = Color(hex: 0xB3B3B3)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
 
+    // Deliberately a light/inverted pair, distinct from the rest of this
+    // dark palette — for PrimaryButtonStyle's CTA, meant to pop against
+    // the dark background rather than blend into it.
+    static let primaryButtonBackground = Color(hex: 0xF6F6F6)
+    static let primaryButtonText = Color(hex: 0x000000)
+
     init(hex: UInt32) {
         self.init(
             .sRGB,

@@ -21,16 +21,16 @@ Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate;
 - **Service** — owns the actual async SDK calls (FluidAudio managers, `AVAudioEngine`/`AVAudioPlayerNode`, HTTP calls). Reports progress via callback closures passed in by the ViewModel, not via its own `@Published` state — all `@Published` state lives on the ViewModel only.
 - **Model** — plain data/enums, no logic.
 - **Core/** — cross-feature utilities with no feature-specific meaning (e.g. a generic HTTP/JSON helper used by more than one feature's Service).
-- **`Shared/`, `DesignSystem/`** — not created yet. Add only when a real second consumer exists; do not pre-scaffold empty folders for hypothetical future needs.
+- **`DesignSystem/`** — cross-feature UI tokens (currently just the Import screens' fixed dark color palette). **`Shared/`** — not created yet; add only when a real second consumer exists, same as everything else here.
 
 ## Target file tree
 
 ```
 Sources/
   App/
-    KokoroAneTestApp.swift        // @main — creates DependencyContainer + one shared TTSViewModel, passes it into RootTabView
+    KokoroAneTestApp.swift        // @main — creates DependencyContainer + one shared TTSViewModel + VoiceCloneViewModel, passes both into RootTabView
     RootTabView.swift             // DONE — 5-tab TabView shell (Home/Explore/Import/Library/Voices), Import selected by default
-    PlaceholderTabView.swift      // DONE — trivial "coming soon" content reused for Explore/Library/Voices tabs
+    PlaceholderTabView.swift      // DONE — trivial "coming soon" content reused for Explore/Library tabs
     AppCoordinator.swift          // NOT YET BUILT — ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
     DependencyContainer.swift     // owns shared long-lived instances (managers, AVAudioEngine, etc.), created once — DONE
   Features/
@@ -41,14 +41,32 @@ Sources/
         OnboardingViewModel.swift
     Import/                       // DONE — consumer-facing redesigned home screen (the Import tab)
       Views/
-        ImportHomeView.swift      // DONE — action grid + demo trending/projects rows + Setup entry point
+        ImportHomeView.swift      // DONE — action grid + real Trending voices/What's trending + Setup + Create-your-own-voice entry points
         SetupSheet.swift          // DONE — download Kokoro pack / Pocket TTS pack, independently
         WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress
-        VoiceSettingsSheet.swift  // DONE — combined Kokoro+Pocket voice list, tagged available/not-available
+        VoiceSettingsSheet.swift  // DONE — Kokoro + Pocket + "My Voices" (cloned) picker, tagged available/not-available
+        VoicePreviewSheet.swift   // DONE — half-sheet voice preview: large cover art (audio-reactive pulse), progress track, play/pause
+        TrendingBookCard.swift    // DONE — shared book cover card (Import's row + AllTrendingBooksView's grid)
+        AllTrendingBooksView.swift // DONE — "See all" infinite-scroll grid, paginated via TrendingBooksViewModel
+      ViewModels/
+        TrendingBooksViewModel.swift // DONE — Gutendex pagination state, shared between the preview row and "See all"
+      Services/
+        GutendexBookService.swift // DONE — fetches/paginates trending public-domain books from gutendex.com
       Models/
         VoicePack.swift           // DONE — enum { kokoro, pocket }, drives SetupSheet's two rows
-        DemoContent.swift         // DONE — static demo data: trending voices, trending books, projects placeholder rows
-      // No ViewModels/Services here — reuses TTS's TTSViewModel directly (same shared instance as the Home tab)
+        VoicePreviewLines.swift   // DONE — per-voice 16-20 word preview sentences (Kokoro's 28; used to generate bundled clips)
+        TrendingBook.swift        // DONE — normalized Gutendex book (title, author, cover URL)
+        DemoContent.swift         // DONE — static demo data: Projects placeholder rows only (Trending voices/What's trending are real now)
+    VoiceClone/                   // DONE — record/clone/manage the user's own PocketTTS voices (Voices tab + Import's "Create your own voice")
+      Views/
+        VoicesTabView.swift       // DONE — list cloned voices, preview (live synth) / delete; "+" opens RecordVoiceView
+        RecordVoiceView.swift     // DONE — record (~10s, capped 20s) or import a file, preview, name, clone
+      ViewModels/
+        VoiceCloneViewModel.swift // DONE — recording/cloning state, persisted clonedVoices list, own PocketEngineService instance
+      Services/
+        VoiceRecorderService.swift // DONE — AVAudioRecorder wrapper + file-import transcoding to WAV
+      Models/
+        ClonedVoice.swift         // DONE — { id, name, createdAt } + the shared Application Support path convention (.fileURL)
     TTS/
       Views/
         TTSHomeView.swift         // DONE — thin, @ObservedObject var viewModel: TTSViewModel; now hosted as the Home tab, not the app root
@@ -58,21 +76,27 @@ Sources/
         TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration; single instance shared by the Home and Import tabs
       Services/
         KokoroEngineService.swift   // DONE — takes the manager's own directory so ensureModels() checks the right on-disk path
-        PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback
+        PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback + voice-cloning wrapper methods
       Models/
         Engine.swift               // DONE
         ChunkState.swift           // DONE — .waiting/.generated/.playing/.failed, drives each row's segmented bar colors
         KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap
         KokoroGeneration.swift     // DONE — one independent track (Generate tap): its sub-chunks, audio, play state
+  DesignSystem/
+    Colors.swift                  // DONE — fixed dark palette for the Import/VoiceClone screens + shared placeholder-gradient helper
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
   Resources/
     Info.plist                    // DONE
+    Assets.xcassets                // DONE — voice cover art (VoiceCover1-6) used by Trending voices
 CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md to regenerate; project.yml bundles it as a `type: folder` resource
+VoicePreviews/
+  Kokoro/*.wav                    // DONE — 28 bundled Kokoro voice-preview clips; project.yml bundles this as a `type: folder` resource (same reasoning as CustomKokoroModel)
+assets/                             // source-of-truth exports (voice-covers/, kokoro-previews/) copied into Sources/Resources or VoicePreviews/ above
 ```
 
-**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services (Views/ViewModels/Services/Models all populated, `TTSViewModel` is one instance shared across tabs via constructor injection — no environment injection). `App/DependencyContainer.swift` and `Core/Networking/HuggingFaceTreeSizeFetcher.swift` done. The app root is now `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library/Voices are `PlaceholderTabView` stand-ins). The new `Import` feature is a redesigned consumer-facing home screen: only "Write text" and the "Setup" voice-pack-download modal are functional, the rest (Paste a link/Upload a file/Scan text, Trending voices, What's trending, Create your own book, Projects) are static demo content per the current design pass. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library are still `PlaceholderTabView` stand-ins, Voices is now a real `VoicesTabView`). `Import`'s Trending voices (all real voices, play-preview via a half-sheet) and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `ENG_CONTEXT.md`'s Open Items). **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
 
 ## Adding a new feature/screen
 
