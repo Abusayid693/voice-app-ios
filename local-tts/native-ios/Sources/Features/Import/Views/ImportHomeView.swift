@@ -44,10 +44,10 @@ struct ImportHomeView: View {
             .navigationTitle("Import")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        setupButton
-                        settingsButton
-                    }
+                    setupButton
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    settingsButton
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
@@ -77,7 +77,7 @@ struct ImportHomeView: View {
             VoicePreviewSheet(tile: tile, viewModel: viewModel)
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet()
+            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
         }
     }
 

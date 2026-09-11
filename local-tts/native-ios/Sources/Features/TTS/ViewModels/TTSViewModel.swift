@@ -85,6 +85,11 @@ final class TTSViewModel: ObservableObject {
     // SDK has no cheap, side-effect-free "is this on disk" check to ask
     // instead — see downloadPocketPackIfNeeded()).
     @Published var isPocketPackDownloaded: Bool
+    // Where the bundled Kokoro pack actually lives on disk (nil if the
+    // bundled-copy step failed) — exposed for the Settings > Voice
+    // Packs/Storage pages, which report real on-disk sizes rather than
+    // estimates.
+    let kokoroModelDirectory: URL?
 
     // Separate from isTextSheetPresented (the Home tab's own sheet flag) so
     // the two tabs' modals don't fight over one bool.
@@ -140,6 +145,7 @@ final class TTSViewModel: ObservableObject {
         isKokoroPackReady = dependencies.isKokoroPackBundled
         isPocketPackDownloaded = UserDefaults.standard.bool(
             forKey: Self.pocketPackDownloadedDefaultsKey)
+        kokoroModelDirectory = dependencies.kokoroModelDirectory
     }
 
     var downloadProgressLabel: String {

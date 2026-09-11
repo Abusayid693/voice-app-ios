@@ -2,11 +2,11 @@ import SwiftUI
 
 /// App settings — reached via the gear icon on Import, presented the same
 /// way as SetupSheet (a plain `.sheet`, dark theme, "Done" to dismiss).
-/// Voice Packs / Storage / About are placeholders for now (see issue #9,
-/// which flags real prerequisites for each — pack deletion semantics,
-/// storage computation, and About content — to resolve before building
-/// them out); this pass wires up the entry point and navigation shell.
+/// Voice Packs / Storage report real on-disk pack/size data; About reports
+/// the real bundle version (see issue #9).
 struct SettingsSheet: View {
+    @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -14,17 +14,17 @@ struct SettingsSheet: View {
             List {
                 Section {
                     NavigationLink {
-                        SettingsPlaceholderView(title: "Voice Packs")
+                        VoicePacksView(viewModel: viewModel)
                     } label: {
                         row(title: "Voice Packs", systemImage: "shippingbox.fill")
                     }
                     NavigationLink {
-                        SettingsPlaceholderView(title: "Storage")
+                        StorageView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
                     } label: {
                         row(title: "Storage", systemImage: "internaldrive.fill")
                     }
                     NavigationLink {
-                        SettingsPlaceholderView(title: "About")
+                        AboutView()
                     } label: {
                         row(title: "About", systemImage: "info.circle.fill")
                     }
@@ -53,5 +53,8 @@ struct SettingsSheet: View {
 }
 
 #Preview {
-    SettingsSheet()
+    let dependencies = DependencyContainer()
+    SettingsSheet(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }
