@@ -20,6 +20,7 @@ struct ImportHomeView: View {
     @State private var selectedVoiceTile: VoiceTile?
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
+    @State private var isSettingsPresented = false
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -45,6 +46,9 @@ struct ImportHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     setupButton
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    settingsButton
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
@@ -75,6 +79,9 @@ struct ImportHomeView: View {
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(tile: tile, viewModel: viewModel)
         }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+        }
     }
 
     private var setupButton: some View {
@@ -82,6 +89,14 @@ struct ImportHomeView: View {
             viewModel.isSetupPresented = true
         } label: {
             Label("Setup", systemImage: isFullyDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+        }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            isSettingsPresented = true
+        } label: {
+            Image(systemName: "gearshape")
         }
     }
 

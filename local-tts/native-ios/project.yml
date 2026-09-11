@@ -44,6 +44,11 @@ targets:
         # Voice cloning (Features/VoiceClone) records a short in-app sample
         # via AVAudioRecorder — required or the app crashes on first mic use.
         NSMicrophoneUsageDescription: Used to record a short sample of your voice to create a cloned voice.
+        # `xcodegen generate` regenerates Info.plist from these properties
+        # every time — editing the plist file directly gets clobbered on the
+        # next generate. Settings > About reads this back via
+        # Bundle.main.infoDictionary.
+        CFBundleShortVersionString: "0.1.0"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest

@@ -57,6 +57,13 @@ Sources/
         VoicePreviewLines.swift   // DONE — per-voice 16-20 word preview sentences (Kokoro's 28; used to generate bundled clips)
         TrendingBook.swift        // DONE — normalized Gutendex book (title, author, cover URL)
         DemoContent.swift         // DONE — static demo data: Projects placeholder rows only (Trending voices/What's trending are real now)
+    Settings/                      // DONE — app Settings, reached via the gear icon on Import (issue #9)
+      Views/
+        SettingsSheet.swift        // DONE — presented like SetupSheet; list of Voice Packs/Storage/About, each a real NavigationLink push
+        VoicePacksView.swift       // DONE — per-engine downloaded/size status, computed from real on-disk directories
+        StorageView.swift          // DONE — Kokoro/Pocket pack + cloned-voices size breakdown + total, all real (AppStorage.directorySize)
+        AboutView.swift            // DONE — app version, read from the real bundle (CFBundleShortVersionString/CFBundleVersion)
+        OpenSourceCard.swift       // DONE — promo card below About: cover image header, open-source pitch, "Contribute" link to the repo; frosted-glass style (Material, not real iOS 26 Liquid Glass — see file header)
     VoiceClone/                   // DONE — record/clone/manage the user's own PocketTTS voices (Voices tab + Import's "Create your own voice")
       Views/
         VoicesTabView.swift       // DONE — list cloned voices, preview (live synth) / delete; "+" opens RecordVoiceView
@@ -87,16 +94,18 @@ Sources/
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
+    FileSystem/
+      DiskStorage.swift           // DONE — recursive on-disk directory sizing, used by Settings > Voice Packs/Storage
   Resources/
     Info.plist                    // DONE
-    Assets.xcassets                // DONE — voice cover art (VoiceCover1-6) used by Trending voices
+    Assets.xcassets                // DONE — voice cover art (VoiceCover1-6) used by Trending voices; SettingsCoverImage used by Settings' OpenSourceCard
 CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md to regenerate; project.yml bundles it as a `type: folder` resource
 VoicePreviews/
   Kokoro/*.wav                    // DONE — 28 bundled Kokoro voice-preview clips; project.yml bundles this as a `type: folder` resource (same reasoning as CustomKokoroModel)
 assets/                             // source-of-truth exports (voice-covers/, kokoro-previews/) copied into Sources/Resources or VoicePreviews/ above
 ```
 
-**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library are still `PlaceholderTabView` stand-ins, Voices is now a real `VoicesTabView`). `Import`'s Trending voices (all real voices, play-preview via a half-sheet) and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `ENG_CONTEXT.md`'s Open Items). **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library are still `PlaceholderTabView` stand-ins, Voices is now a real `VoicesTabView`). `Import`'s Trending voices (all real voices, play-preview via a half-sheet) and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `ENG_CONTEXT.md`'s Open Items). `Features/Settings/` (issue #9) is real: Voice Packs and Storage report actual on-disk pack/size data, About reports the real bundle version — no more placeholders. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
 
 ## Adding a new feature/screen
 
