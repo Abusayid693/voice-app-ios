@@ -16,6 +16,7 @@ struct ImportHomeView: View {
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
     @State private var selectedVoiceTile: VoiceTile?
+    @State private var isSettingsPresented = false
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -39,7 +40,10 @@ struct ImportHomeView: View {
             .navigationTitle("Import")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    setupButton
+                    HStack(spacing: 16) {
+                        setupButton
+                        settingsButton
+                    }
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
@@ -54,6 +58,9 @@ struct ImportHomeView: View {
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(tile: tile, viewModel: viewModel)
         }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsSheet()
+        }
     }
 
     private var setupButton: some View {
@@ -61,6 +68,14 @@ struct ImportHomeView: View {
             viewModel.isSetupPresented = true
         } label: {
             Label("Setup", systemImage: isFullyDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+        }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            isSettingsPresented = true
+        } label: {
+            Image(systemName: "gearshape")
         }
     }
 
