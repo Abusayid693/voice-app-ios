@@ -5,6 +5,7 @@ import SwiftUI
 /// shows inline below the editor rather than navigating away.
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
 
     var body: some View {
         NavigationStack {
@@ -34,7 +35,7 @@ struct WriteTextView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
-            VoiceSettingsSheet(viewModel: viewModel)
+            VoiceSettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
         }
     }
 
@@ -108,5 +109,8 @@ struct WriteTextView: View {
 }
 
 #Preview {
-    WriteTextView(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let dependencies = DependencyContainer()
+    WriteTextView(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }

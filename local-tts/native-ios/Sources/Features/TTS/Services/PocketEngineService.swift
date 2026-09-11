@@ -68,6 +68,40 @@ final class PocketEngineService {
         return try await manager.synthesizeStreaming(text: spokenText, voice: voice)
     }
 
+    /// Same as above, but for a cloned voice's conditioning data instead of
+    /// a named preset — the two are parallel overloads on the SDK manager.
+    func synthesizeStreaming(
+        text: String, voiceData: PocketTtsVoiceData
+    ) async throws -> AsyncThrowingStream<PocketTtsSynthesizer.AudioFrame, Error> {
+        let spokenText = await Task.detached {
+            TextNormalizer.shared.tnNormalizeSentence(text)
+        }.value
+        return try await manager.synthesizeStreaming(text: spokenText, voiceData: voiceData)
+    }
+
+    // MARK: - Voice cloning
+
+    /// True once the mimi_encoder model (voice cloning's only extra
+    /// dependency beyond the normal Pocket pack) is present on disk.
+    func isVoiceCloningAvailable() async -> Bool {
+        await manager.isVoiceCloningAvailable()
+    }
+
+    /// Downloads the mimi_encoder model on first call if needed (no
+    /// progress callback exposed by the SDK for this step), then runs the
+    /// given sample through it to produce voice-conditioning data.
+    func cloneVoice(from audioURL: URL) async throws -> PocketTtsVoiceData {
+        try await manager.cloneVoice(from: audioURL)
+    }
+
+    func saveClonedVoice(_ voiceData: PocketTtsVoiceData, to url: URL) throws {
+        try manager.saveClonedVoice(voiceData, to: url)
+    }
+
+    func loadClonedVoice(from url: URL) throws -> PocketTtsVoiceData {
+        try manager.loadClonedVoice(from: url)
+    }
+
     /// Converts one 80ms `AudioFrame` (raw Float32 samples) into a PCM
     /// buffer and hands it to the player node — scheduling returns
     /// immediately, so playback runs concurrently with the next frame's
