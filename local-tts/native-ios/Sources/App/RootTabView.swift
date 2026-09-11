@@ -10,6 +10,7 @@ enum RootTab: Hashable {
 struct RootTabView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var libraryViewModel: LibraryViewModel
     @State private var selectedTab: RootTab = .importScreen
 
     var body: some View {
@@ -22,11 +23,14 @@ struct RootTabView: View {
                 .tabItem { Label("Explore", systemImage: "safari") }
                 .tag(RootTab.explore)
 
-            ImportHomeView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
-                .tabItem { Label("Import", systemImage: "plus.circle.fill") }
-                .tag(RootTab.importScreen)
+            ImportHomeView(
+                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                libraryViewModel: libraryViewModel
+            )
+            .tabItem { Label("Import", systemImage: "plus.circle.fill") }
+            .tag(RootTab.importScreen)
 
-            PlaceholderTabView(title: "Library")
+            LibraryTabView(viewModel: libraryViewModel)
                 .tabItem { Label("Library", systemImage: "books.vertical") }
                 .tag(RootTab.library)
 
@@ -41,5 +45,6 @@ struct RootTabView: View {
     let dependencies = DependencyContainer()
     RootTabView(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        libraryViewModel: LibraryViewModel())
 }

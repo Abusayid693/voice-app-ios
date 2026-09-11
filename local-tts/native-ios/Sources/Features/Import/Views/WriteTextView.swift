@@ -6,6 +6,7 @@ import SwiftUI
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var libraryViewModel: LibraryViewModel
 
     var body: some View {
         NavigationStack {
@@ -90,7 +91,7 @@ struct WriteTextView: View {
                     .background(Circle().fill(Color.appSecondaryBackground))
             }
 
-            Button(action: viewModel.runDownloadAndSpeak) {
+            Button(action: generate) {
                 if viewModel.isBusy {
                     ProgressView()
                         .frame(maxWidth: .infinity)
@@ -106,11 +107,29 @@ struct WriteTextView: View {
         }
         .padding()
     }
+
+    // Saves the text/voice to Library before kicking off the real
+    // generation — a saved entry is written on every tap for now (not
+    // gated on success), matching how Kokoro's own track list already
+    // works (a "Generate" tap always creates something, even if a chunk
+    // later fails). See issue #11 for the plan to also capture audio.
+    private func generate() {
+        let voiceName: String
+        switch viewModel.engine {
+        case .kokoroAne:
+            voiceName = viewModel.kokoroVoice
+        case .pocketTts:
+            voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
+        }
+        libraryViewModel.save(text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
+        viewModel.runDownloadAndSpeak()
+    }
 }
 
 #Preview {
     let dependencies = DependencyContainer()
     WriteTextView(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        libraryViewModel: LibraryViewModel())
 }

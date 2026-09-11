@@ -8,6 +8,7 @@ import SwiftUI
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var libraryViewModel: LibraryViewModel
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -61,7 +62,9 @@ struct ImportHomeView: View {
             SetupSheet(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
-            WriteTextView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+            WriteTextView(
+                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                libraryViewModel: libraryViewModel)
         }
         .sheet(isPresented: $isCreateVoicePresented) {
             CreateVoiceSheet { route in
@@ -365,5 +368,6 @@ enum VoiceCoverArt {
     let dependencies = DependencyContainer()
     ImportHomeView(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        libraryViewModel: LibraryViewModel())
 }
