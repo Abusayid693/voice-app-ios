@@ -37,6 +37,12 @@ final class VoiceCloneViewModel: ObservableObject {
     private static let clonedVoicesDefaultsKey = "clonedVoices"
     private static let maxRecordingDuration: TimeInterval = 20
 
+    /// Shown on the Instant Clone screen so the user knows what to read —
+    /// phonetically varied (a classic extended pangram) rather than a
+    /// single repeated word, for a better sample.
+    static let suggestedReadingText =
+        "The quick brown fox jumps over the lazy dog while the morning sun rises slowly over the distant, quiet hills."
+
     private let pocketService: PocketEngineService
     private let recorder = VoiceRecorderService()
     private var recordingTimerTask: Task<Void, Never>?

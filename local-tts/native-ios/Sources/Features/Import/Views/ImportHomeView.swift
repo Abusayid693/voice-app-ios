@@ -17,7 +17,7 @@ struct ImportHomeView: View {
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
     @State private var selectedVoiceTile: VoiceTile?
-    @State private var isRecordVoicePresented = false
+    @State private var isCreateVoicePresented = false
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -54,8 +54,10 @@ struct ImportHomeView: View {
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
             WriteTextView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
         }
-        .fullScreenCover(isPresented: $isRecordVoicePresented) {
-            RecordVoiceView(viewModel: voiceCloneViewModel)
+        .sheet(isPresented: $isCreateVoicePresented) {
+            CreateVoiceSheet(viewModel: voiceCloneViewModel) {
+                isCreateVoicePresented = false
+            }
         }
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(tile: tile, viewModel: viewModel)
@@ -113,11 +115,11 @@ struct ImportHomeView: View {
         }
     }
 
-    // Real, unlike createYourOwnBookRow below — opens RecordVoiceView
-    // directly (see TTSViewModel/VoiceCloneViewModel's voice-cloning flow).
+    // Real, unlike createYourOwnBookRow below — opens the same CreateVoiceSheet
+    // (Instant Clone / Upload file) as the Voices tab's own entry point.
     private var createYourOwnVoiceRow: some View {
         Button {
-            isRecordVoicePresented = true
+            isCreateVoicePresented = true
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "mic.fill")

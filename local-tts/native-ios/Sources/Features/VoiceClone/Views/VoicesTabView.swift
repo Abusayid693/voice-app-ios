@@ -5,7 +5,7 @@ import SwiftUI
 /// VoiceSettingsSheet's "My Voices" section, not here.
 struct VoicesTabView: View {
     @ObservedObject var viewModel: VoiceCloneViewModel
-    @State private var isRecordingPresented = false
+    @State private var isCreateVoicePresented = false
 
     var body: some View {
         NavigationStack {
@@ -14,12 +14,20 @@ struct VoicesTabView: View {
                     emptyState
                 } else {
                     List {
-                        ForEach(viewModel.clonedVoices) { voice in
-                            row(for: voice)
+                        Section("Clone voices") {
+                            cloneVoicesStrip
                         }
-                        .onDelete { indexSet in
-                            for index in indexSet {
-                                viewModel.deleteVoice(viewModel.clonedVoices[index])
+                        .listRowBackground(Color.appBackground)
+                        .listRowInsets(EdgeInsets())
+
+                        Section("Your voices") {
+                            ForEach(viewModel.clonedVoices) { voice in
+                                row(for: voice)
+                            }
+                            .onDelete { indexSet in
+                                for index in indexSet {
+                                    viewModel.deleteVoice(viewModel.clonedVoices[index])
+                                }
                             }
                         }
                         .listRowBackground(Color.appSecondaryBackground)
@@ -32,7 +40,7 @@ struct VoicesTabView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        isRecordingPresented = true
+                        isCreateVoicePresented = true
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -40,8 +48,10 @@ struct VoicesTabView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .fullScreenCover(isPresented: $isRecordingPresented) {
-            RecordVoiceView(viewModel: viewModel)
+        .sheet(isPresented: $isCreateVoicePresented) {
+            CreateVoiceSheet(viewModel: viewModel) {
+                isCreateVoicePresented = false
+            }
         }
     }
 
@@ -52,17 +62,61 @@ struct VoicesTabView: View {
                 .foregroundStyle(Color.appSecondaryText)
             Text("No cloned voices yet")
                 .foregroundStyle(Color.appSecondaryText)
-            Button("Create your own voice") { isRecordingPresented = true }
+            Button("Create your own voice") { isCreateVoicePresented = true }
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // Quick horizontal access — every cloned voice plus a trailing add
+    // button, alongside the full list below ("Your voices" — recents-strip
+    // + full-list pattern; some duplication is intentional).
+    private var cloneVoicesStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 16) {
+                ForEach(viewModel.clonedVoices) { voice in
+                    Button {
+                        viewModel.togglePreview(for: voice)
+                    } label: {
+                        VStack(spacing: 6) {
+                            avatar(for: voice, size: 56)
+                            Text(voice.name)
+                                .font(.caption)
+                                .foregroundStyle(Color.appPrimaryText)
+                                .lineLimit(1)
+                        }
+                        .frame(width: 72)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    isCreateVoicePresented = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Circle()
+                            .strokeBorder(Color.appSecondaryText, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                            .frame(width: 56, height: 56)
+                            .overlay {
+                                Image(systemName: "plus")
+                                    .foregroundStyle(Color.appSecondaryText)
+                            }
+                        Text("New voice")
+                            .font(.caption)
+                            .foregroundStyle(Color.appSecondaryText)
+                    }
+                    .frame(width: 72)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+    }
+
     private func row(for voice: ClonedVoice) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "person.wave.2.fill")
-                .foregroundStyle(Color.appPrimaryText)
-                .frame(width: 32)
+            avatar(for: voice, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(voice.name)
@@ -91,6 +145,17 @@ struct VoicesTabView: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, 4)
+    }
+
+    private func avatar(for voice: ClonedVoice, size: CGFloat) -> some View {
+        Circle()
+            .fill(Color.appBackground)
+            .frame(width: size, height: size)
+            .overlay {
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.45))
+                    .foregroundStyle(Color.appPrimaryText)
+            }
     }
 }
 
