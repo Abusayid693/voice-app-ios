@@ -7,6 +7,7 @@ import SwiftUI
 /// design pass.
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -16,6 +17,8 @@ struct ImportHomeView: View {
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
     @State private var selectedVoiceTile: VoiceTile?
+    @State private var isCreateVoicePresented = false
+    @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
 
     private var isFullyDownloaded: Bool {
@@ -28,6 +31,7 @@ struct ImportHomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     actionGrid
                     trendingVoicesSection
+                    createYourOwnVoiceRow
                     whatsTrendingSection
                     createYourOwnBookRow
                     projectsSection
@@ -47,13 +51,27 @@ struct ImportHomeView: View {
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
+            .navigationDestination(item: $voiceCloneRoute) { route in
+                switch route {
+                case .instantClone:
+                    InstantCloneView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                case .upload:
+                    UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                }
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
-            WriteTextView(viewModel: viewModel)
+            WriteTextView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+        }
+        .sheet(isPresented: $isCreateVoicePresented) {
+            CreateVoiceSheet { route in
+                isCreateVoicePresented = false
+                voiceCloneRoute = route
+            }
         }
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(tile: tile, viewModel: viewModel)
@@ -120,6 +138,31 @@ struct ImportHomeView: View {
                 .padding(.vertical, 4)
             }
         }
+    }
+
+    // Real, unlike createYourOwnBookRow below — opens the same CreateVoiceSheet
+    // (Instant Clone / Upload file) as the Voices tab's own entry point.
+    private var createYourOwnVoiceRow: some View {
+        Button {
+            isCreateVoicePresented = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "mic.fill")
+                    .font(.title)
+                    .foregroundStyle(Color.appPrimaryText)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create your own voice").font(.subheadline).bold()
+                        .foregroundStyle(Color.appPrimaryText)
+                    Text("Clone your voice in seconds").font(.caption)
+                        .foregroundStyle(Color.appSecondaryText)
+                }
+                Spacer()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var whatsTrendingSection: some View {
@@ -334,5 +377,8 @@ enum VoiceCoverArt {
 }
 
 #Preview {
-    ImportHomeView(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let dependencies = DependencyContainer()
+    ImportHomeView(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }

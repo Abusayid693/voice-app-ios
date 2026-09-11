@@ -6,9 +6,10 @@ enum RootTab: Hashable {
 
 /// App shell: the 5-tab bar from the redesign. Import is the default
 /// screen; Home keeps the original engine/voice debug screen (unchanged);
-/// Explore/Library/Voices are placeholders until they get real screens.
+/// Explore/Library are still placeholders; Voices manages cloned voices.
 struct RootTabView: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @State private var selectedTab: RootTab = .importScreen
 
     var body: some View {
@@ -21,7 +22,7 @@ struct RootTabView: View {
                 .tabItem { Label("Explore", systemImage: "safari") }
                 .tag(RootTab.explore)
 
-            ImportHomeView(viewModel: viewModel)
+            ImportHomeView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
                 .tabItem { Label("Import", systemImage: "plus.circle.fill") }
                 .tag(RootTab.importScreen)
 
@@ -29,7 +30,7 @@ struct RootTabView: View {
                 .tabItem { Label("Library", systemImage: "books.vertical") }
                 .tag(RootTab.library)
 
-            PlaceholderTabView(title: "Voices")
+            VoicesTabView(viewModel: voiceCloneViewModel)
                 .tabItem { Label("Voices", systemImage: "waveform") }
                 .tag(RootTab.voices)
         }
@@ -37,5 +38,8 @@ struct RootTabView: View {
 }
 
 #Preview {
-    RootTabView(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let dependencies = DependencyContainer()
+    RootTabView(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }

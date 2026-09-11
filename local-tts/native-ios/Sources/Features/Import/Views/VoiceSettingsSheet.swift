@@ -6,11 +6,30 @@ import SwiftUI
 /// available voice also switches `viewModel.engine` to match.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                if !voiceCloneViewModel.clonedVoices.isEmpty {
+                    Section("My Voices") {
+                        ForEach(voiceCloneViewModel.clonedVoices) { clonedVoice in
+                            voiceRow(
+                                name: clonedVoice.name,
+                                isAvailable: true,
+                                isSelected: viewModel.engine == .pocketTts
+                                    && viewModel.selectedClonedVoice?.id == clonedVoice.id
+                            ) {
+                                viewModel.engine = .pocketTts
+                                viewModel.selectedClonedVoice = clonedVoice
+                                dismiss()
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.appSecondaryBackground)
+                }
+
                 Section("Kokoro-ANE") {
                     ForEach(TTSViewModel.kokoroVoices, id: \.self) { name in
                         voiceRow(
@@ -20,6 +39,7 @@ struct VoiceSettingsSheet: View {
                         ) {
                             viewModel.engine = .kokoroAne
                             viewModel.kokoroVoice = name
+                            viewModel.selectedClonedVoice = nil
                             dismiss()
                         }
                     }
@@ -32,9 +52,11 @@ struct VoiceSettingsSheet: View {
                             name: name,
                             isAvailable: viewModel.isPocketPackDownloaded,
                             isSelected: viewModel.engine == .pocketTts && viewModel.pocketVoice == name
+                                && viewModel.selectedClonedVoice == nil
                         ) {
                             viewModel.engine = .pocketTts
                             viewModel.pocketVoice = name
+                            viewModel.selectedClonedVoice = nil
                             dismiss()
                         }
                     }
@@ -75,5 +97,8 @@ struct VoiceSettingsSheet: View {
 }
 
 #Preview {
-    VoiceSettingsSheet(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let dependencies = DependencyContainer()
+    VoiceSettingsSheet(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }
