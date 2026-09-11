@@ -10,6 +10,8 @@ Standalone native iOS SwiftUI app (no Expo/CocoaPods — see `ENG_CONTEXT.md` fo
 
 xcodegen detail: `project.yml`'s `sources: [Sources]` is a whole-folder reference — xcodegen recurses automatically, so new subfolders under `Sources/` need **no** `project.yml` edit, only `xcodegen generate` re-run before building. Exception: `Info.plist`'s path is referenced explicitly via `info.path:` and must be updated if it moves.
 
+**Before every commit that touches `Sources/`, `project.yml`, or adds a bundled resource folder**: run `xcodegen generate`, then check `DEVELOPMENT_TEAM` in the regenerated `KokoroAneTest.xcodeproj/project.pbxproj` still matches `project.yml`'s `DEVELOPMENT_TEAM` (`grep -n DEVELOPMENT_TEAM KokoroAneTest.xcodeproj/project.pbxproj`). Xcode's automatic signing has silently rewritten this to a different team mid-session more than once (see `ENG_CONTEXT.md`'s signing-drift note) — catching it before committing avoids shipping a stale/wrong signing team in the generated project file.
+
 ## Architecture: MVVM + Services, feature-first folders
 
 Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate; Services own the actual async SDK/engine calls. Views never call an SDK directly; ViewModels never call `AVAudioEngine`/FluidAudio directly.
@@ -78,3 +80,11 @@ CustomKokoroModel/                  // gitignored, ~93MB — see ENG_CONTEXT.md 
 2. If it needs a push destination within the Main flow, add a case to `Features/TTS/Route.swift`-equivalent (or that flow's own route enum) and a `.navigationDestination` branch — do not introduce a second global router.
 3. If it's a new top-level flow (gated, not pushed — like Onboarding), it's switched at the `AppCoordinator`/root level, not inside another flow's `NavigationStack`.
 4. Update the target file tree above.
+
+## Git & GitHub workflow
+
+- **Non-trivial work (a new feature, not a one-line fix) gets its own branch off `main`**, named for what it does (e.g. `voice-cloning-pocket-tts`), not committed to `main` directly.
+- **File a GitHub issue before or alongside starting the work**, then open the PR against `main` referencing it with `Closes #N` in the body — use the `/issue-and-pr` skill (`.claude/skills/issue-and-pr/SKILL.md`) for the mechanical steps rather than running `gh issue create`/`gh pr create` ad hoc.
+- **PR body shape**: `## Summary` (bullet points of what changed) + `Closes #N` + `## Test plan` (a manual verification checklist — this app has no automated test suite yet, so be concrete about what to click through).
+- Issues use the templates in `.github/ISSUE_TEMPLATE/` (`bug_report.yml`, `feature_request.yml`); blank issues are disabled repo-wide.
+- Don't push to `main` or merge a PR as a side effect of other work — those stay explicit, user-requested actions.
