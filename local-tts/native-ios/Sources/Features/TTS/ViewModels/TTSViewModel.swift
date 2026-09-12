@@ -6,7 +6,8 @@ import FluidAudio
 final class TTSViewModel: ObservableObject {
     // All 28 standard Kokoro-82M English voices. FluidAudio's own hosted
     // ANE repo only publishes af_heart (a real model-conversion
-    // constraint, not just a missing download — see ENG_CONTEXT.md), but
+    // constraint, not just a missing download — see
+    // docs/adr/0002-custom-kokoro-model-bundle.md), but
     // a custom from-scratch conversion (laishere/kokoro-coreml, bundled
     // via DependencyContainer's CustomKokoroModel) confirmed the rest
     // genuinely work once paired with FluidAudio's real
@@ -236,7 +237,8 @@ final class TTSViewModel: ObservableObject {
     /// — pure file playback, no synthesis, so this never touches
     /// kokoroService/pocketService and can't collide with an in-progress
     /// "Write text" generation. No-ops if the clip isn't bundled yet (e.g.
-    /// Pocket voices before their pass — see ENG_CONTEXT.md).
+    /// Pocket voices before their pass — see
+    /// docs/adr/0009-bundled-voice-preview-clips.md).
     func togglePreview(voiceName: String, engine: Engine) {
         let wasPlayingThisVoice = previewingVoiceID == voiceName
         stopPreview()

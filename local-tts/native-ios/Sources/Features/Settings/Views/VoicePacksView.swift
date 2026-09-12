@@ -5,7 +5,7 @@ import SwiftUI
 /// packs (see issue #9). Deletion isn't offered yet: Kokoro's pack is
 /// bundled with the app (nothing to re-download if removed), and Pocket has
 /// no re-download-on-demand path from here yet — both are flagged as
-/// follow-ups in ENG_CONTEXT.md.
+/// follow-ups in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
 struct VoicePacksView: View {
     @ObservedObject var viewModel: TTSViewModel
 

@@ -11,7 +11,7 @@ packages:
   # chrome (not a system-level override — SF Symbols are still used
   # wherever a truly native/system look is expected). ISC-licensed,
   # zero runtime dependencies, real SwiftUI vector Shapes (not bundled
-  # raster images) — see ENG_CONTEXT.md for the alternatives considered.
+  # raster images).
   LucideSwift:
     url: https://github.com/ajaxjiang96/lucide-swift
     exactVersion: 0.9.4
@@ -31,7 +31,7 @@ targets:
         type: folder
         buildPhase: resources
       # Bundled voice-preview clips (Sources/Features/Import — see
-      # ENG_CONTEXT.md's "Voice previews" section). Same reasoning as
+      # docs/adr/0009-bundled-voice-preview-clips.md). Same reasoning as
       # CustomKokoroModel above: added under the plain `Sources` scan, this
       # would be flattened (losing the Kokoro/Pocket subdirectories that
       # TTSViewModel.togglePreview looks up via

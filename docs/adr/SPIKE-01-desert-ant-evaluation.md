@@ -1,4 +1,7 @@
-# Desert Ant — potential features for Voicenote
+# SPIKE 1. Desert Ant SDK — potential features for Voicenote
+
+**Status:** Exploratory — no decision made, not started
+**Date:** 2025-09
 
 Source: https://desertant.com/docs/ (Swift/Kotlin/JS SDKs, on-device AI models). Evaluated for fit against Voicenote (the Expo voice-note app), not this TTS test harness — everything here is on the STT/post-processing side, complementary to FluidAudio's TTS engines rather than overlapping.
 
@@ -53,4 +56,4 @@ Content moderation, structured JSON extraction, image/video analysis, speaker id
 
 ## Recommended next step
 
-Same validation pattern already used for FluidAudio in this repo: pull the actual SDK, verify claims (WER, model size, on-device ANE behavior) against real code and real-device testing rather than trusting docs alone, before committing to it in Voicenote. Voz is the natural first candidate to test standalone, since transcription is the highest-value addition and the docs' WER/speed claims are worth independently confirming.
+Same validation pattern already used for FluidAudio in this repo (ADR 1): pull the actual SDK, verify claims (WER, model size, on-device ANE behavior) against real code and real-device testing rather than trusting docs alone, before committing to it in Voicenote. Voz is the natural first candidate to test standalone, since transcription is the highest-value addition and the docs' WER/speed claims are worth independently confirming.
