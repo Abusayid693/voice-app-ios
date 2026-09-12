@@ -60,6 +60,12 @@ final class TTSViewModel: ObservableObject {
     @Published var text = "Hello from FluidAudio!"
     @Published var status = "Idle"
     @Published var isBusy = false
+    // Which Setup pack (VoicePack.id) is currently downloading, if any —
+    // `isBusy` above is shared across the whole ViewModel (generation,
+    // every pack download), so gating SetupSheet's per-row spinner on it
+    // alone made every not-yet-downloaded row spin at once the moment any
+    // one pack started downloading. This tracks the *specific* row.
+    @Published private(set) var downloadingPackID: String?
     @Published var initSeconds: TimeInterval?
     @Published var synthSeconds: TimeInterval?
     @Published var isWarmInit = false
@@ -242,7 +248,11 @@ final class TTSViewModel: ObservableObject {
         guard !isKokoroPackReady else { return }
         status = "Downloading Kokoro pack…"
         isBusy = true
-        defer { isBusy = false }
+        downloadingPackID = VoicePack.kokoro.id
+        defer {
+            isBusy = false
+            downloadingPackID = nil
+        }
         do {
             try await kokoroService.ensureModels(progressHandler: { [weak self] progress in
                 Task { @MainActor in
@@ -269,7 +279,11 @@ final class TTSViewModel: ObservableObject {
         guard !isPocketPackDownloaded(language) else { return }
         status = "Downloading Pocket TTS pack (\(language.displayName))…"
         isBusy = true
-        defer { isBusy = false }
+        downloadingPackID = VoicePack.pocket(language).id
+        defer {
+            isBusy = false
+            downloadingPackID = nil
+        }
         do {
             try await pocketServices[language]!.ensureModels(progressHandler: { [weak self] progress in
                 Task { @MainActor in

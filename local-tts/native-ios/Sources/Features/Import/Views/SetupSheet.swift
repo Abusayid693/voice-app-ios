@@ -36,6 +36,11 @@ struct SetupSheet: View {
     @ViewBuilder
     private func packRow(for pack: VoicePack) -> some View {
         let isReady = isReady(pack)
+        // Precise per-row check — viewModel.isBusy alone is shared across
+        // every pack (and generation), so with 6 rows now (Kokoro + 5
+        // Pocket languages) gating the spinner on it made every
+        // not-yet-downloaded row spin the instant any one started.
+        let isDownloadingThis = viewModel.downloadingPackID == pack.id
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -45,14 +50,19 @@ struct SetupSheet: View {
                 Spacer()
                 if isReady {
                     LucideIcon(.circleCheck, color: .green)
-                } else if viewModel.isBusy {
+                } else if isDownloadingThis {
                     ProgressView()
                 } else {
                     Button("Download") { startDownload(pack) }
                         .buttonStyle(.borderedProminent)
+                        // Still disabled while a *different* pack downloads
+                        // — the progress/status fields these downloads
+                        // update are shared, not per-pack, so two at once
+                        // would corrupt each other's display.
+                        .disabled(viewModel.isBusy)
                 }
             }
-            if viewModel.isBusy, !isReady {
+            if isDownloadingThis {
                 ProgressView(value: viewModel.downloadFraction)
                 Text(viewModel.downloadProgressLabel)
                     .font(.caption2)
