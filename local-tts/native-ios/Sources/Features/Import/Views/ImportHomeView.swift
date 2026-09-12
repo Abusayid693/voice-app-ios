@@ -151,7 +151,7 @@ struct ImportHomeView: View {
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tile: tile, viewModel: viewModel)
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, viewModel: viewModel)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
@@ -431,6 +431,14 @@ struct VoiceTile: Identifiable {
     // A short persona tagline ("Warm and friendly") in place of the raw
     // engine label, falling back to that label for voices without one.
     var descriptionText: String { VoiceDescription.tagline(for: name, fallback: engineLabel) }
+
+    // A fuller, 1-2 sentence description of the voice's character — used on
+    // VoicePreviewSheet's card in place of the raw engine label.
+    var longDescription: String { VoiceDescription.longDescription(for: name) }
+
+    // Emoji flag for the voice's accent/locale, shown beside its name on
+    // VoicePreviewSheet's card.
+    var countryFlag: String { VoiceLocale.flag(for: name) }
 }
 
 /// One row per voice: cover image, name, a short persona tagline, and a
@@ -573,6 +581,88 @@ enum VoiceDescription {
 
     static func tagline(for voiceName: String, fallback: String) -> String {
         taglines[voiceName] ?? fallback
+    }
+
+    // Fuller descriptions for VoicePreviewSheet's card — same
+    // name-association-guess basis as the taglines above (Kokoro's
+    // af_/am_/bf_/bm_ prefix gives real gender/accent; the character
+    // adjectives are still a guess, not verified against each clip). Pocket
+    // TTS voices are named after LibriVox-style audiobook narrators/
+    // characters with no persona data at all, so those are freshly-written,
+    // generic narration-toned descriptions rather than anything sourced.
+    private static let longDescriptions: [String: String] = [
+        "af_alloy": "Poised and composed, with a polished, professional edge — clear enough for crisp narration or presentations.",
+        "af_aoede": "Dreamy and artistic, with a soft, unhurried delivery well suited to reflective or lyrical text.",
+        "af_bella": "Warm and confident, with a rich, assured tone that carries a room.",
+        "af_heart": "Warm and friendly, with an easy, conversational tone — great for everyday narration and casual reads.",
+        "af_jessica": "Friendly and professional, with a clear, approachable delivery suited to explainers and guides.",
+        "af_kore": "Bright and youthful, with an upbeat, energetic lift to every line.",
+        "af_nicole": "Sophisticated and polished, with a smooth, refined cadence.",
+        "af_nova": "Vibrant and energetic, with a lively pace that suits upbeat, fast-moving content.",
+        "af_river": "Free-spirited and relaxed, with an unhurried, laid-back delivery.",
+        "af_sarah": "Sweet and genuine, with a warm, down-to-earth tone that feels personal.",
+        "af_sky": "Bright and airy, with a light, cheerful lilt.",
+        "am_adam": "Warm and easygoing, with a relaxed, approachable delivery.",
+        "am_echo": "Sharp and composed, with a crisp, confident edge.",
+        "am_eric": "Friendly and warm, with a steady, welcoming tone.",
+        "am_fenrir": "Rugged and deep, with a strong, grounded presence.",
+        "am_liam": "Youthful and relaxed, with a casual, easy pace.",
+        "am_michael": "Reliable and warm, with a dependable, trustworthy tone.",
+        "am_onyx": "Sleek and cool, with a smooth, understated confidence.",
+        "am_puck": "Playful and mischievous, with a light, spirited energy.",
+        "am_santa": "Warm and jolly, with a hearty, good-natured cheer.",
+        "bf_alice": "Elegant and refined, with a crisp, well-mannered British delivery.",
+        "bf_emma": "Poised and elegant, with a graceful, composed tone.",
+        "bf_isabella": "Graceful and refined, with a smooth, cultivated cadence.",
+        "bf_lily": "Gentle and delicate, with a soft, soothing British lilt.",
+        "bm_daniel": "Distinguished and calm, with an even, authoritative delivery.",
+        "bm_fable": "A warm storyteller's voice, rich and expressive — built for narration.",
+        "bm_george": "Distinguished and composed, with a steady, refined British tone.",
+        "bm_lewis": "Friendly and approachable, with a warm, easy-going British manner.",
+        "alba": "A clear, gentle narrator voice with a calm, steady pace.",
+        "anna": "A warm, expressive voice well suited to storytelling and long-form reads.",
+        "azelma": "A soft, measured voice with a quiet, thoughtful delivery.",
+        "bill_boerst": "A steady, seasoned narrator voice with a relaxed, confident cadence.",
+        "caro_davy": "A bright, articulate voice with a brisk, engaging pace.",
+        "charles": "A calm, deliberate voice suited to serious or reflective narration.",
+        "cosette": "A soft, youthful voice with a gentle, sincere tone.",
+        "eponine": "An expressive, emotive voice with a slightly melancholic warmth.",
+        "estelle": "A refined, articulate voice with a smooth, unhurried delivery.",
+        "eve": "A clear, natural voice with an easy, conversational rhythm.",
+        "fantine": "A tender, soft-spoken voice with a quiet emotional depth.",
+        "george": "A steady, dependable voice with a classic narrator's tone.",
+        "giovanni": "A warm, expressive voice with a touch of theatrical flair.",
+        "jane": "A composed, articulate voice with a gentle, measured pace.",
+        "javert": "A firm, resolute voice with a serious, commanding edge.",
+        "jean": "A grounded, weathered voice with quiet, steady conviction.",
+        "juergen": "A deep, deliberate voice with a calm, authoritative presence.",
+        "lola": "A lively, expressive voice with a playful, energetic lift.",
+        "marius": "A youthful, earnest voice with an open, sincere tone.",
+        "mary": "A warm, gentle voice with a comforting, familiar quality.",
+        "michael": "A clear, confident voice suited to straightforward narration.",
+        "paul": "A steady, even voice with an unassuming, practical tone.",
+        "peter_yearsley": "A rich, classic narrator's voice with a measured, deliberate pace.",
+        "rafael": "A warm, textured voice with an expressive, animated delivery.",
+        "stuart_bell": "A crisp, articulate voice with a brisk, professional pace.",
+        "vera": "A soft, composed voice with a calm, reassuring tone.",
+    ]
+
+    static func longDescription(for voiceName: String) -> String {
+        longDescriptions[voiceName] ?? "A distinctive voice with its own character."
+    }
+}
+
+/// Emoji flag for a voice's accent/locale, derived from Kokoro's own
+/// af_/am_ (American) / bf_/bm_ (British) naming convention. Pocket TTS
+/// voices carry no locale info in their name at all — those default to US
+/// English until real per-voice locale data exists; flag this assumption if
+/// it turns out wrong for a specific voice.
+enum VoiceLocale {
+    static func flag(for voiceName: String) -> String {
+        if voiceName.hasPrefix("bf_") || voiceName.hasPrefix("bm_") {
+            return "🇬🇧"
+        }
+        return "🇺🇸"
     }
 }
 

@@ -45,7 +45,7 @@ Sources/
         SetupSheet.swift          // DONE — download Kokoro pack / Pocket TTS pack, independently
         WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress
         VoiceSettingsSheet.swift  // DONE — Kokoro + Pocket + "My Voices" (cloned) picker, tagged available/not-available
-        VoicePreviewSheet.swift   // DONE — half-sheet voice preview: large cover art (audio-reactive pulse), progress track, play/pause
+        VoicePreviewSheet.swift   // DONE — half-sheet voice preview: horizontally scrolling carousel of whole sheet cards (one per voice, neighbours peeking), system sheet made invisible via .presentationBackground(.clear) so the card itself slides; snapping via .scrollTargetBehavior(.viewAligned)
         TrendingBookCard.swift    // DONE — shared book cover card (Import's row + AllTrendingBooksView's grid)
         AllTrendingBooksView.swift // DONE — "See all" infinite-scroll grid, paginated via TrendingBooksViewModel
       ViewModels/
