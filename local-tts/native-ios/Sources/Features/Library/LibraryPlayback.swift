@@ -8,6 +8,11 @@ import Foundation
 /// backfilling it once that regeneration completes so the next open plays
 /// straight from disk. Callers should only call this for Kokoro entries —
 /// Pocket has no saved audio and no read-along screen yet.
+///
+/// `@MainActor` to match `TTSViewModel`/`LibraryViewModel`, both of which
+/// are main-actor-isolated classes this only ever gets called from SwiftUI
+/// view code (already on the main actor).
+@MainActor
 enum LibraryPlayback {
     @discardableResult
     static func open(
