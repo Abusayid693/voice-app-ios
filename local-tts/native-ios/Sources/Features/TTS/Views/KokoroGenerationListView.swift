@@ -63,7 +63,7 @@ private struct KokoroGenerationRow: View {
                 HStack(spacing: 3) {
                     ForEach(generation.chunkStates.indices, id: \.self) { index in
                         Capsule()
-                            .fill(color(for: generation.chunkStates[index]))
+                            .fill(generation.chunkStates[index].displayColor)
                             .frame(height: 4)
                     }
                 }
@@ -71,14 +71,5 @@ private struct KokoroGenerationRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private func color(for state: ChunkState) -> Color {
-        switch state {
-        case .playing: return .blue
-        case .generated: return Color.blue.opacity(0.3)
-        case .waiting: return Color.gray.opacity(0.25)
-        case .failed: return .red
-        }
     }
 }

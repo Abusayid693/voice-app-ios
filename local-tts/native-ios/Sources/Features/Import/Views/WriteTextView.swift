@@ -1,11 +1,18 @@
 import SwiftUI
 
 /// Full-screen text entry reached from Import's "Write text" card. Floating
-/// Generate + Settings buttons at the bottom; generation progress/playback
-/// shows inline below the editor rather than navigating away.
+/// Generate + Settings buttons at the bottom. Kokoro's Generate navigates
+/// straight to ReadAlongPlayerView (issue #10) — no inline player here
+/// anymore. Pocket TTS still shows its progress inline (pocketStatusCard),
+/// unchanged.
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    // Set the moment a Kokoro Generate tap creates a new track — pushes
+    // ReadAlongPlayerView immediately (chunks stream in progressively there,
+    // same as today's inline list did). Pocket TTS doesn't use this; its
+    // Generate keeps today's inline pocketStatusCard, no navigation.
+    @State private var readAlongGenerationID: KokoroGeneration.ID?
 
     var body: some View {
         NavigationStack {
@@ -32,6 +39,9 @@ struct WriteTextView: View {
                     }
                 }
             }
+            .navigationDestination(item: $readAlongGenerationID) { generationID in
+                ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
@@ -39,22 +49,13 @@ struct WriteTextView: View {
         }
     }
 
+    // Kokoro no longer shows its own inline player here — Generate
+    // navigates straight to ReadAlongPlayerView, which is now the only
+    // place Kokoro generations are played back from. Pocket is unchanged.
     @ViewBuilder
     private var progressArea: some View {
-        switch viewModel.engine {
-        case .kokoroAne:
-            if !viewModel.kokoroGenerations.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        KokoroGenerationListView(viewModel: viewModel)
-                    }
-                }
-                .frame(maxHeight: 220)
-            }
-        case .pocketTts:
-            if viewModel.isBusy || viewModel.timeToFirstAudio != nil {
-                pocketStatusCard
-            }
+        if viewModel.engine == .pocketTts, viewModel.isBusy || viewModel.timeToFirstAudio != nil {
+            pocketStatusCard
         }
     }
 
@@ -90,7 +91,7 @@ struct WriteTextView: View {
                     .background(Circle().fill(Color.appSecondaryBackground))
             }
 
-            Button(action: viewModel.runDownloadAndSpeak) {
+            Button(action: generate) {
                 if viewModel.isBusy {
                     ProgressView()
                         .frame(maxWidth: .infinity)
@@ -105,6 +106,20 @@ struct WriteTextView: View {
             .frame(height: 44)
         }
         .padding()
+    }
+
+    /// Kokoro navigates straight to the read-along screen (issue #10);
+    /// Pocket keeps today's behavior unchanged (inline pocketStatusCard).
+    private func generate() {
+        switch viewModel.engine {
+        case .kokoroAne:
+            if let newID = viewModel.generateKokoro() {
+                viewModel.toggleKokoroPlayback(for: newID)
+                readAlongGenerationID = newID
+            }
+        case .pocketTts:
+            viewModel.runDownloadAndSpeak()
+        }
     }
 }
 
