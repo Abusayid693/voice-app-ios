@@ -20,6 +20,7 @@
 		47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */; };
 		4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */; };
 		5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */ = {isa = PBXBuildFile; fileRef = 336FA80C01B8751C4A246C5D /* CustomKokoroModel */; };
+		59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF60F7A71F5E9FFA62ADDF16 /* ReadAlongPlayerView.swift */; };
 		67801616FA55DBDEC073FE1E /* CreateVoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */; };
 		6AA586D1EF397B16E67E331D /* DemoContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
@@ -88,6 +89,7 @@
 		99BCBB265406E5783559C7D7 /* VoicesTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicesTabView.swift; sourceTree = "<group>"; };
 		9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskStorage.swift; sourceTree = "<group>"; };
 		A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteTextView.swift; sourceTree = "<group>"; };
+		AF60F7A71F5E9FFA62ADDF16 /* ReadAlongPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadAlongPlayerView.swift; sourceTree = "<group>"; };
 		B4839B571DC8F7200C26BC98 /* ChunkState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkState.swift; sourceTree = "<group>"; };
 		BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGeneration.swift; sourceTree = "<group>"; };
 		BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 			children = (
 				D73267891CCDBCE38D83CBE2 /* AllTrendingBooksView.swift */,
 				7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */,
+				AF60F7A71F5E9FFA62ADDF16 /* ReadAlongPlayerView.swift */,
 				E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */,
 				9016A555EFF94E335E35D39C /* TrendingBookCard.swift */,
 				F951C1610075724A48F1647E /* VoicePreviewSheet.swift */,
@@ -488,6 +491,7 @@
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
+				59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */,
 				873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */,
 				208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */,
 				EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */,
