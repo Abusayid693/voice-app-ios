@@ -148,15 +148,10 @@ private struct VoicePreviewCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    @ViewBuilder
     private var coverArt: some View {
-        if tile.isAvailable {
-            Image(VoiceCoverArt.assetName(for: tile.name))
-                .resizable()
-                .scaledToFill()
-        } else {
-            VoiceCoverArt.placeholderGradient(for: tile.name)
-        }
+        Image(VoiceCoverArt.assetName(for: tile.name))
+            .resizable()
+            .scaledToFill()
     }
 
     /// This card's own cover art, blown up to fill it at low opacity

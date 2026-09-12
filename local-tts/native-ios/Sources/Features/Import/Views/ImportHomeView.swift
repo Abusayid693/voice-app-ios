@@ -220,7 +220,7 @@ struct ImportHomeView: View {
     }
 
     private var trendingVoicesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
             // Cancels the parent VStack's .padding(.horizontal) (default,
             // 16pt) just for this scroll view's own clipping bounds, then
@@ -229,16 +229,21 @@ struct ImportHomeView: View {
             // clipped early at that boundary; the last/first card can
             // slide all the way to the true screen edge.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
+                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
                     ForEach(voiceTiles) { tile in
                         VoiceTileView(tile: tile, viewModel: viewModel) {
                             selectedVoiceTile = tile
                         }
                     }
                 }
+                // Each tile becomes a snap candidate; for a 2-row grid this
+                // snaps per column (both stacked tiles at that horizontal
+                // offset), not per individual tile.
+                .scrollTargetLayout()
                 .padding(.horizontal, 16)
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
+            .scrollTargetBehavior(.viewAligned)
             .padding(.horizontal, -16)
         }
     }
@@ -476,7 +481,6 @@ private struct VoiceTileView: View {
                 LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 2)
             .frame(width: 268, height: 84)
             .contentShape(Rectangle())
         }
@@ -485,28 +489,23 @@ private struct VoiceTileView: View {
         .opacity(tile.isAvailable ? 1 : 0.6)
     }
 
-    @ViewBuilder
     private var avatar: some View {
-        if tile.isAvailable {
-            Image(VoiceCoverArt.assetName(for: tile.name))
-                .resizable()
-                .scaledToFill()
-        } else {
-            VoiceCoverArt.placeholderGradient(for: tile.name)
-        }
+        Image(VoiceCoverArt.assetName(for: tile.name))
+            .resizable()
+            .scaledToFill()
     }
 }
 
-/// Voice avatars: a real cover image (cycled from the 5 bundled
-/// `VoiceCoverN` assets) for voices whose pack is downloaded, or a
-/// gradient placeholder — picked deterministically from the voice's name,
-/// not re-randomized on every redraw — for voices that aren't available yet.
+/// Voice avatars: a real, per-voice AI-generated cover image for voices
+/// that have one, or an orb (`OrbCoverArt`, `DesignSystem/OrbCoverArt.swift`)
+/// for every other voice — available or not, Kokoro or Pocket TTS. One
+/// rule regardless of engine/download state, so every caller here can just
+/// ask for "the" cover art without branching on availability itself.
 enum VoiceCoverArt {
     // Real, per-voice AI-generated avatars (issue #18) — keyed by the exact
-    // voice code, not the generic cycling covers below. Sparse on purpose:
-    // only voices with a generated avatar appear here; every other voice
-    // still falls back to the hashed generic cover until its own avatar
-    // exists. Add an entry here as each new avatar lands.
+    // voice code. Sparse on purpose: only voices with a generated avatar
+    // appear here; every other voice falls back to OrbCoverArt until its
+    // own avatar exists. Add an entry here as each new avatar lands.
     private static let realAvatarAssetNames: [String: String] = [
         "af_heart": "VoiceAvatar_af_heart",
         "af_alloy": "VoiceAvatar_af_alloy",
@@ -521,24 +520,13 @@ enum VoiceCoverArt {
         "af_sky": "VoiceAvatar_af_sky",
         "am_adam": "VoiceAvatar_am_adam",
         "am_liam": "VoiceAvatar_am_liam",
+        "am_fenrir": "VoiceAvatar_am_fenrir",
         "bf_alice": "VoiceAvatar_bf_alice",
         "bm_daniel": "VoiceAvatar_bm_daniel",
     ]
 
-    private static let assetNames = [
-        "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
-    ]
-
     static func assetName(for voiceName: String) -> String {
-        if let realAvatar = realAvatarAssetNames[voiceName] {
-            return realAvatar
-        }
-        let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return assetNames[sum % assetNames.count]
-    }
-
-    static func placeholderGradient(for voiceName: String) -> LinearGradient {
-        .stablePlaceholder(seed: voiceName)
+        realAvatarAssetNames[voiceName] ?? OrbCoverArt.assetName(for: voiceName)
     }
 }
 

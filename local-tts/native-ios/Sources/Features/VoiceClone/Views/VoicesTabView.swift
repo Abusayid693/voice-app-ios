@@ -152,13 +152,15 @@ struct VoicesTabView: View {
         .padding(.vertical, 4)
     }
 
+    // Seeded by `voice.id` rather than `voice.name` — the name is
+    // user-editable (rename), and keying off it would make a voice's orb
+    // change after a rename; `id` is stable for the voice's whole lifetime.
     private func avatar(for voice: ClonedVoice, size: CGFloat) -> some View {
-        Circle()
-            .fill(Color.appBackground)
+        Image(OrbCoverArt.assetName(for: voice.id.uuidString))
+            .resizable()
+            .scaledToFill()
             .frame(width: size, height: size)
-            .overlay {
-                LucideIcon(.user, style: .filled, size: size * 0.45, color: Color.appPrimaryText)
-            }
+            .clipShape(Circle())
     }
 }
 

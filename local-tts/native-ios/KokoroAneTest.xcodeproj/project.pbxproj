@@ -19,6 +19,7 @@
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
 		2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */; };
+		3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725C7E7034B4C34315AA827C /* OrbCoverArt.swift */; };
 		46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344A4ABF20807BF76484A45D /* LibraryViewModel.swift */; };
 		47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */; };
 		4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */; };
@@ -91,6 +92,7 @@
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
+		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
 		784AE95CAB2310D364034251 /* VoiceRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorderService.swift; sourceTree = "<group>"; };
 		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
@@ -324,6 +326,7 @@
 			children = (
 				379B744EF0BC94CCB3986CCD /* BlobShape.swift */,
 				251025C4FD0961EB5F194C37 /* Colors.swift */,
+				725C7E7034B4C34315AA827C /* OrbCoverArt.swift */,
 				5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */,
 			);
 			path = DesignSystem;
@@ -550,6 +553,7 @@
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
 				792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */,
+				3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */,
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
