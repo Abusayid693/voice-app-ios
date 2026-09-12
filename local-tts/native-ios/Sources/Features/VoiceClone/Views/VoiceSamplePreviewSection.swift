@@ -33,6 +33,14 @@ struct VoiceSamplePreviewSection: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, 40)
 
+            Picker("Language", selection: $viewModel.cloneLanguage) {
+                ForEach(PocketLanguage.allCases) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Color.appPrimaryText)
+
             if let cloneErrorMessage = viewModel.cloneErrorMessage {
                 Text(cloneErrorMessage)
                     .font(.caption)

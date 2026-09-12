@@ -86,12 +86,22 @@ final class DependencyContainer {
         }
     }
 
+    // One manager per language — PocketTtsManager.language is fixed at
+    // init ("to switch languages, create a new manager", per the SDK's own
+    // doc comment), so supporting multiple languages means multiple
+    // instances, not a mutable property on one. All share the audio
+    // engine/node below (that's output-only plumbing, not per-manager
+    // state — only one language ever generates/plays at a time).
+    //
     // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
     // (rank-4 flowlm_step_ane/cond_prefill_ane) instead of GPU — the SDK
     // defaults to .gpu, but that default is benchmarked on M-series Macs;
     // .ane is documented as the iOS-appropriate placement. Precision is
     // ignored under .ane (those variants are fp16-only).
-    let pocketManager = PocketTtsManager(language: .english, placement: .ane)
+    let pocketManagers: [PocketLanguage: PocketTtsManager] = Dictionary(
+        uniqueKeysWithValues: PocketLanguage.allCases.map {
+            ($0, PocketTtsManager(language: $0.sdkLanguage, placement: .ane))
+        })
 
     // PocketTTS streams 80ms frames rather than one complete WAV, so
     // playback goes through AVAudioEngine/AVAudioPlayerNode (which accepts

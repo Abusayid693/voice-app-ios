@@ -65,7 +65,7 @@ struct SetupSheet: View {
     private func isReady(_ pack: VoicePack) -> Bool {
         switch pack {
         case .kokoro: return viewModel.isKokoroPackReady
-        case .pocket: return viewModel.isPocketPackDownloaded
+        case .pocket(let language): return viewModel.isPocketPackDownloaded(language)
         }
     }
 
@@ -73,7 +73,7 @@ struct SetupSheet: View {
         Task {
             switch pack {
             case .kokoro: await viewModel.downloadKokoroPackIfNeeded()
-            case .pocket: await viewModel.downloadPocketPackIfNeeded()
+            case .pocket(let language): await viewModel.downloadPocketPackIfNeeded(language: language)
             }
         }
     }

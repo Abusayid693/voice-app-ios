@@ -15,6 +15,7 @@
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
 		19D4C9EBF3CF872D79F687F5 /* SavedGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B908701D84BB974C827AF15 /* SavedGeneration.swift */; };
 		19D8C1A9FDD2C430A18F8359 /* VoicesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BCBB265406E5783559C7D7 /* VoicesTabView.swift */; };
+		1E98E9FCEC97B9E778B7E8A3 /* PocketLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A87BD4818896A62FBA71633 /* PocketLanguage.swift */; };
 		208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06231A578E9AA46671656B29 /* SettingsSheet.swift */; };
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
@@ -74,8 +75,9 @@
 		046CF8805E70FDE33206289F /* VoicePacksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePacksView.swift; sourceTree = "<group>"; };
 		05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewLines.swift; sourceTree = "<group>"; };
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
+		0A87BD4818896A62FBA71633 /* PocketLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketLanguage.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -282,6 +284,7 @@
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
 				BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */,
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
+				0A87BD4818896A62FBA71633 /* PocketLanguage.swift */,
 				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
 			);
 			path = Models;
@@ -485,7 +488,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
-						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -560,6 +562,7 @@
 				3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */,
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
+				1E98E9FCEC97B9E778B7E8A3 /* PocketLanguage.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
 				59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */,
 				873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */,
@@ -598,7 +601,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -673,7 +676,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

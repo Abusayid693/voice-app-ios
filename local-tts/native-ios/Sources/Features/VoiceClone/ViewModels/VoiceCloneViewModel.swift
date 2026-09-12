@@ -12,6 +12,12 @@ import Foundation
 @MainActor
 final class VoiceCloneViewModel: ObservableObject {
     @Published private(set) var clonedVoices: [ClonedVoice] = []
+    // Which language pack a new recording gets cloned into — surfaced as a
+    // picker alongside the name field (VoiceSamplePreviewSection). Each
+    // saved ClonedVoice remembers whichever language was selected here at
+    // clone time (see ClonedVoice.language), so this only matters for
+    // *new* clones, not existing ones.
+    @Published var cloneLanguage: PocketLanguage = .english
 
     // Recording (see VoiceRecorderService)
     @Published private(set) var isRecording = false
@@ -50,18 +56,28 @@ final class VoiceCloneViewModel: ObservableObject {
         "The children laughed and chased each other around the garden while their parents watched from the porch nearby.",
     ]
 
-    private let pocketService: PocketEngineService
+    // One service per language, same reasoning as TTSViewModel's
+    // pocketServices — cloning and previewing both need to run against
+    // whichever language a given voice actually belongs to, and the SDK
+    // fixes a manager's language at init.
+    private let pocketServices: [PocketLanguage: PocketEngineService]
+    private var pocketModelsReady: Set<PocketLanguage> = []
     private let recorder = VoiceRecorderService()
     private var recordingTimerTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
-    private var pocketModelsReady = false
 
     init(dependencies: DependencyContainer) {
-        pocketService = PocketEngineService(
-            manager: dependencies.pocketManager,
-            audioEngine: dependencies.audioEngine,
-            playerNode: dependencies.playerNode,
-            streamFormat: dependencies.streamFormat)
+        pocketServices = Dictionary(
+            uniqueKeysWithValues: PocketLanguage.allCases.map { language in
+                (
+                    language,
+                    PocketEngineService(
+                        manager: dependencies.pocketManagers[language]!,
+                        audioEngine: dependencies.audioEngine,
+                        playerNode: dependencies.playerNode,
+                        streamFormat: dependencies.streamFormat)
+                )
+            })
         clonedVoices = Self.loadMetadata()
     }
 
@@ -141,10 +157,11 @@ final class VoiceCloneViewModel: ObservableObject {
         isCloning = true
         cloneErrorMessage = nil
         defer { isCloning = false }
+        let language = cloneLanguage
         do {
-            let voiceData = try await pocketService.cloneVoice(from: sampleURL)
-            let voice = ClonedVoice(id: UUID(), name: name, createdAt: Date())
-            try pocketService.saveClonedVoice(voiceData, to: voice.fileURL)
+            let voiceData = try await pocketServices[language]!.cloneVoice(from: sampleURL)
+            let voice = ClonedVoice(id: UUID(), name: name, createdAt: Date(), language: language)
+            try pocketServices[language]!.saveClonedVoice(voiceData, to: voice.fileURL)
             clonedVoices.append(voice)
             Self.saveMetadata(clonedVoices)
             discardRecording()
@@ -170,17 +187,19 @@ final class VoiceCloneViewModel: ObservableObject {
         stopPreview()
         previewingVoiceID = voice.id
         isPreviewLoading = true
+        let language = voice.language
+        let pocketService = pocketServices[language]!
         previewTask = Task { [weak self] in
             guard let self else { return }
             do {
-                if !self.pocketModelsReady {
-                    try await self.pocketService.ensureModels(progressHandler: nil)
-                    try await self.pocketService.initialize()
-                    self.pocketModelsReady = true
+                if !self.pocketModelsReady.contains(language) {
+                    try await pocketService.ensureModels(progressHandler: nil)
+                    try await pocketService.initialize()
+                    self.pocketModelsReady.insert(language)
                 }
-                let voiceData = try self.pocketService.loadClonedVoice(from: voice.fileURL)
-                try self.pocketService.preparePlayback()
-                let stream = try await self.pocketService.synthesizeStreaming(
+                let voiceData = try pocketService.loadClonedVoice(from: voice.fileURL)
+                try pocketService.preparePlayback()
+                let stream = try await pocketService.synthesizeStreaming(
                     text: Self.previewLine, voiceData: voiceData)
                 var receivedFirstFrame = false
                 for try await frame in stream {
@@ -189,7 +208,7 @@ final class VoiceCloneViewModel: ObservableObject {
                         receivedFirstFrame = true
                         self.isPreviewLoading = false
                     }
-                    self.pocketService.schedule(frame)
+                    pocketService.schedule(frame)
                 }
             } catch {
                 self.cloneErrorMessage = "Couldn't preview this voice: \(error.localizedDescription)"
@@ -204,7 +223,10 @@ final class VoiceCloneViewModel: ObservableObject {
     func stopPreview() {
         previewTask?.cancel()
         previewTask = nil
-        pocketService.stopPlayback()
+        // Stop every language's service rather than trying to track which
+        // one the just-cancelled preview was using — only one is ever
+        // really active, so this is cheap and avoids any doubt.
+        for service in pocketServices.values { service.stopPlayback() }
         previewingVoiceID = nil
         isPreviewLoading = false
     }

@@ -42,6 +42,16 @@ final class TTSViewModel: ObservableObject {
         }
     }
     @Published var pocketVoice = "alba"
+    // Which Pocket TTS language pack to use — one `PocketTtsManager` per
+    // language (the SDK fixes `language` at init), so changing this
+    // switches which manager/service `runPocketTts()` routes to. Same
+    // stop-in-flight-generation guard as `kokoroVoice`'s didSet.
+    @Published var pocketLanguage: PocketLanguage = .english {
+        didSet {
+            guard oldValue != pocketLanguage else { return }
+            stopAllPlayback()
+        }
+    }
     // Set by VoiceSettingsSheet's "My Voices" section — when non-nil (and
     // engine == .pocketTts), runPocketTts() synthesizes with this cloned
     // voice's conditioning data instead of the named `pocketVoice` preset.
@@ -80,12 +90,12 @@ final class TTSViewModel: ObservableObject {
     // afterward in the rare case that bundle copy failed and
     // downloadKokoroPackIfNeeded() later succeeds.
     @Published var isKokoroPackReady: Bool
-    // Unlike Kokoro, PocketTTS has no bundled fallback — this reflects a
-    // real ~500MB network download the user must opt into via Setup.
-    // Persisted so a relaunch doesn't forget it's already downloaded (the
-    // SDK has no cheap, side-effect-free "is this on disk" check to ask
-    // instead — see downloadPocketPackIfNeeded()).
-    @Published var isPocketPackDownloaded: Bool
+    // Unlike Kokoro, PocketTTS has no bundled fallback — each language is a
+    // real ~527MB network download the user must opt into via Setup.
+    // Persisted per-language so a relaunch doesn't forget what's already
+    // downloaded (the SDK has no cheap, side-effect-free "is this on disk"
+    // check to ask instead — see downloadPocketPackIfNeeded()).
+    @Published private(set) var pocketPackDownloadedLanguages: Set<PocketLanguage> = []
     // Where the bundled Kokoro pack actually lives on disk (nil if the
     // bundled-copy step failed) — exposed for the Settings > Voice
     // Packs/Storage pages, which report real on-disk sizes rather than
@@ -98,7 +108,11 @@ final class TTSViewModel: ObservableObject {
     @Published var isWriteTextPresented = false
     @Published var isVoiceSettingsPresented = false
 
-    private static let pocketPackDownloadedDefaultsKey = "pocketPackDownloaded"
+    private static let pocketPackDownloadedLanguagesDefaultsKey = "pocketPackDownloadedLanguages"
+    // Original single-language flag, kept only to migrate existing
+    // installs — a user who already downloaded Pocket's English pack
+    // shouldn't need to re-download it after this key is replaced.
+    private static let legacyPocketPackDownloadedBoolKey = "pocketPackDownloaded"
 
     // MARK: - Import screen: voice preview playback (bundled clips, no synthesis)
 
@@ -135,22 +149,62 @@ final class TTSViewModel: ObservableObject {
     private var kokoroPlayerDelegate: KokoroChunkPlaybackDelegate?
 
     private let kokoroService: KokoroEngineService
-    private let pocketService: PocketEngineService
+    // One service per language, each wrapping that language's own
+    // manager but sharing the same audio engine/node (only one language
+    // ever generates/plays at a time). `pocketService` below reads
+    // whichever one matches the current `pocketLanguage`, so every
+    // existing `pocketService.xxx` call site keeps working unchanged.
+    private let pocketServices: [PocketLanguage: PocketEngineService]
+    private var pocketService: PocketEngineService { pocketServices[pocketLanguage]! }
     private var audioPlayer: AVAudioPlayer?
 
     init(dependencies: DependencyContainer) {
         kokoroService = KokoroEngineService(
             manager: dependencies.kokoroManager, directory: dependencies.kokoroModelDirectory)
-        pocketService = PocketEngineService(
-            manager: dependencies.pocketManager,
-            audioEngine: dependencies.audioEngine,
-            playerNode: dependencies.playerNode,
-            streamFormat: dependencies.streamFormat)
+        pocketServices = Dictionary(
+            uniqueKeysWithValues: PocketLanguage.allCases.map { language in
+                (
+                    language,
+                    PocketEngineService(
+                        manager: dependencies.pocketManagers[language]!,
+                        audioEngine: dependencies.audioEngine,
+                        playerNode: dependencies.playerNode,
+                        streamFormat: dependencies.streamFormat)
+                )
+            })
         isKokoroPackReady = dependencies.isKokoroPackBundled
-        isPocketPackDownloaded = UserDefaults.standard.bool(
-            forKey: Self.pocketPackDownloadedDefaultsKey)
+        pocketPackDownloadedLanguages = Self.loadPocketPackDownloadedLanguages()
         kokoroModelDirectory = dependencies.kokoroModelDirectory
     }
+
+    private static func loadPocketPackDownloadedLanguages() -> Set<PocketLanguage> {
+        let defaults = UserDefaults.standard
+        if let rawValues = defaults.array(forKey: pocketPackDownloadedLanguagesDefaultsKey) as? [String] {
+            return Set(rawValues.compactMap(PocketLanguage.init(rawValue:)))
+        }
+        // Pre-multi-language installs only ever had English — migrate the
+        // old bool so those users don't lose an already-downloaded pack.
+        return defaults.bool(forKey: legacyPocketPackDownloadedBoolKey) ? [.english] : []
+    }
+
+    private func savePocketPackDownloadedLanguages() {
+        UserDefaults.standard.set(
+            pocketPackDownloadedLanguages.map(\.rawValue),
+            forKey: Self.pocketPackDownloadedLanguagesDefaultsKey)
+    }
+
+    /// True if the given language's Pocket pack has already been
+    /// downloaded. Most of the app only ever cares about English (Settings'
+    /// Voice Packs/Storage pages, Import's Trending-voices availability) —
+    /// `isPocketPackDownloaded` below covers those unchanged.
+    func isPocketPackDownloaded(_ language: PocketLanguage) -> Bool {
+        pocketPackDownloadedLanguages.contains(language)
+    }
+
+    /// Convenience for call sites that predate multi-language support and
+    /// only ever meant "the original English pack" — kept so they don't
+    /// need to be rewritten for language-awareness they don't need.
+    var isPocketPackDownloaded: Bool { isPocketPackDownloaded(.english) }
 
     var downloadProgressLabel: String {
         let downloaded = Self.formatMB(downloadedBytes)
@@ -205,29 +259,32 @@ final class TTSViewModel: ObservableObject {
         }
     }
 
-    /// PocketTTS has no bundled fallback, so this is a real ~500MB network
-    /// download the user opts into from the Setup sheet. On success, the
-    /// "already downloaded" flag is persisted — there's no cheap on-disk
-    /// check to ask the SDK instead (see isPocketPackDownloaded's comment).
-    func downloadPocketPackIfNeeded() async {
-        guard !isPocketPackDownloaded else { return }
-        status = "Downloading Pocket TTS pack…"
+    /// PocketTTS has no bundled fallback, so each language is a real
+    /// ~527MB network download the user opts into from the Setup sheet.
+    /// On success, that language's "already downloaded" flag is persisted
+    /// — there's no cheap on-disk check to ask the SDK instead (see
+    /// isPocketPackDownloaded's comment). Defaults to English so any
+    /// caller that predates multi-language support keeps working as-is.
+    func downloadPocketPackIfNeeded(language: PocketLanguage = .english) async {
+        guard !isPocketPackDownloaded(language) else { return }
+        status = "Downloading Pocket TTS pack (\(language.displayName))…"
         isBusy = true
         defer { isBusy = false }
         do {
-            try await pocketService.ensureModels(progressHandler: { [weak self] progress in
+            try await pocketServices[language]!.ensureModels(progressHandler: { [weak self] progress in
                 Task { @MainActor in
                     guard let self else { return }
                     self.applyDownloadProgress(
-                        progress, phaseWeight: 1.0, fetchTotal: self.fetchPocketTtsTotalBytes)
+                        progress, phaseWeight: 1.0,
+                        fetchTotal: { await self.fetchPocketTtsTotalBytes(language: language) })
                 }
             })
-            try await pocketService.initialize()
-            isPocketPackDownloaded = true
-            UserDefaults.standard.set(true, forKey: Self.pocketPackDownloadedDefaultsKey)
+            try await pocketServices[language]!.initialize()
+            pocketPackDownloadedLanguages.insert(language)
+            savePocketPackDownloadedLanguages()
             status = "Idle"
         } catch {
-            status = "Pocket TTS pack download failed: \(error.localizedDescription)"
+            status = "Pocket TTS pack (\(language.displayName)) download failed: \(error.localizedDescription)"
         }
     }
 
@@ -326,7 +383,15 @@ final class TTSViewModel: ObservableObject {
     private func stopAllPlayback() {
         audioPlayer?.stop()
         audioPlayer = nil
-        pocketService.stopPlayback()
+        // Stop every language's service, not just the current
+        // `pocketLanguage` — this can run from that same property's
+        // didSet, which fires *after* the value already changed, so
+        // reading the (now computed-current) `pocketService` here would
+        // stop the new language's idle service instead of the old one
+        // that's actually still streaming. Only one is ever really
+        // active, so stopping all of them is harmless and avoids the
+        // ordering problem entirely.
+        for service in pocketServices.values { service.stopPlayback() }
 
         kokoroGenerationTask?.cancel()
         kokoroGenerationTask = nil
@@ -639,6 +704,15 @@ final class TTSViewModel: ObservableObject {
         let voice = pocketVoice
         let clonedVoice = selectedClonedVoice
         let inputText = text
+        // Snapshot which language's service this run uses at the moment
+        // Generate is tapped — pocketLanguage changing mid-run already
+        // triggers stopAllPlayback() via its own didSet, but pinning the
+        // local reference too keeps this whole closure self-consistent
+        // regardless of timing (a cloned voice's own language is set on
+        // `pocketLanguage` at selection time in VoiceSettingsSheet, so this
+        // is correct for cloned voices as well as named presets).
+        let pocketService = pocketServices[pocketLanguage]!
+        let language = pocketLanguage
 
         Task {
             do {
@@ -650,7 +724,8 @@ final class TTSViewModel: ObservableObject {
                 try await pocketService.ensureModels(progressHandler: { progress in
                     Task { @MainActor in
                         self.applyDownloadProgress(
-                            progress, phaseWeight: 1.0, fetchTotal: self.fetchPocketTtsTotalBytes)
+                            progress, phaseWeight: 1.0,
+                            fetchTotal: { await self.fetchPocketTtsTotalBytes(language: language) })
                     }
                 })
                 isWarmInit = !didDownload
@@ -726,16 +801,23 @@ final class TTSViewModel: ObservableObject {
     /// uncompiled `.mlpackage` sources, none of which `ensureModels(placement:
     /// .ane)` actually downloads. Filtering to just the components that call
     /// fetches keeps the total honest.
-    private func fetchPocketTtsTotalBytes() async -> Int64? {
+    private func fetchPocketTtsTotalBytes(language: PocketLanguage) async -> Int64? {
+        // `sdkLanguage.rawValue` matches the real v2.1/<name>/ folder name
+        // exactly for every case here (english/german/italian/portuguese/
+        // spanish) — verified directly against the HuggingFace repo
+        // listing, not assumed. All five came back byte-identical in size
+        // (~527MB) when this same filter was checked per-language — see
+        // docs/adr/0011-pocket-tts-language-packs.md.
+        let langPath = language.sdkLanguage.rawValue
         let required = [
-            "v2.1/english/cond_prefill_ane.mlmodelc/",
-            "v2.1/english/flowlm_step_ane.mlmodelc/",
-            "v2.1/english/flow_decoder_fused.mlmodelc/",
-            "v2.1/english/mimi_decoder.mlmodelc/",
-            "v2.1/english/constants_bin/",
+            "v2.1/\(langPath)/cond_prefill_ane.mlmodelc/",
+            "v2.1/\(langPath)/flowlm_step_ane.mlmodelc/",
+            "v2.1/\(langPath)/flow_decoder_fused.mlmodelc/",
+            "v2.1/\(langPath)/mimi_decoder.mlmodelc/",
+            "v2.1/\(langPath)/constants_bin/",
         ]
         return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
-            url: "https://huggingface.co/api/models/FluidInference/pocket-tts-coreml/tree/main/v2.1/english?recursive=true",
+            url: "https://huggingface.co/api/models/FluidInference/pocket-tts-coreml/tree/main/v2.1/\(langPath)?recursive=true",
             matching: { path in required.contains { path.hasPrefix($0) } })
     }
 }

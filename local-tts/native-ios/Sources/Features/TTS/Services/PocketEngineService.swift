@@ -25,10 +25,13 @@ final class PocketEngineService {
 
     /// Subdirectory downloads (PocketTTS's language packs) span the whole
     /// 0...1 progress fraction — no separate compile phase to reserve room
-    /// for, unlike Kokoro's repo download.
+    /// for, unlike Kokoro's repo download. Uses `manager.language` rather
+    /// than a hardcoded value, so this service is correct for whichever
+    /// language's manager it was constructed with — one `PocketEngineService`
+    /// per `PocketLanguage`, mirroring `DependencyContainer.pocketManagers`.
     func ensureModels(progressHandler: ProgressHandler?) async throws {
         try await PocketTtsResourceDownloader.ensureModels(
-            language: .english, placement: .ane, progressHandler: progressHandler)
+            language: manager.language, placement: .ane, progressHandler: progressHandler)
     }
 
     func initialize() async throws {
