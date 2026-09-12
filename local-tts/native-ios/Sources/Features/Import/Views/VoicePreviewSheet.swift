@@ -13,12 +13,7 @@ struct VoicePreviewSheet: View {
 
     var body: some View {
         VStack(spacing: 24) {
-            coverArt
-                .frame(width: 180, height: 180)
-                .clipShape(Circle())
-                .scaleEffect(isPlaying ? 1 + viewModel.previewLevel * 0.12 : 1)
-                .opacity(isPlaying ? 0.85 + viewModel.previewLevel * 0.15 : 1)
-                .animation(.easeInOut(duration: 0.12), value: viewModel.previewLevel)
+            animatedCoverArt
                 .padding(.top, 16)
 
             VStack(spacing: 4) {
@@ -65,6 +60,39 @@ struct VoicePreviewSheet: View {
         } else {
             VoiceCoverArt.placeholderGradient(for: tile.name)
         }
+    }
+
+    // Layers the BlobShape deformation on top of the existing scale/opacity
+    // pulse. The per-frame TimelineView only runs while actually playing —
+    // at rest this renders a plain, static BlobShape(amplitude: 0), which is
+    // exactly a circle, with no continuous timer burning CPU in the
+    // background. Foreground cover art only; backgroundLayer below keeps
+    // its own plain shape unchanged.
+    @ViewBuilder
+    private var animatedCoverArt: some View {
+        if isPlaying {
+            TimelineView(.animation) { timeline in
+                blobClippedCoverArt(phase: phase(at: timeline.date))
+            }
+        } else {
+            blobClippedCoverArt(phase: 0)
+        }
+    }
+
+    private func blobClippedCoverArt(phase: CGFloat) -> some View {
+        coverArt
+            .frame(width: 180, height: 180)
+            .clipShape(BlobShape(amplitude: isPlaying ? viewModel.previewLevel : 0, phase: phase))
+            .scaleEffect(isPlaying ? 1 + viewModel.previewLevel * 0.12 : 1)
+            .opacity(isPlaying ? 0.85 + viewModel.previewLevel * 0.15 : 1)
+            .animation(.easeInOut(duration: 0.12), value: viewModel.previewLevel)
+    }
+
+    // Radians/sec — slow, organic drift rather than a visible spin.
+    private let blobRotationSpeed: Double = 1.4
+
+    private func phase(at date: Date) -> CGFloat {
+        CGFloat(date.timeIntervalSinceReferenceDate * blobRotationSpeed)
     }
 
     /// The sheet's own cover art, blown up to fill the background at low

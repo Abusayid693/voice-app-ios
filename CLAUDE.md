@@ -91,6 +91,7 @@ Sources/
         KokoroGeneration.swift     // DONE — one independent track (Generate tap): its sub-chunks, audio, play state
   DesignSystem/
     Colors.swift                  // DONE — fixed dark palette for the Import/VoiceClone screens + shared placeholder-gradient helper
+    BlobShape.swift                // DONE — organic sine-harmonic blob Shape (amplitude/phase animatable), drives VoicePreviewSheet's audio-reactive deformation
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
