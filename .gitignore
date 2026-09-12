@@ -10,3 +10,6 @@ local-tts/native-ios/CustomKokoroModel/
 
 # macOS
 .DS_Store
+
+# Local-only working notes (investigation writeups not meant for the repo)
+WORD_HIGHLIGHTING_NOTES.md
