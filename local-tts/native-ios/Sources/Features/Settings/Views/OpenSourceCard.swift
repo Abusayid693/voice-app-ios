@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Promo-style card on Settings, below the About row — unlike the flat
@@ -24,9 +25,7 @@ struct OpenSourceCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(Self.points, id: \.self) { point in
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "checkmark")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Color.appPrimaryText)
+                        LucideIcon(.check, size: 15, color: Color.appPrimaryText, strokeWidth: 3)
                         Text(point)
                             .font(.subheadline)
                             .foregroundStyle(Color.appSecondaryText)

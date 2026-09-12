@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 enum RootTab: Hashable {
@@ -16,26 +17,26 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             TTSHomeView(viewModel: viewModel)
-                .tabItem { Label("Home", systemImage: "house") }
+                .tabItem { Label(title: { Text("Home") }, icon: { LucideIcon(.house) }) }
                 .tag(RootTab.home)
 
             PlaceholderTabView(title: "Explore")
-                .tabItem { Label("Explore", systemImage: "safari") }
+                .tabItem { Label(title: { Text("Explore") }, icon: { LucideIcon(.compass) }) }
                 .tag(RootTab.explore)
 
             ImportHomeView(
                 viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
                 libraryViewModel: libraryViewModel
             )
-            .tabItem { Label("Import", systemImage: "plus.circle.fill") }
+            .tabItem { Label(title: { Text("Import") }, icon: { LucideIcon(.circlePlus) }) }
             .tag(RootTab.importScreen)
 
             LibraryTabView(viewModel: libraryViewModel, ttsViewModel: viewModel)
-                .tabItem { Label("Library", systemImage: "books.vertical") }
+                .tabItem { Label(title: { Text("Library") }, icon: { LucideIcon(.library) }) }
                 .tag(RootTab.library)
 
             VoicesTabView(viewModel: voiceCloneViewModel)
-                .tabItem { Label("Voices", systemImage: "waveform") }
+                .tabItem { Label(title: { Text("Voices") }, icon: { LucideIcon(.audioWaveform) }) }
                 .tag(RootTab.voices)
         }
     }

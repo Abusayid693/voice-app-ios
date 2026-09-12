@@ -7,6 +7,14 @@ packages:
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio
     exactVersion: 0.15.6
+  # Smoother, rounded icon set replacing SF Symbols in the app's own UI
+  # chrome (not a system-level override — SF Symbols are still used
+  # wherever a truly native/system look is expected). ISC-licensed,
+  # zero runtime dependencies, real SwiftUI vector Shapes (not bundled
+  # raster images) — see ENG_CONTEXT.md for the alternatives considered.
+  LucideSwift:
+    url: https://github.com/ajaxjiang96/lucide-swift
+    exactVersion: 0.9.4
 targets:
   KokoroAneTest:
     type: application
@@ -35,6 +43,8 @@ targets:
     dependencies:
       - package: FluidAudio
         product: FluidAudio
+      - package: LucideSwift
+        product: LucideSwift
     info:
       path: Sources/Resources/Info.plist
       properties:

@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// One row per "Generate" tap — independent tracks, like a playlist, each
@@ -36,8 +37,7 @@ private struct KokoroGenerationRow: View {
                         ProgressView()
                             .frame(width: 28, height: 28)
                     } else {
-                        Image(systemName: generation.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 28))
+                        LucideIcon(generation.isPlaying ? .circlePause : .circlePlay, size: 28)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {

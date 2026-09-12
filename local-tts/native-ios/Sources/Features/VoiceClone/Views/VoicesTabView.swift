@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// The Voices tab: manage cloned voices — create new ones, preview or
@@ -43,7 +44,7 @@ struct VoicesTabView: View {
                     Button {
                         isCreateVoicePresented = true
                     } label: {
-                        Image(systemName: "plus")
+                        LucideIcon(.plus)
                     }
                 }
             }
@@ -67,9 +68,7 @@ struct VoicesTabView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "mic.circle")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.appSecondaryText)
+            LucideIcon(.mic, size: 48, color: Color.appSecondaryText)
             Text("No cloned voices yet")
                 .foregroundStyle(Color.appSecondaryText)
             Button("Create your own voice") { isCreateVoicePresented = true }
@@ -108,8 +107,7 @@ struct VoicesTabView: View {
                             .strokeBorder(Color.appSecondaryText, style: StrokeStyle(lineWidth: 1, dash: [4]))
                             .frame(width: 56, height: 56)
                             .overlay {
-                                Image(systemName: "plus")
-                                    .foregroundStyle(Color.appSecondaryText)
+                                LucideIcon(.plus, color: Color.appSecondaryText)
                             }
                         Text("New voice")
                             .font(.caption)
@@ -144,12 +142,9 @@ struct VoicesTabView: View {
                 if viewModel.previewingVoiceID == voice.id && viewModel.isPreviewLoading {
                     ProgressView()
                 } else {
-                    Image(
-                        systemName: viewModel.previewingVoiceID == voice.id
-                            ? "pause.circle.fill" : "play.circle.fill"
-                    )
-                    .font(.title2)
-                    .foregroundStyle(Color.appPrimaryText)
+                    LucideIcon(
+                        viewModel.previewingVoiceID == voice.id ? .circlePause : .circlePlay,
+                        size: 22, color: Color.appPrimaryText)
                 }
             }
             .buttonStyle(.plain)
@@ -162,9 +157,7 @@ struct VoicesTabView: View {
             .fill(Color.appBackground)
             .frame(width: size, height: size)
             .overlay {
-                Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.45))
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.user, style: .filled, size: size * 0.45, color: Color.appPrimaryText)
             }
     }
 }

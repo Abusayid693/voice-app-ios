@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Read-along screen for a Kokoro generation (issue #10), reached by
@@ -115,9 +116,9 @@ struct ReadAlongPlayerView: View {
                     ProgressView()
                         .frame(width: 32, height: 32)
                 } else {
-                    Image(systemName: generation.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(Color.appPrimaryText)
+                    LucideIcon(
+                        generation.isPlaying ? .circlePause : .circlePlay, size: 32,
+                        color: Color.appPrimaryText)
                 }
             }
             .disabled(generation.isBuffering)

@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Minimal stand-in for a tab that has no real screen yet (Explore,
@@ -8,8 +9,7 @@ struct PlaceholderTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 8) {
-                Image(systemName: "hourglass")
-                    .font(.largeTitle)
+                LucideIcon(.hourglass, size: 34)
                     .foregroundStyle(.secondary)
                 Text("\(title) coming soon")
                     .font(.headline)

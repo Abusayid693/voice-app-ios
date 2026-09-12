@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// App settings — reached via the gear icon on Import, presented the same
@@ -16,17 +17,17 @@ struct SettingsSheet: View {
                     NavigationLink {
                         VoicePacksView(viewModel: viewModel)
                     } label: {
-                        row(title: "Voice Packs", systemImage: "shippingbox.fill")
+                        row(title: "Voice Packs", icon: .packageIcon)
                     }
                     NavigationLink {
                         StorageView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
                     } label: {
-                        row(title: "Storage", systemImage: "internaldrive.fill")
+                        row(title: "Storage", icon: .hardDrive)
                     }
                     NavigationLink {
                         AboutView()
                     } label: {
-                        row(title: "About", systemImage: "info.circle.fill")
+                        row(title: "About", icon: .info)
                     }
                 }
                 .listRowBackground(Color.appSecondaryBackground)
@@ -49,11 +50,11 @@ struct SettingsSheet: View {
         .preferredColorScheme(.dark)
     }
 
-    private func row(title: String, systemImage: String) -> some View {
+    private func row(title: String, icon: LucideIconName) -> some View {
         Label {
             Text(title).foregroundStyle(Color.appPrimaryText)
         } icon: {
-            Image(systemName: systemImage).foregroundStyle(Color.appPrimaryText)
+            LucideIcon(icon, color: Color.appPrimaryText)
         }
     }
 }

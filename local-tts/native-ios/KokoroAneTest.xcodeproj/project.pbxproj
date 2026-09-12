@@ -60,6 +60,7 @@
 		CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5A425A4486E4739F80386 /* VoiceCloneViewModel.swift */; };
 		DD488A29F17A3FE441103912 /* VoiceSamplePreviewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C992C537826E7A8C2B56DC50 /* VoiceSamplePreviewSection.swift */; };
 		DF028801F92E66828A7A5322 /* InstantCloneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */; };
+		E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A0D045B3092A9E63F40DEA50 /* LucideSwift */; };
 		EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */; };
 		EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */; };
 		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
@@ -131,6 +132,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */,
+				E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -458,6 +460,7 @@
 			name = KokoroAneTest;
 			packageProductDependencies = (
 				CE49DCF4046639135F678D6A /* FluidAudio */,
+				A0D045B3092A9E63F40DEA50 /* LucideSwift */,
 			);
 			productName = KokoroAneTest;
 			productReference = 1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */;
@@ -489,6 +492,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 667BED9B659518709B9B9718 /* Products */;
@@ -765,9 +769,22 @@
 				version = 0.15.6;
 			};
 		};
+		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ajaxjiang96/lucide-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A0D045B3092A9E63F40DEA50 /* LucideSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */;
+			productName = LucideSwift;
+		};
 		CE49DCF4046639135F678D6A /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */;

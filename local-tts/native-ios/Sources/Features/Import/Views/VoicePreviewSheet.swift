@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Half-height sheet reached by tapping a Trending voices row — large
@@ -38,9 +39,7 @@ struct VoicePreviewSheet: View {
             Button {
                 viewModel.togglePreview(voiceName: tile.name, engine: tile.engine)
             } label: {
-                Image(systemName: isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(isPlaying ? .circlePause : .circlePlay, size: 64, color: Color.appPrimaryText)
             }
             .disabled(!tile.isAvailable)
 

@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Settings > Voice Packs — real download/size status for both engines'
@@ -48,8 +49,8 @@ struct VoicePacksView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Label(
-                    isReady ? "Downloaded" : "Not downloaded",
-                    systemImage: isReady ? "checkmark.circle.fill" : "arrow.down.circle"
+                    title: { Text(isReady ? "Downloaded" : "Not downloaded") },
+                    icon: { LucideIcon(isReady ? .circleCheck : .circleArrowDown) }
                 )
                 .font(.caption)
                 .foregroundStyle(isReady ? Color.appPrimaryText : Color.appSecondaryText)

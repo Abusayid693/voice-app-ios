@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Full-screen text entry reached from Import's "Write text" card. Floating
@@ -35,8 +36,7 @@ struct WriteTextView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.isWriteTextPresented = false }) {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(Color.appPrimaryText)
+                        LucideIcon(.x, color: Color.appPrimaryText)
                     }
                 }
             }
@@ -85,9 +85,7 @@ struct WriteTextView: View {
             Button {
                 viewModel.isVoiceSettingsPresented = true
             } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.title3)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.cog, size: 20, color: Color.appPrimaryText)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(Color.appSecondaryBackground))
             }
