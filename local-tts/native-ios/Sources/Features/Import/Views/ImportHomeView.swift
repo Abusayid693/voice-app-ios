@@ -8,6 +8,7 @@ import SwiftUI
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var libraryViewModel: LibraryViewModel
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -20,6 +21,9 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
+    // Set when tapping a Kokoro entry in Projects — see playFromSavedGeneration's
+    // doc comment for why "opening" a saved entry means regenerating it fresh.
+    @State private var readAlongGenerationID: KokoroGeneration.ID?
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -59,13 +63,18 @@ struct ImportHomeView: View {
                     UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
                 }
             }
+            .navigationDestination(item: $readAlongGenerationID) { generationID in
+                ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
-            WriteTextView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+            WriteTextView(
+                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                libraryViewModel: libraryViewModel)
         }
         .sheet(isPresented: $isCreateVoicePresented) {
             CreateVoiceSheet { route in
@@ -224,27 +233,74 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
     }
 
+    // Real generations (latest 5, newest first) once any exist; falls back
+    // to the static demo row + a "Create your own project" entry point
+    // (no action yet, matching createYourOwnBookRow's own no-op) while the
+    // library is still empty.
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Projects").font(.headline).foregroundStyle(Color.appPrimaryText)
-            ForEach(DemoContent.projects) { project in
-                HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color.appSecondaryBackground)
-                        .frame(width: 40, height: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                        Text(project.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
-                            .lineLimit(1)
-                        Text(project.updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
-                    }
-                    Spacer()
-                    Image(systemName: "play.circle.fill").font(.title2)
-                        .foregroundStyle(Color.appPrimaryText)
+            if libraryViewModel.savedGenerations.isEmpty {
+                ForEach(DemoContent.projects) { project in
+                    projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
                 }
-                .contentShape(Rectangle())
+                createYourOwnProjectRow
+            } else {
+                ForEach(libraryViewModel.savedGenerations.prefix(5)) { generation in
+                    projectRow(
+                        title: VoiceDisplayName.forCode(generation.voiceName),
+                        subtitle: generation.text,
+                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))"
+                    )
+                    // Kokoro only — plays the saved audio straight from
+                    // disk when available (LibraryPlayback), regenerating
+                    // only as a fallback; there's no Pocket player yet.
+                    .onTapGesture {
+                        guard generation.engine == .kokoroAne else { return }
+                        if let newID = LibraryPlayback.open(
+                            generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
+                        {
+                            readAlongGenerationID = newID
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func projectRow(title: String, subtitle: String, updatedLabel: String) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color.appSecondaryBackground)
+                .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
+                Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                    .lineLimit(1)
+                Text(updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
+            }
+            Spacer()
+            Image(systemName: "play.circle.fill").font(.title2)
+                .foregroundStyle(Color.appPrimaryText)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var createYourOwnProjectRow: some View {
+        Button(action: {}) {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(Color.appPrimaryText)
+                Text("Create your own project").font(.subheadline).bold()
+                    .foregroundStyle(Color.appPrimaryText)
+                Spacer()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -285,17 +341,7 @@ struct VoiceTile: Identifiable {
     let isAvailable: Bool
 
     // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
-    var displayName: String {
-        var raw = Substring(name)
-        for prefix in ["af_", "am_", "bf_", "bm_"] where raw.hasPrefix(prefix) {
-            raw.removeFirst(prefix.count)
-            break
-        }
-        return raw
-            .split(separator: "_")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
+    var displayName: String { VoiceDisplayName.forCode(name) }
 }
 
 /// One row per voice: cover image, name + engine label, a play icon at the
@@ -380,5 +426,6 @@ enum VoiceCoverArt {
     let dependencies = DependencyContainer()
     ImportHomeView(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        libraryViewModel: LibraryViewModel())
 }

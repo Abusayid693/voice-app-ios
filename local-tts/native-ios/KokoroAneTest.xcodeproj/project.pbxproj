@@ -12,11 +12,13 @@
 		053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07EEB3027B4E022D555A931 /* Engine.swift */; };
 		1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */; };
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
+		19D4C9EBF3CF872D79F687F5 /* SavedGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B908701D84BB974C827AF15 /* SavedGeneration.swift */; };
 		19D8C1A9FDD2C430A18F8359 /* VoicesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BCBB265406E5783559C7D7 /* VoicesTabView.swift */; };
 		208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06231A578E9AA46671656B29 /* SettingsSheet.swift */; };
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
 		2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */; };
+		46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344A4ABF20807BF76484A45D /* LibraryViewModel.swift */; };
 		47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */; };
 		4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */; };
 		5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */ = {isa = PBXBuildFile; fileRef = 336FA80C01B8751C4A246C5D /* CustomKokoroModel */; };
@@ -25,6 +27,7 @@
 		6AA586D1EF397B16E67E331D /* DemoContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
 		7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */; };
+		720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BE4CA4DD780C848E2C15D6 /* LibraryTabView.swift */; };
 		792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226B8BED92895B71E466C73E /* OpenSourceCard.swift */; };
 		7BA3D073D03AC978E3131ABE /* VoicePreviews in Resources */ = {isa = PBXBuildFile; fileRef = CAFE6273C18A193545CA0FF7 /* VoicePreviews */; };
 		7C55558B9AC3B4289E4B7517 /* UploadVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9833799EFDD6FEDCCDA464 /* UploadVoiceView.swift */; };
@@ -34,7 +37,9 @@
 		83975B79CB40408F447C561F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA21F0B398C4B3DA5EE02D6 /* AboutView.swift */; };
 		846BCD15B53DBF85CD1BF2BB /* TrendingBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C3E7070E8D2293BE1EEC9E /* TrendingBook.swift */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
+		87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */; };
 		8CCDD010CEB39749F8D06671 /* VoiceRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784AE95CAB2310D364034251 /* VoiceRecorderService.swift */; };
+		8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */; };
 		913CEBA126D84389FFDA21C5 /* VoicePacksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046CF8805E70FDE33206289F /* VoicePacksView.swift */; };
 		918CCAA9F1918E9F3B1C7CF1 /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2346E68205E6911A9AF347 /* StorageView.swift */; };
 		959A3EA4880EB5C09A60E4C3 /* TrendingBooksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */; };
@@ -50,6 +55,7 @@
 		B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */; };
 		BB75A4408D01E36AE4E242C6 /* VoicePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F951C1610075724A48F1647E /* VoicePreviewSheet.swift */; };
 		C77F75D0042DF99C044F6115 /* ClonedVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC33F2E0CA90E2F7D873E5 /* ClonedVoice.swift */; };
+		CCB679D4688F3306170DDDF0 /* GenerationTextSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD37E25F7F1C1EA70217E7B9 /* GenerationTextSheet.swift */; };
 		CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */; };
 		CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5A425A4486E4739F80386 /* VoiceCloneViewModel.swift */; };
 		DD488A29F17A3FE441103912 /* VoiceSamplePreviewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C992C537826E7A8C2B56DC50 /* VoiceSamplePreviewSection.swift */; };
@@ -65,7 +71,7 @@
 		05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewLines.swift; sourceTree = "<group>"; };
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -74,12 +80,16 @@
 		3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroAneTestApp.swift; sourceTree = "<group>"; };
 		30A3AE469CA3D6649CCD731F /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
+		344A4ABF20807BF76484A45D /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
+		3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPlayback.swift; sourceTree = "<group>"; };
 		3A9833799EFDD6FEDCCDA464 /* UploadVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadVoiceView.swift; sourceTree = "<group>"; };
+		3B908701D84BB974C827AF15 /* SavedGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGeneration.swift; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		784AE95CAB2310D364034251 /* VoiceRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorderService.swift; sourceTree = "<group>"; };
+		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
@@ -88,7 +98,9 @@
 		99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBooksViewModel.swift; sourceTree = "<group>"; };
 		99BCBB265406E5783559C7D7 /* VoicesTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicesTabView.swift; sourceTree = "<group>"; };
 		9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskStorage.swift; sourceTree = "<group>"; };
+		A6BE4CA4DD780C848E2C15D6 /* LibraryTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryTabView.swift; sourceTree = "<group>"; };
 		A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteTextView.swift; sourceTree = "<group>"; };
+		AD37E25F7F1C1EA70217E7B9 /* GenerationTextSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTextSheet.swift; sourceTree = "<group>"; };
 		AF60F7A71F5E9FFA62ADDF16 /* ReadAlongPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadAlongPlayerView.swift; sourceTree = "<group>"; };
 		B4839B571DC8F7200C26BC98 /* ChunkState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkState.swift; sourceTree = "<group>"; };
 		BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGeneration.swift; sourceTree = "<group>"; };
@@ -131,6 +143,17 @@
 				99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		0C601D57C1143B5F516F7B3E /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */,
+				748BAF20936A1EE613DEE20E /* Models */,
+				90730110E66A5321BE94F5BA /* ViewModels */,
+				B08EC05F45D33E4B9BBC52F3 /* Views */,
+			);
+			path = Library;
 			sourceTree = "<group>";
 		};
 		291C6C974A1B6C3D481FB6D6 /* Views */ = {
@@ -251,6 +274,7 @@
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
 				BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */,
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
+				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -266,6 +290,14 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		748BAF20936A1EE613DEE20E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				3B908701D84BB974C827AF15 /* SavedGeneration.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
 		7CDE99F84FBEA8EA437FCD4E /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -273,6 +305,14 @@
 				C8DE7BD70ACE70EDC00A3D47 /* Info.plist */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		90730110E66A5321BE94F5BA /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				344A4ABF20807BF76484A45D /* LibraryViewModel.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		9A02FA37760CC6407BB21860 /* DesignSystem */ = {
@@ -300,11 +340,21 @@
 			isa = PBXGroup;
 			children = (
 				5E9A3E0A4E2752C9E613CFD5 /* Import */,
+				0C601D57C1143B5F516F7B3E /* Library */,
 				C13BFE6B889DCB7E88486126 /* Settings */,
 				2A29C1A73B8AE96E1FC5F39F /* TTS */,
 				61BB096EBC5188C796374B9E /* VoiceClone */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		B08EC05F45D33E4B9BBC52F3 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AD37E25F7F1C1EA70217E7B9 /* GenerationTextSheet.swift */,
+				A6BE4CA4DD780C848E2C15D6 /* LibraryTabView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		BD6A2CBF28D480E9C5088724 /* Models */ = {
@@ -423,7 +473,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
-						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -478,6 +527,7 @@
 				7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */,
 				AA769E6B751D9894A65C6E4C /* DiskStorage.swift in Sources */,
 				053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */,
+				CCB679D4688F3306170DDDF0 /* GenerationTextSheet.swift in Sources */,
 				9AE50BFF7E4F47F323F182D5 /* GutendexBookService.swift in Sources */,
 				189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */,
 				CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */,
@@ -487,12 +537,16 @@
 				289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */,
 				EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */,
 				B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */,
+				8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */,
+				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
+				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
 				792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */,
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
 				59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */,
 				873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */,
+				19D4C9EBF3CF872D79F687F5 /* SavedGeneration.swift in Sources */,
 				208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */,
 				EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */,
 				918CCAA9F1918E9F3B1C7CF1 /* StorageView.swift in Sources */,
@@ -505,6 +559,7 @@
 				7C55558B9AC3B4289E4B7517 /* UploadVoiceView.swift in Sources */,
 				B48D061C014B0B1E8233E5CA /* VoiceCloneRoute.swift in Sources */,
 				CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */,
+				87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */,
 				041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */,
 				913CEBA126D84389FFDA21C5 /* VoicePacksView.swift in Sources */,
 				A14CDE189527D09CED04A1B7 /* VoicePreviewLines.swift in Sources */,
@@ -526,7 +581,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -601,7 +656,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

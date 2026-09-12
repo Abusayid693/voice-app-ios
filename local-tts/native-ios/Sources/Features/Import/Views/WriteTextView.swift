@@ -8,6 +8,7 @@ import SwiftUI
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var libraryViewModel: LibraryViewModel
     // Set the moment a Kokoro Generate tap creates a new track — pushes
     // ReadAlongPlayerView immediately (chunks stream in progressively there,
     // same as today's inline list did). Pocket TTS doesn't use this; its
@@ -108,12 +109,33 @@ struct WriteTextView: View {
         .padding()
     }
 
-    /// Kokoro navigates straight to the read-along screen (issue #10);
-    /// Pocket keeps today's behavior unchanged (inline pocketStatusCard).
+    // Saves the text/voice to Library before kicking off the real
+    // generation — a saved entry is written on every tap for now (not
+    // gated on success), matching how Kokoro's own track list already
+    // works (a "Generate" tap always creates something, even if a chunk
+    // later fails). Kokoro's audio is attached to that same saved entry
+    // once every chunk finishes, so Library/Projects can replay it
+    // straight from disk (see LibraryPlayback) instead of regenerating.
+    // Kokoro navigates straight to the read-along screen (issue #10);
+    // Pocket keeps today's behavior unchanged (inline pocketStatusCard, no
+    // saved audio — see SavedGeneration's doc comment).
     private func generate() {
+        let voiceName: String
         switch viewModel.engine {
         case .kokoroAne:
-            if let newID = viewModel.generateKokoro() {
+            voiceName = viewModel.kokoroVoice
+        case .pocketTts:
+            voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
+        }
+        let savedID = libraryViewModel.save(text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
+
+        switch viewModel.engine {
+        case .kokoroAne:
+            let newID = viewModel.generateKokoro(onFullyGenerated: { chunkAudio in
+                guard let savedID else { return }
+                libraryViewModel.attachAudio(chunkAudio, to: savedID)
+            })
+            if let newID {
                 viewModel.toggleKokoroPlayback(for: newID)
                 readAlongGenerationID = newID
             }
@@ -127,5 +149,6 @@ struct WriteTextView: View {
     let dependencies = DependencyContainer()
     WriteTextView(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        libraryViewModel: LibraryViewModel())
 }
