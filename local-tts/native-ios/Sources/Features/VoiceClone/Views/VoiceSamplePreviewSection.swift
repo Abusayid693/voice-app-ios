@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Preview/name/Clone UI shown once a sample exists (recorded or
@@ -16,8 +17,8 @@ struct VoiceSamplePreviewSection: View {
                     viewModel.previewRecording()
                 } label: {
                     Label(
-                        viewModel.isPreviewingRecording ? "Playing…" : "Play",
-                        systemImage: "play.fill")
+                        title: { Text(viewModel.isPreviewingRecording ? "Playing…" : "Play") },
+                        icon: { LucideIcon(.play, style: .filled, size: 14) })
                 }
                 .buttonStyle(.bordered)
                 .disabled(viewModel.isPreviewingRecording)

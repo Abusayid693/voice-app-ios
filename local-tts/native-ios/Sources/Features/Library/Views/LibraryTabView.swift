@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// The Library tab: every past "Generate" tap's original text + voice
@@ -33,12 +34,12 @@ struct LibraryTabView: View {
                                     Button(role: .destructive) {
                                         viewModel.delete(generation)
                                     } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Label(title: { Text("Delete") }, icon: { LucideIcon(.trash) })
                                     }
                                     Button {
                                         viewingGeneration = generation
                                     } label: {
-                                        Label("View Text", systemImage: "pencil")
+                                        Label(title: { Text("View Text") }, icon: { LucideIcon(.pencil) })
                                     }
                                     .tint(.blue)
                                 }
@@ -55,7 +56,7 @@ struct LibraryTabView: View {
                     Button {
                         sortNewestFirst.toggle()
                     } label: {
-                        Image(systemName: sortNewestFirst ? "arrow.down" : "arrow.up")
+                        LucideIcon(sortNewestFirst ? .arrowDown : .arrowUp)
                     }
                 }
             }
@@ -71,9 +72,7 @@ struct LibraryTabView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.appSecondaryText)
+            LucideIcon(.library, size: 48, color: Color.appSecondaryText)
             Text("No generations yet")
                 .foregroundStyle(Color.appSecondaryText)
             Text("Text you generate from Write Text will show up here.")
@@ -91,9 +90,10 @@ struct LibraryTabView: View {
                 .fill(Color.appBackground)
                 .frame(width: 40, height: 40)
                 .overlay {
-                    Image(systemName: generation.engine == .kokoroAne ? "waveform" : "mic.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.appPrimaryText)
+                    LucideIcon(
+                        generation.engine == .kokoroAne ? .audioWaveform : .mic,
+                        style: generation.engine == .kokoroAne ? .stroked : .filled, size: 16,
+                        color: Color.appPrimaryText)
                 }
 
             VStack(alignment: .leading, spacing: 2) {

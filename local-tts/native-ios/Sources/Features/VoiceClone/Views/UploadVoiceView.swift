@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -12,9 +13,7 @@ struct UploadVoiceView: View {
         VStack(spacing: 28) {
             Spacer()
 
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.appPrimaryText)
+            LucideIcon(.upload, size: 56, color: Color.appPrimaryText)
 
             if !viewModel.hasRecording {
                 Button("Upload") { isFileImporterPresented = true }

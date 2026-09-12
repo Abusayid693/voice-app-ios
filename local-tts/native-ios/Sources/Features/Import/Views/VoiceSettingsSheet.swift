@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Combined Kokoro + Pocket voice picker for the Write text screen — one
@@ -83,7 +84,7 @@ struct VoiceSettingsSheet: View {
                 Text(name)
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark").foregroundStyle(.blue)
+                    LucideIcon(.check, size: 15, color: .blue)
                 } else if !isAvailable {
                     Text("Not available").font(.caption).foregroundStyle(Color.appTertiaryText)
                 }

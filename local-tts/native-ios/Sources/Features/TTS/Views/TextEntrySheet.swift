@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 struct TextEntrySheet: View {
@@ -18,14 +19,14 @@ struct TextEntrySheet: View {
                             if isBusy {
                                 ProgressView()
                             } else {
-                                Label("Listen", systemImage: "waveform")
+                                Label(title: { Text("Listen") }, icon: { LucideIcon(.audioWaveform, size: 15) })
                             }
                         }
                         .disabled(isBusy || text.isEmpty)
                     }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: onClose) {
-                            Image(systemName: "xmark")
+                            LucideIcon(.x)
                         }
                     }
                 }

@@ -21,7 +21,7 @@ local-tts/native-ios/
   project.yml           # source of truth for the Xcode project
 ```
 
-See [`CLAUDE.md`](CLAUDE.md) for the architecture conventions and current file tree, and [`ENG_CONTEXT.md`](ENG_CONTEXT.md) for the engineering history and every non-obvious decision behind how this is built.
+See [`CLAUDE.md`](CLAUDE.md) for the architecture conventions and current file tree, [`docs/adr/`](docs/adr/) for the reasoning behind non-obvious decisions, and [`CHANGELOG.md`](CHANGELOG.md) for what shipped in each version.
 
 ## Building
 
@@ -31,7 +31,7 @@ xcodegen generate
 open KokoroAneTest.xcodeproj
 ```
 
-Requires Xcode with an iOS 17+ simulator or device. `CustomKokoroModel/` is gitignored (large, regeneratable) — see `ENG_CONTEXT.md` for the regeneration recipe if it's missing on a fresh clone.
+Requires Xcode with an iOS 17+ simulator or device. `CustomKokoroModel/` is gitignored (large, regeneratable) — see [`docs/adr/0002-custom-kokoro-model-bundle.md`](docs/adr/0002-custom-kokoro-model-bundle.md) for the regeneration recipe if it's missing on a fresh clone.
 
 ## License
 

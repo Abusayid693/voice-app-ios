@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Bottom sheet reached from the Voices tab's "+ New voice"/toolbar "+"
@@ -18,13 +19,13 @@ struct CreateVoiceSheet: View {
 
             optionRow(
                 title: "Instant Clone", subtitle: "Record a short sample now",
-                systemImage: "mic.fill"
+                icon: .mic
             ) {
                 onSelect(.instantClone)
             }
             optionRow(
                 title: "Upload file", subtitle: "Use an existing recording",
-                systemImage: "square.and.arrow.up"
+                icon: .upload
             ) {
                 onSelect(.upload)
             }
@@ -38,20 +39,18 @@ struct CreateVoiceSheet: View {
     }
 
     private func optionRow(
-        title: String, subtitle: String, systemImage: String, action: @escaping () -> Void
+        title: String, subtitle: String, icon: LucideIconName, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.title2)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(icon, size: 22, color: Color.appPrimaryText)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
                     Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(Color.appTertiaryText)
+                LucideIcon(.chevronRight, color: Color.appTertiaryText)
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))

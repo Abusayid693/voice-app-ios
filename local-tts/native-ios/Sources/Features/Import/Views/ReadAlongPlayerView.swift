@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Read-along screen for a Kokoro generation (issue #10), reached by
@@ -6,13 +7,14 @@ import SwiftUI
 /// inside WriteTextView's editable `TextEditor` (highlighted ranges and an
 /// editable text view fight each other: cursor placement, selection,
 /// live-typing all get in the way of programmatically-driven highlight
-/// state). See ENG_CONTEXT.md's "Read-along player" section.
+/// state). See docs/adr/0004-kokoro-chunked-multitrack-playback.md.
 ///
 /// Highlights a whole chunk at a time (word-level was tried and reverted —
 /// Kokoro's own text normalizer expands numbers/dates/times before
 /// phonemizing, e.g. "26" -> "twenty six", which broke the word-count
 /// alignment for any chunk containing them; common enough in real pasted
-/// text that chunk-level is the more reliable v1 — see ENG_CONTEXT.md).
+/// text that chunk-level is the more reliable v1 — see
+/// docs/adr/0005-chunk-level-read-along-highlighting.md).
 ///
 /// Looks the live generation up by id on every render (rather than holding
 /// a value-type snapshot) so it reflects chunk audio/playback state as they
@@ -115,9 +117,9 @@ struct ReadAlongPlayerView: View {
                     ProgressView()
                         .frame(width: 32, height: 32)
                 } else {
-                    Image(systemName: generation.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(Color.appPrimaryText)
+                    LucideIcon(
+                        generation.isPlaying ? .circlePause : .circlePlay, size: 32,
+                        color: Color.appPrimaryText)
                 }
             }
             .disabled(generation.isBuffering)

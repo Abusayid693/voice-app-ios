@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Pushed as a real page (not inside the CreateVoiceSheet modal) for
@@ -13,9 +14,7 @@ struct InstantCloneView: View {
         VStack(spacing: 28) {
             Spacer()
 
-            Image(systemName: "mic.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(viewModel.isRecording ? .red : Color.appPrimaryText)
+            LucideIcon(.mic, style: .filled, size: 56, color: viewModel.isRecording ? .red : Color.appPrimaryText)
                 .scaleEffect(viewModel.isRecording ? 1.08 : 1)
                 .animation(
                     viewModel.isRecording
@@ -39,7 +38,7 @@ struct InstantCloneView: View {
                         passageIndex =
                             (passageIndex + 1) % VoiceCloneViewModel.suggestedReadingPassages.count
                     } label: {
-                        Label("Try another", systemImage: "arrow.triangle.2.circlepath")
+                        Label(title: { Text("Try another") }, icon: { LucideIcon(.refreshCw, size: 14) })
                             .font(.caption)
                     }
                     .foregroundStyle(Color.appSecondaryText)

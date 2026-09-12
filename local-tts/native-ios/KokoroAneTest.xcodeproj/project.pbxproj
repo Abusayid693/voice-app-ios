@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */; };
 		041DB77937BA1E4B6AF8E381 /* VoicePack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851CC1471E60AC39DADD12C6 /* VoicePack.swift */; };
+		053A30AD8C7AE06777C0EA2C /* BlobShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379B744EF0BC94CCB3986CCD /* BlobShape.swift */; };
 		053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07EEB3027B4E022D555A931 /* Engine.swift */; };
 		1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E08D6A46C69B9515A62E8BE4 /* Assets.xcassets */; };
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
@@ -18,6 +19,7 @@
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
 		2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */; };
+		3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725C7E7034B4C34315AA827C /* OrbCoverArt.swift */; };
 		46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 344A4ABF20807BF76484A45D /* LibraryViewModel.swift */; };
 		47607ED67217E5ECE284D88A /* VoiceSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03834AB959484126F5B030A4 /* VoiceSettingsSheet.swift */; };
 		4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */; };
@@ -60,6 +62,7 @@
 		CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5A425A4486E4739F80386 /* VoiceCloneViewModel.swift */; };
 		DD488A29F17A3FE441103912 /* VoiceSamplePreviewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C992C537826E7A8C2B56DC50 /* VoiceSamplePreviewSection.swift */; };
 		DF028801F92E66828A7A5322 /* InstantCloneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */; };
+		E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A0D045B3092A9E63F40DEA50 /* LucideSwift */; };
 		EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */; };
 		EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */; };
 		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
@@ -71,7 +74,7 @@
 		05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewLines.swift; sourceTree = "<group>"; };
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -82,12 +85,14 @@
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
 		344A4ABF20807BF76484A45D /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPlayback.swift; sourceTree = "<group>"; };
+		379B744EF0BC94CCB3986CCD /* BlobShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlobShape.swift; sourceTree = "<group>"; };
 		3A9833799EFDD6FEDCCDA464 /* UploadVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadVoiceView.swift; sourceTree = "<group>"; };
 		3B908701D84BB974C827AF15 /* SavedGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGeneration.swift; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
+		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
 		784AE95CAB2310D364034251 /* VoiceRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorderService.swift; sourceTree = "<group>"; };
 		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
@@ -131,6 +136,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */,
+				E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -318,7 +324,9 @@
 		9A02FA37760CC6407BB21860 /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				379B744EF0BC94CCB3986CCD /* BlobShape.swift */,
 				251025C4FD0961EB5F194C37 /* Colors.swift */,
+				725C7E7034B4C34315AA827C /* OrbCoverArt.swift */,
 				5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */,
 			);
 			path = DesignSystem;
@@ -458,6 +466,7 @@
 			name = KokoroAneTest;
 			packageProductDependencies = (
 				CE49DCF4046639135F678D6A /* FluidAudio */,
+				A0D045B3092A9E63F40DEA50 /* LucideSwift */,
 			);
 			productName = KokoroAneTest;
 			productReference = 1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */;
@@ -473,6 +482,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
+						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -488,6 +498,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 667BED9B659518709B9B9718 /* Products */;
@@ -519,6 +530,7 @@
 			files = (
 				83975B79CB40408F447C561F /* AboutView.swift in Sources */,
 				95BAE181CEFF899DB13372AF /* AllTrendingBooksView.swift in Sources */,
+				053A30AD8C7AE06777C0EA2C /* BlobShape.swift in Sources */,
 				FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */,
 				C77F75D0042DF99C044F6115 /* ClonedVoice.swift in Sources */,
 				7CCF792E32580E0A413F0C91 /* Colors.swift in Sources */,
@@ -541,6 +553,7 @@
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
 				792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */,
+				3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */,
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
@@ -581,7 +594,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -656,7 +669,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -764,9 +777,22 @@
 				version = 0.15.6;
 			};
 		};
+		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ajaxjiang96/lucide-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A0D045B3092A9E63F40DEA50 /* LucideSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */;
+			productName = LucideSwift;
+		};
 		CE49DCF4046639135F678D6A /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */;

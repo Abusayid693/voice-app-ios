@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// Modal for downloading the two voice packs up front. Always reachable
@@ -43,8 +44,7 @@ struct SetupSheet: View {
                 }
                 Spacer()
                 if isReady {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    LucideIcon(.circleCheck, color: .green)
                 } else if viewModel.isBusy {
                     ProgressView()
                 } else {

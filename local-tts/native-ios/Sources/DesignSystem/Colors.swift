@@ -28,10 +28,11 @@ extension Color {
 
 extension LinearGradient {
     /// Deterministic placeholder gradient keyed off a stable string seed
-    /// (a voice code, a book id) — the same seed always yields the same
-    /// colors, so a placeholder shown while real artwork loads (or because
-    /// it never loads) doesn't flicker to a different color on every
-    /// redraw.
+    /// (a book id) — the same seed always yields the same colors, so a
+    /// placeholder shown while real artwork loads doesn't flicker to a
+    /// different color on every redraw. Voice cover art uses `OrbCoverArt`
+    /// instead (`DesignSystem/OrbCoverArt.swift`); this remains for
+    /// `TrendingBookCard`'s book covers, which have no orb equivalent.
     static func stablePlaceholder(seed: String) -> LinearGradient {
         let pairs: [[Color]] = [
             [.pink, .purple], [.blue, .teal], [.orange, .red],

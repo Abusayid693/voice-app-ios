@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// One book's cover + title + author — shared between Import's 5-book
@@ -15,9 +16,7 @@ struct TrendingBookCard: View {
                 } else {
                     LinearGradient.stablePlaceholder(seed: "\(book.id)")
                         .overlay {
-                            Image(systemName: "book.closed.fill")
-                                .font(.title)
-                                .foregroundStyle(.white.opacity(0.85))
+                            LucideIcon(.book, style: .filled, size: 28, color: .white.opacity(0.85))
                         }
                 }
             }

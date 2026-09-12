@@ -7,12 +7,13 @@ import FluidAudio
 final class DependencyContainer {
     // FluidAudio's own hosted ANE repo only publishes af_heart (a real
     // model-conversion constraint, not a missing download — see
-    // ENG_CONTEXT.md). This app instead ships a locally-converted
-    // (laishere/kokoro-coreml) model set bundled at CustomKokoroModel/,
-    // paired with FluidAudio's real KokoroNoise_v2/KokoroTail_v2 stages
-    // (our own stock conversion of those two had audible pitch/loudness
-    // bugs — see ENG_CONTEXT.md), so every standard Kokoro-82M English
-    // voice actually works. KokoroAneResourceDownloader.ensureVoicePack
+    // docs/adr/0002-custom-kokoro-model-bundle.md). This app instead ships
+    // a locally-converted (laishere/kokoro-coreml) model set bundled at
+    // CustomKokoroModel/, paired with FluidAudio's real
+    // KokoroNoise_v2/KokoroTail_v2 stages (our own stock conversion of
+    // those two had audible pitch/loudness bugs), so every standard
+    // Kokoro-82M English voice actually works.
+    // KokoroAneResourceDownloader.ensureVoicePack
     // finds each voice's .bin already present here and never touches the
     // network.
     let kokoroManager: KokoroAneManager

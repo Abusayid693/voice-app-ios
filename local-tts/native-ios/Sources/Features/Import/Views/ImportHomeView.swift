@@ -1,4 +1,40 @@
+import LucideSwift
 import SwiftUI
+
+/// Reports whether a ScrollView is parked at (or within `threshold` of) its
+/// top, so ImportHomeView can fade the Setup pointer out as soon as the user
+/// scrolls away from it.
+///
+/// Uses `.onScrollGeometryChange` (iOS 18+) rather than the older
+/// GeometryReader-in-the-content's-`.background` + PreferenceKey recipe. That
+/// recipe silently stopped working: modern ScrollView doesn't re-evaluate a
+/// background GeometryReader on every scroll tick, so the preference never
+/// fired and the "at top" flag was stuck at `true` forever no matter which
+/// coordinate space it measured against.
+///
+/// On iOS 17 there is no equivalent API, so the pointer simply stays put
+/// until the packs finish downloading — it's a decorative onboarding hint,
+/// and that degradation is preferable to reinstating the broken recipe.
+private struct ScrolledToTopObserver: ViewModifier {
+    @Binding var isAtTop: Bool
+    var threshold: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                // At rest contentOffset.y == -contentInsets.top (the nav bar
+                // and large title are part of the top inset), so the sum —
+                // not contentOffset alone — is the real distance scrolled.
+                geometry.contentOffset.y + geometry.contentInsets.top <= threshold
+            } action: { _, atTop in
+                guard atTop != isAtTop else { return }
+                withAnimation(.easeInOut(duration: 0.2)) { isAtTop = atTop }
+            }
+        } else {
+            content
+        }
+    }
+}
 
 /// The app's default screen — a consumer-facing "Import" landing page
 /// (redesign target: paste/upload/scan/write actions, trending demo rows,
@@ -24,12 +60,43 @@ struct ImportHomeView: View {
     // Set when tapping a Kokoro entry in Projects — see playFromSavedGeneration's
     // doc comment for why "opening" a saved entry means regenerating it fresh.
     @State private var readAlongGenerationID: KokoroGeneration.ID?
+    // Setup pointer only makes sense while its target is still visible at
+    // the top of the screen — hide it the moment the user scrolls away
+    // from the top, rather than have it float over unrelated content.
+    // Driven by ScrolledToTopObserver above.
+    @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
     }
 
     var body: some View {
+        // The pointer is a sibling of the *whole* NavigationStack, not a
+        // layer inside it. Anything placed inside the stack is positioned
+        // relative to the stack's content area, and that area moves: when
+        // the large "Import" title collapses into the inline bar on scroll,
+        // the content area's origin rises by the title's height, dragging
+        // any inner overlay up with it (which is what made the pointer look
+        // like it scrolled, then "stuck" once the collapse finished). Out
+        // here the coordinate space is the screen's safe area, which never
+        // changes — and that's the same space the toolbar button lives in.
+        ZStack(alignment: .topTrailing) {
+            navigationContent
+
+            if !isFullyDownloaded && isScrolledToTop {
+                setupPointer
+                    // 40pt down clears the 44pt nav bar; 100pt in from the
+                    // trailing edge lands under "Setup" rather than the cog.
+                    .padding(.top, 50)
+                    .padding(.trailing, 100)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var navigationContent: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
@@ -44,8 +111,10 @@ struct ImportHomeView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
+            .scrollIndicators(.hidden)
+            .modifier(ScrolledToTopObserver(isAtTop: $isScrolledToTop))
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Import")
+            .navigationTitle("Home")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     setupButton
@@ -67,7 +136,6 @@ struct ImportHomeView: View {
                 ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
             }
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel)
         }
@@ -83,7 +151,7 @@ struct ImportHomeView: View {
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tile: tile, viewModel: viewModel)
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, viewModel: viewModel)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
@@ -94,24 +162,42 @@ struct ImportHomeView: View {
         Button {
             viewModel.isSetupPresented = true
         } label: {
-            Label("Setup", systemImage: isFullyDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+            Label(
+                title: { Text("Setup") },
+                icon: {
+                    LucideIcon(isFullyDownloaded ? .circleCheck : .circleArrowDown)
+                })
         }
+    }
+
+    // Floats in screen space outside the NavigationStack (see body) so it
+    // stays pinned under the Setup toolbar button no matter how far the
+    // page scrolls or whether the large title has collapsed. Never attached
+    // to the button itself — that would make it participate in the
+    // toolbar's own layout and push the other item around.
+    private var setupPointer: some View {
+        Image("SetupPointer")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 28.8, height: 48)
+            .allowsHitTesting(false)
+            .transition(.opacity)
     }
 
     private var settingsButton: some View {
         Button {
             isSettingsPresented = true
         } label: {
-            Image(systemName: "gearshape")
+            LucideIcon(.cog)
         }
     }
 
     private var actionGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ImportActionCard(title: "Paste a link", systemImage: "link", action: {})
-            ImportActionCard(title: "Upload a file", systemImage: "doc", action: {})
-            ImportActionCard(title: "Scan text", systemImage: "viewfinder", action: {})
-            ImportActionCard(title: "Write text", systemImage: "character.cursor.ibeam") {
+            ImportActionCard(title: "Paste a link", icon: .link, action: {})
+            ImportActionCard(title: "Upload a file", icon: .file, action: {})
+            ImportActionCard(title: "Scan text", icon: .scan, action: {})
+            ImportActionCard(title: "Write text", icon: .textCursor) {
                 viewModel.isWriteTextPresented = true
             }
         }
@@ -134,18 +220,31 @@ struct ImportHomeView: View {
     }
 
     private var trendingVoicesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
+            // Cancels the parent VStack's .padding(.horizontal) (default,
+            // 16pt) just for this scroll view's own clipping bounds, then
+            // re-adds the same 16pt as content inset — so cards still start
+            // flush with the rest of the screen, but scrolling isn't
+            // clipped early at that boundary; the last/first card can
+            // slide all the way to the true screen edge.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
+                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
                     ForEach(voiceTiles) { tile in
                         VoiceTileView(tile: tile, viewModel: viewModel) {
                             selectedVoiceTile = tile
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                // Each tile becomes a snap candidate; for a 2-row grid this
+                // snaps per column (both stacked tiles at that horizontal
+                // offset), not per individual tile.
+                .scrollTargetLayout()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 2)
             }
+            .scrollTargetBehavior(.viewAligned)
+            .padding(.horizontal, -16)
         }
     }
 
@@ -156,9 +255,7 @@ struct ImportHomeView: View {
             isCreateVoicePresented = true
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "mic.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.mic, style: .filled, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create your own voice").font(.subheadline).bold()
                         .foregroundStyle(Color.appPrimaryText)
@@ -215,9 +312,7 @@ struct ImportHomeView: View {
     private var createYourOwnBookRow: some View {
         Button(action: {}) {
             HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create your own book").font(.subheadline).bold()
                         .foregroundStyle(Color.appPrimaryText)
@@ -280,8 +375,7 @@ struct ImportHomeView: View {
                 Text(updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
             }
             Spacer()
-            Image(systemName: "play.circle.fill").font(.title2)
-                .foregroundStyle(Color.appPrimaryText)
+            LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
         }
         .contentShape(Rectangle())
     }
@@ -289,9 +383,7 @@ struct ImportHomeView: View {
     private var createYourOwnProjectRow: some View {
         Button(action: {}) {
             HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
                 Text("Create your own project").font(.subheadline).bold()
                     .foregroundStyle(Color.appPrimaryText)
                 Spacer()
@@ -306,22 +398,20 @@ struct ImportHomeView: View {
 
 private struct ImportActionCard: View {
     let title: String
-    let systemImage: String
+    let icon: LucideIconName
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(Color.appPrimaryText)
+            VStack(spacing: 10) {
+                LucideIcon(icon, size: 20, color: Color.appPrimaryText)
                 Text(title)
                     .font(.subheadline)
                     .bold()
                     .foregroundStyle(Color.appPrimaryText)
-                Spacer(minLength: 0)
+                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .frame(height: 80)
             .padding()
             .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
@@ -342,13 +432,24 @@ struct VoiceTile: Identifiable {
 
     // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
     var displayName: String { VoiceDisplayName.forCode(name) }
+
+    // A short persona tagline ("Warm and friendly") in place of the raw
+    // engine label, falling back to that label for voices without one.
+    var descriptionText: String { VoiceDescription.tagline(for: name, fallback: engineLabel) }
+
+    // A fuller, 1-2 sentence description of the voice's character — used on
+    // VoicePreviewSheet's card in place of the raw engine label.
+    var longDescription: String { VoiceDescription.longDescription(for: name) }
+
+    // Emoji flag for the voice's accent/locale, shown beside its name on
+    // VoicePreviewSheet's card.
+    var countryFlag: String { VoiceLocale.flag(for: name) }
 }
 
-/// One row per voice: cover image, name + engine label, a play icon at the
-/// trailing end — mirrors the mockup's trending-voice row layout. Tapping
-/// anywhere on the row opens VoicePreviewSheet rather than playing inline;
-/// the icon just reflects whether this voice's preview is the one
-/// currently playing (started from that sheet).
+/// One row per voice: cover image, name, a short persona tagline, and a
+/// trailing play/pause indicator (reflects whether this voice's preview is
+/// the one currently playing, started from VoicePreviewSheet). The whole
+/// card is the tap target — tapping opens VoicePreviewSheet.
 private struct VoiceTileView: View {
     let tile: VoiceTile
     @ObservedObject var viewModel: TTSViewModel
@@ -363,27 +464,24 @@ private struct VoiceTileView: View {
                     .frame(width: 60, height: 60)
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(tile.displayName)
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(Color.appPrimaryText)
                         .lineLimit(1)
-                    Text(tile.engineLabel)
-                        .font(.caption2)
+                    Text(tile.descriptionText)
+                        .font(.system(size: 13))
                         .foregroundStyle(Color.appTertiaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 Spacer(minLength: 8)
 
-                Image(systemName: isPreviewing ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
             .frame(width: 268, height: 84)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -391,34 +489,168 @@ private struct VoiceTileView: View {
         .opacity(tile.isAvailable ? 1 : 0.6)
     }
 
-    @ViewBuilder
     private var avatar: some View {
-        if tile.isAvailable {
-            Image(VoiceCoverArt.assetName(for: tile.name))
-                .resizable()
-                .scaledToFill()
-        } else {
-            VoiceCoverArt.placeholderGradient(for: tile.name)
-        }
+        Image(VoiceCoverArt.assetName(for: tile.name))
+            .resizable()
+            .scaledToFill()
     }
 }
 
-/// Voice avatars: a real cover image (cycled from the 5 bundled
-/// `VoiceCoverN` assets) for voices whose pack is downloaded, or a
-/// gradient placeholder — picked deterministically from the voice's name,
-/// not re-randomized on every redraw — for voices that aren't available yet.
+/// Voice avatars: a real, per-voice AI-generated cover image for voices
+/// that have one, or an orb (`OrbCoverArt`, `DesignSystem/OrbCoverArt.swift`)
+/// for every other voice — available or not, Kokoro or Pocket TTS. One
+/// rule regardless of engine/download state, so every caller here can just
+/// ask for "the" cover art without branching on availability itself.
 enum VoiceCoverArt {
-    private static let assetNames = [
-        "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
+    // Real, per-voice AI-generated avatars (issue #18) — keyed by the exact
+    // voice code. Sparse on purpose: only voices with a generated avatar
+    // appear here; every other voice falls back to OrbCoverArt until its
+    // own avatar exists. Add an entry here as each new avatar lands.
+    private static let realAvatarAssetNames: [String: String] = [
+        "af_heart": "VoiceAvatar_af_heart",
+        "af_alloy": "VoiceAvatar_af_alloy",
+        "af_nova": "VoiceAvatar_af_nova",
+        "af_aoede": "VoiceAvatar_af_aoede",
+        "af_bella": "VoiceAvatar_af_bella",
+        "af_jessica": "VoiceAvatar_af_jessica",
+        "af_kore": "VoiceAvatar_af_kore",
+        "af_nicole": "VoiceAvatar_af_nicole",
+        "af_river": "VoiceAvatar_af_river",
+        "af_sarah": "VoiceAvatar_af_sarah",
+        "af_sky": "VoiceAvatar_af_sky",
+        "am_adam": "VoiceAvatar_am_adam",
+        "am_liam": "VoiceAvatar_am_liam",
+        "am_fenrir": "VoiceAvatar_am_fenrir",
+        "bf_alice": "VoiceAvatar_bf_alice",
+        "bm_daniel": "VoiceAvatar_bm_daniel",
     ]
 
     static func assetName(for voiceName: String) -> String {
-        let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return assetNames[sum % assetNames.count]
+        realAvatarAssetNames[voiceName] ?? OrbCoverArt.assetName(for: voiceName)
+    }
+}
+
+/// Short persona taglines shown under a voice's name in Trending voices,
+/// instead of the raw engine label — same personas used to brief the
+/// avatar images (issue #18), condensed to a couple of words. Sparse like
+/// `VoiceCoverArt.realAvatarAssetNames`: falls back to the engine label for
+/// any voice without one yet (currently all of Pocket TTS).
+enum VoiceDescription {
+    private static let taglines: [String: String] = [
+        "af_heart": "Warm and friendly",
+        "af_alloy": "Poised and composed",
+        "af_aoede": "Dreamy and artistic",
+        "af_bella": "Warm and confident",
+        "af_jessica": "Friendly and professional",
+        "af_kore": "Bright and youthful",
+        "af_nicole": "Sophisticated and polished",
+        "af_nova": "Vibrant and energetic",
+        "af_river": "Free-spirited and relaxed",
+        "af_sarah": "Sweet and genuine",
+        "af_sky": "Bright and airy",
+        "am_adam": "Warm and easygoing",
+        "am_echo": "Sharp and composed",
+        "am_eric": "Friendly and warm",
+        "am_fenrir": "Rugged, deep voice",
+        "am_liam": "Youthful and relaxed",
+        "am_michael": "Reliable and warm",
+        "am_onyx": "Sleek and cool",
+        "am_puck": "Playful and mischievous",
+        "am_santa": "Warm and jolly",
+        "bf_alice": "Elegant and refined",
+        "bf_emma": "Poised and elegant",
+        "bf_isabella": "Graceful and refined",
+        "bf_lily": "Gentle and delicate",
+        "bm_daniel": "Distinguished and calm",
+        "bm_fable": "Warm storyteller",
+        "bm_george": "Distinguished and composed",
+        "bm_lewis": "Friendly and approachable",
+    ]
+
+    static func tagline(for voiceName: String, fallback: String) -> String {
+        taglines[voiceName] ?? fallback
     }
 
-    static func placeholderGradient(for voiceName: String) -> LinearGradient {
-        .stablePlaceholder(seed: voiceName)
+    // Fuller descriptions for VoicePreviewSheet's card — same
+    // name-association-guess basis as the taglines above (Kokoro's
+    // af_/am_/bf_/bm_ prefix gives real gender/accent; the character
+    // adjectives are still a guess, not verified against each clip). Pocket
+    // TTS voices are named after LibriVox-style audiobook narrators/
+    // characters with no persona data at all, so those are freshly-written,
+    // generic narration-toned descriptions rather than anything sourced.
+    private static let longDescriptions: [String: String] = [
+        "af_alloy": "Poised and composed, with a polished, professional edge — clear enough for crisp narration or presentations.",
+        "af_aoede": "Dreamy and artistic, with a soft, unhurried delivery well suited to reflective or lyrical text.",
+        "af_bella": "Warm and confident, with a rich, assured tone that carries a room.",
+        "af_heart": "Warm and friendly, with an easy, conversational tone — great for everyday narration and casual reads.",
+        "af_jessica": "Friendly and professional, with a clear, approachable delivery suited to explainers and guides.",
+        "af_kore": "Bright and youthful, with an upbeat, energetic lift to every line.",
+        "af_nicole": "Sophisticated and polished, with a smooth, refined cadence.",
+        "af_nova": "Vibrant and energetic, with a lively pace that suits upbeat, fast-moving content.",
+        "af_river": "Free-spirited and relaxed, with an unhurried, laid-back delivery.",
+        "af_sarah": "Sweet and genuine, with a warm, down-to-earth tone that feels personal.",
+        "af_sky": "Bright and airy, with a light, cheerful lilt.",
+        "am_adam": "Warm and easygoing, with a relaxed, approachable delivery.",
+        "am_echo": "Sharp and composed, with a crisp, confident edge.",
+        "am_eric": "Friendly and warm, with a steady, welcoming tone.",
+        "am_fenrir": "Rugged and deep, with a strong, grounded presence.",
+        "am_liam": "Youthful and relaxed, with a casual, easy pace.",
+        "am_michael": "Reliable and warm, with a dependable, trustworthy tone.",
+        "am_onyx": "Sleek and cool, with a smooth, understated confidence.",
+        "am_puck": "Playful and mischievous, with a light, spirited energy.",
+        "am_santa": "Warm and jolly, with a hearty, good-natured cheer.",
+        "bf_alice": "Elegant and refined, with a crisp, well-mannered British delivery.",
+        "bf_emma": "Poised and elegant, with a graceful, composed tone.",
+        "bf_isabella": "Graceful and refined, with a smooth, cultivated cadence.",
+        "bf_lily": "Gentle and delicate, with a soft, soothing British lilt.",
+        "bm_daniel": "Distinguished and calm, with an even, authoritative delivery.",
+        "bm_fable": "A warm storyteller's voice, rich and expressive — built for narration.",
+        "bm_george": "Distinguished and composed, with a steady, refined British tone.",
+        "bm_lewis": "Friendly and approachable, with a warm, easy-going British manner.",
+        "alba": "A clear, gentle narrator voice with a calm, steady pace.",
+        "anna": "A warm, expressive voice well suited to storytelling and long-form reads.",
+        "azelma": "A soft, measured voice with a quiet, thoughtful delivery.",
+        "bill_boerst": "A steady, seasoned narrator voice with a relaxed, confident cadence.",
+        "caro_davy": "A bright, articulate voice with a brisk, engaging pace.",
+        "charles": "A calm, deliberate voice suited to serious or reflective narration.",
+        "cosette": "A soft, youthful voice with a gentle, sincere tone.",
+        "eponine": "An expressive, emotive voice with a slightly melancholic warmth.",
+        "estelle": "A refined, articulate voice with a smooth, unhurried delivery.",
+        "eve": "A clear, natural voice with an easy, conversational rhythm.",
+        "fantine": "A tender, soft-spoken voice with a quiet emotional depth.",
+        "george": "A steady, dependable voice with a classic narrator's tone.",
+        "giovanni": "A warm, expressive voice with a touch of theatrical flair.",
+        "jane": "A composed, articulate voice with a gentle, measured pace.",
+        "javert": "A firm, resolute voice with a serious, commanding edge.",
+        "jean": "A grounded, weathered voice with quiet, steady conviction.",
+        "juergen": "A deep, deliberate voice with a calm, authoritative presence.",
+        "lola": "A lively, expressive voice with a playful, energetic lift.",
+        "marius": "A youthful, earnest voice with an open, sincere tone.",
+        "mary": "A warm, gentle voice with a comforting, familiar quality.",
+        "michael": "A clear, confident voice suited to straightforward narration.",
+        "paul": "A steady, even voice with an unassuming, practical tone.",
+        "peter_yearsley": "A rich, classic narrator's voice with a measured, deliberate pace.",
+        "rafael": "A warm, textured voice with an expressive, animated delivery.",
+        "stuart_bell": "A crisp, articulate voice with a brisk, professional pace.",
+        "vera": "A soft, composed voice with a calm, reassuring tone.",
+    ]
+
+    static func longDescription(for voiceName: String) -> String {
+        longDescriptions[voiceName] ?? "A distinctive voice with its own character."
+    }
+}
+
+/// Emoji flag for a voice's accent/locale, derived from Kokoro's own
+/// af_/am_ (American) / bf_/bm_ (British) naming convention. Pocket TTS
+/// voices carry no locale info in their name at all — those default to US
+/// English until real per-voice locale data exists; flag this assumption if
+/// it turns out wrong for a specific voice.
+enum VoiceLocale {
+    static func flag(for voiceName: String) -> String {
+        if voiceName.hasPrefix("bf_") || voiceName.hasPrefix("bm_") {
+            return "🇬🇧"
+        }
+        return "🇺🇸"
     }
 }
 

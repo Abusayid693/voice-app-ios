@@ -1,8 +1,9 @@
 import Foundation
 
 /// One distinct 16-20 word sentence per voice, used to generate that
-/// voice's preview clip (see ENG_CONTEXT.md's preview-clip regeneration
-/// recipe) — deliberately varied content/phrasing rather than one shared
+/// voice's preview clip (see
+/// docs/adr/0009-bundled-voice-preview-clips.md's regeneration recipe) —
+/// deliberately varied content/phrasing rather than one shared
 /// line, so voices are easy to tell apart when auditioned back to back.
 enum VoicePreviewLines {
     static let fallback =

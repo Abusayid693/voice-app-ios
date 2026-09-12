@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 struct TTSHomeView: View {
@@ -53,9 +54,8 @@ struct TTSHomeView: View {
                                 .lineLimit(3)
                                 .multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "chevron.right")
+                            LucideIcon(.chevronRight, size: 12)
                                 .foregroundStyle(.tertiary)
-                                .font(.caption)
                         }
                         .contentShape(Rectangle())
                     }
