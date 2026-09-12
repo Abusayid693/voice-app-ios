@@ -1,4 +1,14 @@
+import LucideSwift
 import SwiftUI
+
+/// Tracks the scroll content's offset (via a coordinate-space-relative
+/// GeometryReader in its background) so ImportHomeView can show/hide the
+/// Setup pointer based on scroll position — the pre-iOS-18 way to do this;
+/// `.onScrollGeometryChange` would be simpler but needs iOS 18+.
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
 
 /// The app's default screen — a consumer-facing "Import" landing page
 /// (redesign target: paste/upload/scan/write actions, trending demo rows,
@@ -24,6 +34,10 @@ struct ImportHomeView: View {
     // Set when tapping a Kokoro entry in Projects — see playFromSavedGeneration's
     // doc comment for why "opening" a saved entry means regenerating it fresh.
     @State private var readAlongGenerationID: KokoroGeneration.ID?
+    // Setup pointer only makes sense while its target is still visible at
+    // the top of the screen — hide it the moment the user scrolls away
+    // from the top, rather than have it float over unrelated content.
+    @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -43,6 +57,23 @@ struct ImportHomeView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
                 .padding(.bottom, 24)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geometry.frame(in: .named("importScroll")).minY)
+                    }
+                )
+            }
+            .coordinateSpace(name: "importScroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minY in
+                let atTop = minY >= -10
+                if atTop != isScrolledToTop {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isScrolledToTop = atTop
+                    }
+                }
             }
             .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle("Import")
@@ -90,11 +121,29 @@ struct ImportHomeView: View {
         }
     }
 
+    // Overlay lives directly on the button itself — positioned relative to
+    // its real frame, not an estimated offset from the screen edge, so
+    // "just below Setup" is exact by construction rather than guessed.
     private var setupButton: some View {
         Button {
             viewModel.isSetupPresented = true
         } label: {
-            Label("Setup", systemImage: isFullyDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+            Label(
+                title: { Text("Setup") },
+                icon: {
+                    LucideIcon(isFullyDownloaded ? .circleCheck : .circleArrowDown)
+                })
+        }
+        .overlay(alignment: .bottom) {
+            if !isFullyDownloaded && isScrolledToTop {
+                Image("SetupPointer")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 60)
+                    .offset(y: 56)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -102,16 +151,16 @@ struct ImportHomeView: View {
         Button {
             isSettingsPresented = true
         } label: {
-            Image(systemName: "gearshape")
+            LucideIcon(.cog)
         }
     }
 
     private var actionGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ImportActionCard(title: "Paste a link", systemImage: "link", action: {})
-            ImportActionCard(title: "Upload a file", systemImage: "doc", action: {})
-            ImportActionCard(title: "Scan text", systemImage: "viewfinder", action: {})
-            ImportActionCard(title: "Write text", systemImage: "character.cursor.ibeam") {
+            ImportActionCard(title: "Paste a link", icon: .link, action: {})
+            ImportActionCard(title: "Upload a file", icon: .file, action: {})
+            ImportActionCard(title: "Scan text", icon: .scan, action: {})
+            ImportActionCard(title: "Write text", icon: .textCursor) {
                 viewModel.isWriteTextPresented = true
             }
         }
@@ -136,6 +185,12 @@ struct ImportHomeView: View {
     private var trendingVoicesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
+            // Cancels the parent VStack's .padding(.horizontal) (default,
+            // 16pt) just for this scroll view's own clipping bounds, then
+            // re-adds the same 16pt as content inset — so cards still start
+            // flush with the rest of the screen, but scrolling isn't
+            // clipped early at that boundary; the last/first card can
+            // slide all the way to the true screen edge.
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(84))], spacing: 12) {
                     ForEach(voiceTiles) { tile in
@@ -144,8 +199,10 @@ struct ImportHomeView: View {
                         }
                     }
                 }
+                .padding(.horizontal, 16)
                 .padding(.vertical, 4)
             }
+            .padding(.horizontal, -16)
         }
     }
 
@@ -156,9 +213,7 @@ struct ImportHomeView: View {
             isCreateVoicePresented = true
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "mic.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.mic, style: .filled, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create your own voice").font(.subheadline).bold()
                         .foregroundStyle(Color.appPrimaryText)
@@ -215,9 +270,7 @@ struct ImportHomeView: View {
     private var createYourOwnBookRow: some View {
         Button(action: {}) {
             HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Create your own book").font(.subheadline).bold()
                         .foregroundStyle(Color.appPrimaryText)
@@ -280,8 +333,7 @@ struct ImportHomeView: View {
                 Text(updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
             }
             Spacer()
-            Image(systemName: "play.circle.fill").font(.title2)
-                .foregroundStyle(Color.appPrimaryText)
+            LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
         }
         .contentShape(Rectangle())
     }
@@ -289,9 +341,7 @@ struct ImportHomeView: View {
     private var createYourOwnProjectRow: some View {
         Button(action: {}) {
             HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
                 Text("Create your own project").font(.subheadline).bold()
                     .foregroundStyle(Color.appPrimaryText)
                 Spacer()
@@ -306,15 +356,13 @@ struct ImportHomeView: View {
 
 private struct ImportActionCard: View {
     let title: String
-    let systemImage: String
+    let icon: LucideIconName
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(icon, size: 20, color: Color.appPrimaryText)
                 Text(title)
                     .font(.subheadline)
                     .bold()
@@ -342,13 +390,16 @@ struct VoiceTile: Identifiable {
 
     // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
     var displayName: String { VoiceDisplayName.forCode(name) }
+
+    // A short persona tagline ("Warm and friendly") in place of the raw
+    // engine label, falling back to that label for voices without one.
+    var descriptionText: String { VoiceDescription.tagline(for: name, fallback: engineLabel) }
 }
 
-/// One row per voice: cover image, name + engine label, a play icon at the
-/// trailing end — mirrors the mockup's trending-voice row layout. Tapping
-/// anywhere on the row opens VoicePreviewSheet rather than playing inline;
-/// the icon just reflects whether this voice's preview is the one
-/// currently playing (started from that sheet).
+/// One row per voice: cover image, name, a short persona tagline, and a
+/// trailing play/pause indicator (reflects whether this voice's preview is
+/// the one currently playing, started from VoicePreviewSheet). The whole
+/// card is the tap target — tapping opens VoicePreviewSheet.
 private struct VoiceTileView: View {
     let tile: VoiceTile
     @ObservedObject var viewModel: TTSViewModel
@@ -363,27 +414,25 @@ private struct VoiceTileView: View {
                     .frame(width: 60, height: 60)
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(tile.displayName)
-                        .font(.subheadline)
-                        .bold()
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(Color.appPrimaryText)
                         .lineLimit(1)
-                    Text(tile.engineLabel)
-                        .font(.caption2)
+                    Text(tile.descriptionText)
+                        .font(.system(size: 13))
                         .foregroundStyle(Color.appTertiaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 Spacer(minLength: 8)
 
-                Image(systemName: isPreviewing ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.appPrimaryText)
+                LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 2)
             .frame(width: 268, height: 84)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -416,6 +465,19 @@ enum VoiceCoverArt {
     private static let realAvatarAssetNames: [String: String] = [
         "af_heart": "VoiceAvatar_af_heart",
         "af_alloy": "VoiceAvatar_af_alloy",
+        "af_nova": "VoiceAvatar_af_nova",
+        "af_aoede": "VoiceAvatar_af_aoede",
+        "af_bella": "VoiceAvatar_af_bella",
+        "af_jessica": "VoiceAvatar_af_jessica",
+        "af_kore": "VoiceAvatar_af_kore",
+        "af_nicole": "VoiceAvatar_af_nicole",
+        "af_river": "VoiceAvatar_af_river",
+        "af_sarah": "VoiceAvatar_af_sarah",
+        "af_sky": "VoiceAvatar_af_sky",
+        "am_adam": "VoiceAvatar_am_adam",
+        "am_liam": "VoiceAvatar_am_liam",
+        "bf_alice": "VoiceAvatar_bf_alice",
+        "bm_daniel": "VoiceAvatar_bm_daniel",
     ]
 
     private static let assetNames = [
@@ -432,6 +494,48 @@ enum VoiceCoverArt {
 
     static func placeholderGradient(for voiceName: String) -> LinearGradient {
         .stablePlaceholder(seed: voiceName)
+    }
+}
+
+/// Short persona taglines shown under a voice's name in Trending voices,
+/// instead of the raw engine label — same personas used to brief the
+/// avatar images (issue #18), condensed to a couple of words. Sparse like
+/// `VoiceCoverArt.realAvatarAssetNames`: falls back to the engine label for
+/// any voice without one yet (currently all of Pocket TTS).
+enum VoiceDescription {
+    private static let taglines: [String: String] = [
+        "af_heart": "Warm and friendly",
+        "af_alloy": "Poised and composed",
+        "af_aoede": "Dreamy and artistic",
+        "af_bella": "Warm and confident",
+        "af_jessica": "Friendly and professional",
+        "af_kore": "Bright and youthful",
+        "af_nicole": "Sophisticated and polished",
+        "af_nova": "Vibrant and energetic",
+        "af_river": "Free-spirited and relaxed",
+        "af_sarah": "Sweet and genuine",
+        "af_sky": "Bright and airy",
+        "am_adam": "Warm and easygoing",
+        "am_echo": "Sharp and composed",
+        "am_eric": "Friendly and warm",
+        "am_fenrir": "Rugged, deep voice",
+        "am_liam": "Youthful and relaxed",
+        "am_michael": "Reliable and warm",
+        "am_onyx": "Sleek and cool",
+        "am_puck": "Playful and mischievous",
+        "am_santa": "Warm and jolly",
+        "bf_alice": "Elegant and refined",
+        "bf_emma": "Poised and elegant",
+        "bf_isabella": "Graceful and refined",
+        "bf_lily": "Gentle and delicate",
+        "bm_daniel": "Distinguished and calm",
+        "bm_fable": "Warm storyteller",
+        "bm_george": "Distinguished and composed",
+        "bm_lewis": "Friendly and approachable",
+    ]
+
+    static func tagline(for voiceName: String, fallback: String) -> String {
+        taglines[voiceName] ?? fallback
     }
 }
 
