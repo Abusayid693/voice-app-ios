@@ -30,7 +30,7 @@ struct RootTabView: View {
             .tabItem { Label("Import", systemImage: "plus.circle.fill") }
             .tag(RootTab.importScreen)
 
-            LibraryTabView(viewModel: libraryViewModel)
+            LibraryTabView(viewModel: libraryViewModel, ttsViewModel: viewModel)
                 .tabItem { Label("Library", systemImage: "books.vertical") }
                 .tag(RootTab.library)
 

@@ -126,6 +126,9 @@ final class TTSViewModel: ObservableObject {
 
     private var kokoroModelsReady = false
     private var kokoroPendingPlay: (generationID: KokoroGeneration.ID, chunkIndex: Int)?
+    // Fires once, when a given generation finishes every chunk — see
+    // generateKokoro's doc comment.
+    private var kokoroCompletionHandlers: [KokoroGeneration.ID: ([Data]) -> Void] = [:]
     private var kokoroGenerationTask: Task<Void, Never>?
     private var kokoroPlayer: AVAudioPlayer?
     private var kokoroPlayerDelegate: KokoroChunkPlaybackDelegate?
@@ -332,6 +335,7 @@ final class TTSViewModel: ObservableObject {
         kokoroActiveGenerationID = nil
         kokoroModelsReady = false
         kokoroPendingPlay = nil
+        kokoroCompletionHandlers = [:]
     }
 
     // MARK: - Kokoro: Generate (always creates a new, independent track)
@@ -341,8 +345,17 @@ final class TTSViewModel: ObservableObject {
     /// existing one) and appends it to the list, then makes sure the
     /// background worker is running to fill in its audio. Returns the new
     /// track's id, or nil if the text was empty.
+    ///
+    /// `onFullyGenerated`, if given, fires exactly once — with every
+    /// chunk's audio, in order — the moment this specific track finishes
+    /// generating (not when the whole worker queue drains, since other
+    /// tracks may still be pending). Never fires if any chunk fails, since
+    /// an incomplete recording isn't worth persisting. Callers use this to
+    /// persist the audio for Library playback (see LibraryViewModel.attachAudio) —
+    /// TTSViewModel itself has no idea Library exists, it just reports
+    /// completion.
     @discardableResult
-    func generateKokoro() -> KokoroGeneration.ID? {
+    func generateKokoro(onFullyGenerated: (([Data]) -> Void)? = nil) -> KokoroGeneration.ID? {
         let chunks = KokoroTextChunker.chunk(text)
         guard !chunks.isEmpty else { return nil }
 
@@ -352,8 +365,53 @@ final class TTSViewModel: ObservableObject {
             chunkAudio: Array(repeating: nil, count: chunks.count),
             chunkStates: Array(repeating: .waiting, count: chunks.count))
         kokoroGenerations.append(generation)
+        if let onFullyGenerated {
+            kokoroCompletionHandlers[generation.id] = onFullyGenerated
+        }
 
         ensureKokoroGenerationRunning()
+        return generation.id
+    }
+
+    /// Re-synthesizes a saved Library entry and starts playing it — used
+    /// when no saved audio exists yet to replay instead (see
+    /// `playPersistedAudio` for the normal, no-regeneration path). Same
+    /// `onFullyGenerated` contract as `generateKokoro` — pass it to
+    /// backfill the saved audio so the next open plays straight from disk.
+    /// Kokoro only — callers should gate on `SavedGeneration.engine == .kokoroAne`.
+    @discardableResult
+    func playFromSavedGeneration(
+        text savedText: String, voice savedVoice: String, onFullyGenerated: (([Data]) -> Void)? = nil
+    ) -> KokoroGeneration.ID? {
+        text = savedText
+        if kokoroVoice != savedVoice {
+            kokoroVoice = savedVoice
+        }
+        guard let newID = generateKokoro(onFullyGenerated: onFullyGenerated) else { return nil }
+        toggleKokoroPlayback(for: newID)
+        return newID
+    }
+
+    /// Plays already-saved audio straight from disk — no synthesis at all.
+    /// Recomputes the same chunk boundaries `KokoroTextChunker` would have
+    /// produced originally (deterministic, given the same text) so the
+    /// reconstructed track's `chunkTexts` line up with the loaded
+    /// `chunkAudio`, and read-along highlighting behaves identically to a
+    /// live generation. Returns nil (caller should fall back to
+    /// `playFromSavedGeneration`) if the counts don't match — e.g. the
+    /// chunker's behavior changed since this was saved.
+    @discardableResult
+    func playPersistedAudio(text savedText: String, chunkAudio: [Data]) -> KokoroGeneration.ID? {
+        let chunks = KokoroTextChunker.chunk(savedText)
+        guard chunks.count == chunkAudio.count, !chunks.isEmpty else { return nil }
+
+        let generation = KokoroGeneration(
+            text: savedText,
+            chunkTexts: chunks,
+            chunkAudio: chunkAudio.map(Optional.init),
+            chunkStates: Array(repeating: .generated, count: chunks.count))
+        kokoroGenerations.append(generation)
+        toggleKokoroPlayback(for: generation.id)
         return generation.id
     }
 
@@ -415,6 +473,7 @@ final class TTSViewModel: ObservableObject {
                             kokoroPendingPlay = nil
                             playChunk(generationID: generationID, chunkIndex: chunkIndex)
                         }
+                        notifyIfFullyGenerated(generationID: generationID, genIndex: genIndex)
                     } catch is CancellationError {
                         throw CancellationError()
                     } catch {
@@ -428,6 +487,11 @@ final class TTSViewModel: ObservableObject {
                             kokoroPendingPlay = nil
                             kokoroGenerations[genIndex].isBuffering = false
                         }
+                        // A failed chunk still ends this generation's
+                        // waiting period — drop its completion handler
+                        // (without calling it) so it doesn't fire later
+                        // for an incomplete recording.
+                        notifyIfFullyGenerated(generationID: generationID, genIndex: genIndex)
                     }
                 }
                 status = "Idle"
@@ -448,6 +512,20 @@ final class TTSViewModel: ObservableObject {
             }
         }
         return nil
+    }
+
+    /// Fires (and removes) `generationID`'s completion handler, if any,
+    /// once every chunk has settled — but only on a clean run: any
+    /// `.failed` chunk means the recording is incomplete, so the handler
+    /// is dropped without being called (nothing worth persisting).
+    private func notifyIfFullyGenerated(generationID: KokoroGeneration.ID, genIndex: Int) {
+        guard kokoroGenerations[genIndex].isFullyGenerated,
+            let handler = kokoroCompletionHandlers.removeValue(forKey: generationID)
+        else { return }
+        guard !kokoroGenerations[genIndex].chunkStates.contains(.failed) else { return }
+        let chunkAudio = kokoroGenerations[genIndex].chunkAudio.compactMap { $0 }
+        guard chunkAudio.count == kokoroGenerations[genIndex].chunkAudio.count else { return }
+        handler(chunkAudio)
     }
 
     // MARK: - Kokoro: Play (each track is independent — only one plays at a time)

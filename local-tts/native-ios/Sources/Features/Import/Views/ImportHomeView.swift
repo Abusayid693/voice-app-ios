@@ -21,6 +21,9 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
+    // Set when tapping a Kokoro entry in Projects — see playFromSavedGeneration's
+    // doc comment for why "opening" a saved entry means regenerating it fresh.
+    @State private var readAlongGenerationID: KokoroGeneration.ID?
 
     private var isFullyDownloaded: Bool {
         viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
@@ -59,6 +62,9 @@ struct ImportHomeView: View {
                 case .upload:
                     UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
                 }
+            }
+            .navigationDestination(item: $readAlongGenerationID) { generationID in
+                ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
             }
         }
         .preferredColorScheme(.dark)
@@ -244,7 +250,19 @@ struct ImportHomeView: View {
                     projectRow(
                         title: VoiceDisplayName.forCode(generation.voiceName),
                         subtitle: generation.text,
-                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))"
+                    )
+                    // Kokoro only — plays the saved audio straight from
+                    // disk when available (LibraryPlayback), regenerating
+                    // only as a fallback; there's no Pocket player yet.
+                    .onTapGesture {
+                        guard generation.engine == .kokoroAne else { return }
+                        if let newID = LibraryPlayback.open(
+                            generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
+                        {
+                            readAlongGenerationID = newID
+                        }
+                    }
                 }
             }
         }

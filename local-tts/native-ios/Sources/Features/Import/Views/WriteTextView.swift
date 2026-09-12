@@ -113,9 +113,12 @@ struct WriteTextView: View {
     // generation — a saved entry is written on every tap for now (not
     // gated on success), matching how Kokoro's own track list already
     // works (a "Generate" tap always creates something, even if a chunk
-    // later fails). See issue #11 for the plan to also capture audio.
+    // later fails). Kokoro's audio is attached to that same saved entry
+    // once every chunk finishes, so Library/Projects can replay it
+    // straight from disk (see LibraryPlayback) instead of regenerating.
     // Kokoro navigates straight to the read-along screen (issue #10);
-    // Pocket keeps today's behavior unchanged (inline pocketStatusCard).
+    // Pocket keeps today's behavior unchanged (inline pocketStatusCard, no
+    // saved audio — see SavedGeneration's doc comment).
     private func generate() {
         let voiceName: String
         switch viewModel.engine {
@@ -124,11 +127,15 @@ struct WriteTextView: View {
         case .pocketTts:
             voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
         }
-        libraryViewModel.save(text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
+        let savedID = libraryViewModel.save(text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
 
         switch viewModel.engine {
         case .kokoroAne:
-            if let newID = viewModel.generateKokoro() {
+            let newID = viewModel.generateKokoro(onFullyGenerated: { chunkAudio in
+                guard let savedID else { return }
+                libraryViewModel.attachAudio(chunkAudio, to: savedID)
+            })
+            if let newID {
                 viewModel.toggleKokoroPlayback(for: newID)
                 readAlongGenerationID = newID
             }

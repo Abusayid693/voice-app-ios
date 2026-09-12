@@ -39,6 +39,7 @@
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
 		87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */; };
 		8CCDD010CEB39749F8D06671 /* VoiceRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784AE95CAB2310D364034251 /* VoiceRecorderService.swift */; };
+		8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */; };
 		913CEBA126D84389FFDA21C5 /* VoicePacksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046CF8805E70FDE33206289F /* VoicePacksView.swift */; };
 		918CCAA9F1918E9F3B1C7CF1 /* StorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2346E68205E6911A9AF347 /* StorageView.swift */; };
 		959A3EA4880EB5C09A60E4C3 /* TrendingBooksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */; };
@@ -80,6 +81,7 @@
 		30A3AE469CA3D6649CCD731F /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
 		344A4ABF20807BF76484A45D /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
+		3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPlayback.swift; sourceTree = "<group>"; };
 		3A9833799EFDD6FEDCCDA464 /* UploadVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadVoiceView.swift; sourceTree = "<group>"; };
 		3B908701D84BB974C827AF15 /* SavedGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGeneration.swift; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
@@ -146,6 +148,7 @@
 		0C601D57C1143B5F516F7B3E /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */,
 				748BAF20936A1EE613DEE20E /* Models */,
 				90730110E66A5321BE94F5BA /* ViewModels */,
 				B08EC05F45D33E4B9BBC52F3 /* Views */,
@@ -535,6 +538,7 @@
 				289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */,
 				EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */,
 				B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */,
+				8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */,
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
 				792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */,

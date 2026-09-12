@@ -1,12 +1,24 @@
 import SwiftUI
 
 /// The Library tab: every past "Generate" tap's original text + voice
-/// used. Swipe a row for Delete or the pen icon (view the original text,
-/// read-only). Playback isn't wired up yet — see issue #11 — this is
-/// metadata/text only for now.
+/// used. Tapping a Kokoro row re-synthesizes it and opens the same
+/// ReadAlongPlayerView a live Generate uses (no audio is persisted — see
+/// SavedGeneration — so "opening" a saved entry means regenerating it
+/// fresh). Pocket rows still just open the read-only text view, since
+/// there's no Pocket player screen yet. Swipe for Delete or the pen icon
+/// (view the original text, read-only, regardless of engine).
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
+    @ObservedObject var ttsViewModel: TTSViewModel
     @State private var viewingGeneration: SavedGeneration?
+    @State private var readAlongGenerationID: KokoroGeneration.ID?
+    @State private var sortNewestFirst = true
+
+    private var sortedGenerations: [SavedGeneration] {
+        sortNewestFirst
+            ? viewModel.savedGenerations.sorted { $0.createdAt > $1.createdAt }
+            : viewModel.savedGenerations.sorted { $0.createdAt < $1.createdAt }
+    }
 
     var body: some View {
         NavigationStack {
@@ -15,7 +27,7 @@ struct LibraryTabView: View {
                     emptyState
                 } else {
                     List {
-                        ForEach(viewModel.savedGenerations) { generation in
+                        ForEach(sortedGenerations) { generation in
                             row(for: generation)
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -38,6 +50,18 @@ struct LibraryTabView: View {
             }
             .background(Color.appBackground.ignoresSafeArea())
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        sortNewestFirst.toggle()
+                    } label: {
+                        Image(systemName: sortNewestFirst ? "arrow.down" : "arrow.up")
+                    }
+                }
+            }
+            .navigationDestination(item: $readAlongGenerationID) { generationID in
+                ReadAlongPlayerView(generationID: generationID, viewModel: ttsViewModel)
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(item: $viewingGeneration) { generation in
@@ -87,10 +111,26 @@ struct LibraryTabView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onTapGesture { viewingGeneration = generation }
+        .onTapGesture { open(generation) }
+    }
+
+    private func open(_ generation: SavedGeneration) {
+        switch generation.engine {
+        case .kokoroAne:
+            if let newID = LibraryPlayback.open(
+                generation, ttsViewModel: ttsViewModel, libraryViewModel: viewModel)
+            {
+                readAlongGenerationID = newID
+            }
+        case .pocketTts:
+            // No Pocket player screen yet — keep the existing read-only
+            // text view as the tap action for these.
+            viewingGeneration = generation
+        }
     }
 }
 
 #Preview {
-    LibraryTabView(viewModel: LibraryViewModel())
+    let dependencies = DependencyContainer()
+    LibraryTabView(viewModel: LibraryViewModel(), ttsViewModel: TTSViewModel(dependencies: dependencies))
 }
