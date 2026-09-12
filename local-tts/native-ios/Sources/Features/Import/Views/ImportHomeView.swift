@@ -1,13 +1,39 @@
 import LucideSwift
 import SwiftUI
 
-/// Tracks the scroll content's offset (via a coordinate-space-relative
-/// GeometryReader in its background) so ImportHomeView can show/hide the
-/// Setup pointer based on scroll position — the pre-iOS-18 way to do this;
-/// `.onScrollGeometryChange` would be simpler but needs iOS 18+.
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+/// Reports whether a ScrollView is parked at (or within `threshold` of) its
+/// top, so ImportHomeView can fade the Setup pointer out as soon as the user
+/// scrolls away from it.
+///
+/// Uses `.onScrollGeometryChange` (iOS 18+) rather than the older
+/// GeometryReader-in-the-content's-`.background` + PreferenceKey recipe. That
+/// recipe silently stopped working: modern ScrollView doesn't re-evaluate a
+/// background GeometryReader on every scroll tick, so the preference never
+/// fired and the "at top" flag was stuck at `true` forever no matter which
+/// coordinate space it measured against.
+///
+/// On iOS 17 there is no equivalent API, so the pointer simply stays put
+/// until the packs finish downloading — it's a decorative onboarding hint,
+/// and that degradation is preferable to reinstating the broken recipe.
+private struct ScrolledToTopObserver: ViewModifier {
+    @Binding var isAtTop: Bool
+    var threshold: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                // At rest contentOffset.y == -contentInsets.top (the nav bar
+                // and large title are part of the top inset), so the sum —
+                // not contentOffset alone — is the real distance scrolled.
+                geometry.contentOffset.y + geometry.contentInsets.top <= threshold
+            } action: { _, atTop in
+                guard atTop != isAtTop else { return }
+                withAnimation(.easeInOut(duration: 0.2)) { isAtTop = atTop }
+            }
+        } else {
+            content
+        }
+    }
 }
 
 /// The app's default screen — a consumer-facing "Import" landing page
@@ -37,6 +63,7 @@ struct ImportHomeView: View {
     // Setup pointer only makes sense while its target is still visible at
     // the top of the screen — hide it the moment the user scrolls away
     // from the top, rather than have it float over unrelated content.
+    // Driven by ScrolledToTopObserver above.
     @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
@@ -44,6 +71,32 @@ struct ImportHomeView: View {
     }
 
     var body: some View {
+        // The pointer is a sibling of the *whole* NavigationStack, not a
+        // layer inside it. Anything placed inside the stack is positioned
+        // relative to the stack's content area, and that area moves: when
+        // the large "Import" title collapses into the inline bar on scroll,
+        // the content area's origin rises by the title's height, dragging
+        // any inner overlay up with it (which is what made the pointer look
+        // like it scrolled, then "stuck" once the collapse finished). Out
+        // here the coordinate space is the screen's safe area, which never
+        // changes — and that's the same space the toolbar button lives in.
+        ZStack(alignment: .topTrailing) {
+            navigationContent
+
+            if !isFullyDownloaded && isScrolledToTop {
+                setupPointer
+                    // 40pt down clears the 44pt nav bar; 100pt in from the
+                    // trailing edge lands under "Setup" rather than the cog.
+                    .padding(.top, 50)
+                    .padding(.trailing, 100)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var navigationContent: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
@@ -57,26 +110,11 @@ struct ImportHomeView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
                 .padding(.bottom, 24)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .preference(
-                                key: ScrollOffsetPreferenceKey.self,
-                                value: geometry.frame(in: .named("importScroll")).minY)
-                    }
-                )
             }
-            .coordinateSpace(name: "importScroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { minY in
-                let atTop = minY >= -10
-                if atTop != isScrolledToTop {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isScrolledToTop = atTop
-                    }
-                }
-            }
+            .scrollIndicators(.hidden)
+            .modifier(ScrolledToTopObserver(isAtTop: $isScrolledToTop))
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Import")
+            .navigationTitle("Home")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     setupButton
@@ -98,7 +136,6 @@ struct ImportHomeView: View {
                 ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
             }
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel)
         }
@@ -121,9 +158,6 @@ struct ImportHomeView: View {
         }
     }
 
-    // Overlay lives directly on the button itself — positioned relative to
-    // its real frame, not an estimated offset from the screen edge, so
-    // "just below Setup" is exact by construction rather than guessed.
     private var setupButton: some View {
         Button {
             viewModel.isSetupPresented = true
@@ -134,17 +168,20 @@ struct ImportHomeView: View {
                     LucideIcon(isFullyDownloaded ? .circleCheck : .circleArrowDown)
                 })
         }
-        .overlay(alignment: .bottom) {
-            if !isFullyDownloaded && isScrolledToTop {
-                Image("SetupPointer")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 36, height: 60)
-                    .offset(y: 56)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
+    }
+
+    // Floats in screen space outside the NavigationStack (see body) so it
+    // stays pinned under the Setup toolbar button no matter how far the
+    // page scrolls or whether the large title has collapsed. Never attached
+    // to the button itself — that would make it participate in the
+    // toolbar's own layout and push the other item around.
+    private var setupPointer: some View {
+        Image("SetupPointer")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 28.8, height: 48)
+            .allowsHitTesting(false)
+            .transition(.opacity)
     }
 
     private var settingsButton: some View {
@@ -361,15 +398,15 @@ private struct ImportActionCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 10) {
                 LucideIcon(icon, size: 20, color: Color.appPrimaryText)
                 Text(title)
                     .font(.subheadline)
                     .bold()
                     .foregroundStyle(Color.appPrimaryText)
-                Spacer(minLength: 0)
+                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .frame(height: 80)
             .padding()
             .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
