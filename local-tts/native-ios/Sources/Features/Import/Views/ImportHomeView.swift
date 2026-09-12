@@ -408,11 +408,24 @@ private struct VoiceTileView: View {
 /// gradient placeholder — picked deterministically from the voice's name,
 /// not re-randomized on every redraw — for voices that aren't available yet.
 enum VoiceCoverArt {
+    // Real, per-voice AI-generated avatars (issue #18) — keyed by the exact
+    // voice code, not the generic cycling covers below. Sparse on purpose:
+    // only voices with a generated avatar appear here; every other voice
+    // still falls back to the hashed generic cover until its own avatar
+    // exists. Add an entry here as each new avatar lands.
+    private static let realAvatarAssetNames: [String: String] = [
+        "af_heart": "VoiceAvatar_af_heart",
+        "af_alloy": "VoiceAvatar_af_alloy",
+    ]
+
     private static let assetNames = [
         "VoiceCover1", "VoiceCover2", "VoiceCover3", "VoiceCover4", "VoiceCover5", "VoiceCover6",
     ]
 
     static func assetName(for voiceName: String) -> String {
+        if let realAvatar = realAvatarAssetNames[voiceName] {
+            return realAvatar
+        }
         let sum = voiceName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
         return assetNames[sum % assetNames.count]
     }
