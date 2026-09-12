@@ -29,8 +29,8 @@ Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate;
 Sources/
   App/
     KokoroAneTestApp.swift        // @main — creates DependencyContainer + one shared TTSViewModel + VoiceCloneViewModel, passes both into RootTabView
-    RootTabView.swift             // DONE — 5-tab TabView shell (Home/Explore/Import/Library/Voices), Import selected by default
-    PlaceholderTabView.swift      // DONE — trivial "coming soon" content reused for Explore/Library tabs
+    RootTabView.swift             // DONE — 4-tab TabView shell (Home/Library/Tools/Voices) + a floating "+" action button (separate from the tabs, no action yet); Home hosts ImportHomeView and is selected by default
+    PlaceholderTabView.swift      // DONE — trivial "coming soon" content, currently reused for the Tools tab
     AppCoordinator.swift          // NOT YET BUILT — ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
     DependencyContainer.swift     // owns shared long-lived instances (managers, AVAudioEngine, etc.), created once — DONE
   Features/
@@ -93,6 +93,7 @@ Sources/
     Colors.swift                  // DONE — fixed dark palette for the Import/VoiceClone screens + shared placeholder-gradient helper
     BlobShape.swift                // DONE — organic sine-harmonic blob Shape (amplitude/phase animatable), drives VoicePreviewSheet's audio-reactive deformation
     OrbCoverArt.swift               // DONE — deterministic name/id -> orb-image lookup (7 orbs), fallback cover art for any voice without a real per-voice avatar, available or not, plus cloned voices
+    CardText.swift                  // DONE — shared card title/description typography (CardTitle/CardDesc), used by VoiceTileView and Import's ReadAnythingCard
   Core/
     Networking/
       HuggingFaceTreeSizeFetcher.swift  // DONE
@@ -107,7 +108,7 @@ VoicePreviews/
 assets/                             // source-of-truth exports (voice-covers/, kokoro-previews/, orbs/) copied into Sources/Resources or VoicePreviews/ above
 ```
 
-**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` (5 tabs; Import is the default, Home hosts the original `TTSHomeView` debug screen unchanged, Explore/Library are still `PlaceholderTabView` stand-ins, Voices is now a real `VoicesTabView`). `Import`'s Trending voices (all real voices, play-preview via a half-sheet) and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `docs/adr/0008-voice-cloning-integration.md`). `Features/Settings/` (issue #9) is real: Voice Packs and Storage report actual on-disk pack/size data, About reports the real bundle version — no more placeholders. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` — 4 tabs (Home/Library/Tools/Voices) plus a floating "+" action button that's deliberately not a 5th tab (no action wired yet). Home now hosts `ImportHomeView` (formerly the separate "Import" tab, now the default/first tab); the original `TTSHomeView` engine/voice debug screen has been retired from the tab bar (file left in place, just unreferenced — not deleted); Tools is a new `PlaceholderTabView` stand-in (Explore was dropped from the tab bar entirely); Voices and Library are real (`VoicesTabView`, `LibraryTabView`). `ImportHomeView`'s Trending voices (all real voices, play-preview via a swipeable card carousel), Read Anything (promo cards), and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `docs/adr/0008-voice-cloning-integration.md`). `Features/Settings/` (issue #9) is real: Voice Packs and Storage report actual on-disk pack/size data, About reports the real bundle version — no more placeholders. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
 
 ## Adding a new feature/screen
 

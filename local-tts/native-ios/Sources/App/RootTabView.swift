@@ -1,9 +1,8 @@
 import LucideSwift
 import SwiftUI
-import UIKit
 
 enum RootTab: Hashable {
-    case home, explore, importScreen, library, voices
+    case home, library, tools, voices
 }
 
 /// Rasterizes a Lucide icon to a template `Image`, for use as a `.tabItem`
@@ -29,40 +28,59 @@ private func tabIcon(_ name: LucideIconName, size: CGFloat = 24) -> Image {
     return Image(uiImage: uiImage)
 }
 
-/// App shell: the 5-tab bar from the redesign. Import is the default
-/// screen; Home keeps the original engine/voice debug screen (unchanged);
-/// Explore/Library are still placeholders; Voices manages cloned voices.
+/// App shell: 4 tabs (Home/Library/Tools/Voices) plus a floating "+" action
+/// button, deliberately not a 5th tab — a separate, always-visible quick
+/// action rather than a routed screen. No action wired yet.
+///
+/// Home now hosts the consumer-facing `ImportHomeView` (previously the
+/// separate "Import" tab) — the original engine/voice debug screen
+/// (`TTSHomeView`) has been retired from the tab bar; the file itself is
+/// left in place rather than deleted, in case it's still useful for direct
+/// engine testing later.
 struct RootTabView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
-    @State private var selectedTab: RootTab = .importScreen
+    @State private var selectedTab: RootTab = .home
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TTSHomeView(viewModel: viewModel)
+        ZStack(alignment: .bottomTrailing) {
+            TabView(selection: $selectedTab) {
+                ImportHomeView(
+                    viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                    libraryViewModel: libraryViewModel
+                )
                 .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
                 .tag(RootTab.home)
 
-            PlaceholderTabView(title: "Explore")
-                .tabItem { Label(title: { Text("Explore") }, icon: { tabIcon(.compass) }) }
-                .tag(RootTab.explore)
+                LibraryTabView(viewModel: libraryViewModel, ttsViewModel: viewModel)
+                    .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
+                    .tag(RootTab.library)
 
-            ImportHomeView(
-                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel
-            )
-            .tabItem { Label(title: { Text("Import") }, icon: { tabIcon(.circlePlus) }) }
-            .tag(RootTab.importScreen)
+                PlaceholderTabView(title: "Tools")
+                    .tabItem { Label(title: { Text("Tools") }, icon: { tabIcon(.wrench) }) }
+                    .tag(RootTab.tools)
 
-            LibraryTabView(viewModel: libraryViewModel, ttsViewModel: viewModel)
-                .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
-                .tag(RootTab.library)
+                VoicesTabView(viewModel: voiceCloneViewModel)
+                    .tabItem { Label(title: { Text("Voices") }, icon: { tabIcon(.audioWaveform) }) }
+                    .tag(RootTab.voices)
+            }
 
-            VoicesTabView(viewModel: voiceCloneViewModel)
-                .tabItem { Label(title: { Text("Voices") }, icon: { tabIcon(.audioWaveform) }) }
-                .tag(RootTab.voices)
+            addButton
         }
+    }
+
+    private var addButton: some View {
+        Button(action: {}) {
+            LucideIcon(.plus, size: 22, color: Color.primaryButtonText)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.primaryButtonBackground))
+                .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+        }
+        .padding(.trailing, 20)
+        // Clears the system tab bar (~49pt + safe-area inset) so the button
+        // floats just above it, not overlapping the tab labels.
+        .padding(.bottom, 75)
     }
 }
 

@@ -103,6 +103,7 @@ struct ImportHomeView: View {
                     actionGrid
                     trendingVoicesSection
                     createYourOwnVoiceRow
+                    readAnythingSection
                     whatsTrendingSection
                     createYourOwnBookRow
                     projectsSection
@@ -271,6 +272,29 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
     }
 
+    // "Read Anything" — a horizontally scrolling row of promo cards, one
+    // card per item so more can be appended later. Card width/image size
+    // are fixed per the supplied design (327x188 image, full card width
+    // 327), not derived from screen width.
+    private var readAnythingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Read Anything").font(.headline).foregroundStyle(Color.appPrimaryText)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(readAnythingItems) { item in
+                        ReadAnythingCard(item: item)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.horizontal, -16)
+        }
+    }
+
+    // Curated, hand-picked covers (issue: replace the live Gutendex preview
+    // row with 5 specific books) — "See all" still opens the live,
+    // paginated Gutendex feed unchanged, so this row is a curated
+    // highlight, not the app's only source of trending books.
     private var whatsTrendingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -284,25 +308,10 @@ struct ImportHomeView: View {
                         .foregroundStyle(Color.appSecondaryText)
                 }
             }
-            if let loadErrorMessage = trendingBooksViewModel.loadErrorMessage, trendingBooksViewModel.books.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(loadErrorMessage)
-                        .font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
-                    Button("Retry") { Task { await trendingBooksViewModel.retry() } }
-                        .font(.caption)
-                        .buttonStyle(.bordered)
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(trendingBooksViewModel.books.prefix(5)) { book in
-                            TrendingBookCard(book: book)
-                        }
-                        if trendingBooksViewModel.isLoading {
-                            ProgressView()
-                                .frame(width: 110, height: 110)
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(curatedTrendingBooks) { book in
+                        TrendingBookCard(book: book, coverSize: curatedCoverWidth, coverHeight: curatedCoverHeight)
                     }
                 }
             }
@@ -396,6 +405,95 @@ struct ImportHomeView: View {
     }
 }
 
+/// Hand-curated covers for `whatsTrendingSection`'s preview row — real
+/// public-domain titles, custom-generated cover art (`assets/cover/`),
+/// bundled locally rather than fetched. `id`s are negative, real Gutendex
+/// ids are always positive, so there's no collision if a curated title ever
+/// also appears in the live "See all" feed.
+///
+/// All 5 source images share the same real 2:3 portrait aspect (checked
+/// directly: 1152x1728px) — sized here at that exact proportion so the
+/// whole cover shows uncropped, rather than `TrendingBookCard`'s usual
+/// square crop (which fits "See all"'s real, aspect-varying Gutendex
+/// covers, but would cut these off).
+private let curatedCoverWidth: CGFloat = 179
+private let curatedCoverHeight: CGFloat = curatedCoverWidth * 1728 / 1152
+
+private let curatedTrendingBooks: [TrendingBook] = [
+    TrendingBook(
+        id: -1, title: "Pride and Prejudice", authorName: "Jane Austen", coverURL: nil,
+        downloadCount: 0, localCoverAssetName: "BookCoverPrideAndPrejudice"),
+    TrendingBook(
+        id: -2, title: "Sense and Sensibility", authorName: "Jane Austen", coverURL: nil,
+        downloadCount: 0, localCoverAssetName: "BookCoverSenseAndSensibility"),
+    TrendingBook(
+        id: -3, title: "The Odyssey", authorName: "Homer", coverURL: nil,
+        downloadCount: 0, localCoverAssetName: "BookCoverTheOdyssey"),
+    TrendingBook(
+        id: -4, title: "Moby-Dick", authorName: "Herman Melville", coverURL: nil,
+        downloadCount: 0, localCoverAssetName: "BookCoverMobyDick"),
+    TrendingBook(
+        id: -5, title: "Frankenstein", authorName: "Mary Shelley", coverURL: nil,
+        downloadCount: 0, localCoverAssetName: "BookCoverFrankenstein"),
+]
+
+/// Static content for `readAnythingSection` — just one card today; append
+/// more here as they're designed, `ReadAnythingCard`/the section's
+/// ForEach need no changes to pick them up.
+private let readAnythingItems: [ReadAnythingItem] = [
+    ReadAnythingItem(
+        id: "sample",
+        imageName: "ReadAnythingSample",
+        title: "Turn any book into audio",
+        description: "Pick up where you left off, hands-free — listen to your library anywhere."),
+    ReadAnythingItem(
+        id: "sample2",
+        imageName: "ReadAnythingSample2",
+        title: "Hear it before you commit",
+        description: "A real 30-minute demo, generated right on iPhone — no cloud round-trip.",
+        showsPlayButton: true),
+]
+
+private struct ReadAnythingItem: Identifiable {
+    let id: String
+    let imageName: String
+    let title: String
+    let description: String
+    // Decorative only today — not wired to real playback, since these
+    // cards have no associated audio yet.
+    var showsPlayButton: Bool = false
+}
+
+/// One "Read Anything" promo card: a fixed-size 327x188 image on top, title
+/// + short description below. Card width is fixed at 327 (not derived from
+/// screen width) per the supplied design.
+private struct ReadAnythingCard: View {
+    let item: ReadAnythingItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(item.imageName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 327, height: 188)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(alignment: .leading) {
+                    if item.showsPlayButton {
+                        LucideIcon(.circlePlay, size: 36, color: Color(hex: 0xD5AB80))
+                            .padding(.leading, 29)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 4) {
+                CardTitle(text: item.title)
+                CardDesc(text: item.description)
+                    .lineLimit(2)
+            }
+        }
+        .frame(width: 327, alignment: .leading)
+    }
+}
+
 private struct ImportActionCard: View {
     let title: String
     let icon: LucideIconName
@@ -465,13 +563,9 @@ private struct VoiceTileView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(tile.displayName)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Color.appPrimaryText)
+                    CardTitle(text: tile.displayName)
                         .lineLimit(1)
-                    Text(tile.descriptionText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.appTertiaryText)
+                    CardDesc(text: tile.descriptionText)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
