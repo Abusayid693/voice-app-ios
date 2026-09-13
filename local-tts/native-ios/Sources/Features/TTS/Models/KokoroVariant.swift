@@ -39,15 +39,12 @@ enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Senda
     var packSubtitle: String {
         switch self {
         case .english: return "28 English voices, bundled with the app"
-        // FluidAudio's own docs describe Mandarin as shipping a single
-        // voice (zf_001) — the same framing they use for English's
-        // af_heart, which this app already works around via a bundled
-        // conversion (ADR 2). For Mandarin no separate upstream/conversion
-        // was needed: all 100 real zf_*/zm_* voice .bin files are already
-        // present in FluidAudio's own hosted repo and fetchable through
-        // the SDK's own per-voice download path (verified directly over
-        // HTTP, not assumed) — see the Mandarin Kokoro plan.
-        case .mandarin: return "100 Mandarin voices, ~294MB download"
+        // 2 voices (zf_001/zm_009) come from FluidAudio's hosted repo at
+        // download time; the other 8 (hexgrad's own officially-named
+        // Mandarin voices — zf_xiaobei/zm_yunjian/etc.) are bundled in the
+        // app already (see TTSViewModel.mandarinVoices), so only the core
+        // chain + those 2 voices count toward this download figure.
+        case .mandarin: return "10 Mandarin voices, ~242MB download"
         }
     }
 }

@@ -35,19 +35,49 @@ final class KokoroEngineService {
         let repoDirectory = try await KokoroAneResourceDownloader.ensureModels(
             variant: variant, directory: directory, progressHandler: progressHandler)
         guard variant == .mandarin else { return repoDirectory }
-        // ensureModels above only guarantees the default voice
-        // (zf_001) — fetch the rest of the roster too, so a "downloaded"
-        // Mandarin pack means every voice is immediately usable rather
-        // than 99 more one-off network fetches happening later, the first
-        // time each voice gets picked. Cheap: ~522KB each, ~52MB total.
-        // No per-file progress reporting here (ensureVoicePack doesn't
-        // expose any) — the visible progress bar finishes at the main
-        // chain download and this tail runs quietly after.
-        for name in TTSViewModel.mandarinVoices where name != KokoroAneConstants.defaultVoiceMandarin {
-            _ = try await KokoroAneResourceDownloader.ensureVoicePack(
-                name, repoDirectory: repoDirectory, variant: .mandarin)
-        }
+
+        try copyBundledMandarinVoices(into: repoDirectory)
+
+        // ensureModels above only guarantees the default voice (zf_001).
+        // zm_009 is the only other roster entry FluidAudio's own repo
+        // actually hosts (see TTSViewModel.mandarinVoices) — fetch it too
+        // so a "downloaded" pack means every listed voice is immediately
+        // usable, not one more one-off network fetch happening later. The
+        // other 8 names come from copyBundledMandarinVoices above, not
+        // the network — FluidAudio's repo doesn't have them.
+        _ = try await KokoroAneResourceDownloader.ensureVoicePack(
+            "zm_009", repoDirectory: repoDirectory, variant: .mandarin)
         return repoDirectory
+    }
+
+    /// Copies hexgrad/Kokoro-82M's 8 officially-named Mandarin voices
+    /// (bundled in the app — see `model-conversion/kokoro-mandarin-voices/`
+    /// and `docs/adr/0002-custom-kokoro-model-bundle.md`'s bundling
+    /// convention) into the downloaded pack's `voices/` folder, the exact
+    /// location `KokoroAneManager` looks for a Mandarin voice by name.
+    /// Skips any file already present (nothing to do on repeat launches).
+    private func copyBundledMandarinVoices(into repoDirectory: URL) throws {
+        // Bundle.main.url(forResource:withExtension:subdirectory:) proved
+        // unreliable for locating a folder reference on-device elsewhere
+        // in this app (silently returns nil — see DependencyContainer's
+        // makeKokoroManager()) — build the path directly against the
+        // bundle root instead, same fix applied there.
+        let bundledDir = Bundle.main.bundleURL.appendingPathComponent("BundledMandarinVoices")
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: bundledDir.path) else { return }
+
+        let voicesDir = repoDirectory.appendingPathComponent("voices", isDirectory: true)
+        if !fm.fileExists(atPath: voicesDir.path) {
+            try fm.createDirectory(at: voicesDir, withIntermediateDirectories: true)
+        }
+
+        let bundledFiles =
+            (try? fm.contentsOfDirectory(at: bundledDir, includingPropertiesForKeys: nil)) ?? []
+        for source in bundledFiles where source.pathExtension == "bin" {
+            let destination = voicesDir.appendingPathComponent(source.lastPathComponent)
+            guard !fm.fileExists(atPath: destination.path) else { continue }
+            try fm.copyItem(at: source, to: destination)
+        }
     }
 
     func initialize() async throws {

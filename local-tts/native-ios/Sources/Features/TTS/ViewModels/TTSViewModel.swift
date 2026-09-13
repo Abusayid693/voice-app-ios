@@ -22,29 +22,25 @@ final class TTSViewModel: ObservableObject {
         "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
     ]
 
-    // All 100 real Mandarin voice .bin files confirmed present in
-    // FluidAudio's own hosted `FluidInference/kokoro-82m-coreml/ANE-zh/voices/`
-    // (55 zf_* female, 45 zm_* male) — verified directly against the repo's
-    // HuggingFace file listing and, for a sample of non-default names, a
-    // live HTTP fetch (not just the listing) confirming they resolve to
-    // real 522KB voice tensors. FluidAudio's own docs describe Mandarin as
-    // "single voice" (zf_001 only), which — same as English's "af_heart
-    // only" framing — describes what ensureModels() fetches by default,
-    // not a ceiling on what's fetchable via ensureVoicePack.
+    // 2 voices from FluidAudio's own hosted numbered set (zf_001 — the
+    // documented default — and zm_009, the lowest-numbered male voice
+    // available there; zm_001 doesn't exist, confirmed via a direct HTTP
+    // check) plus the 8 voices hexgrad/Kokoro-82M itself names and grades
+    // in VOICES.md. The other 98 numbered voices FluidAudio hosts
+    // (zf_002...zf_099, zm_010...zm_100) are deliberately excluded — their
+    // provenance traces to an undocumented third-party project
+    // (ardorleo/kokoro-tts-zh), not to hexgrad, so there's no way to
+    // confirm they're genuinely distinct speakers. The 8 named voices
+    // below are bundled in the app (BundledMandarinVoices/, converted from
+    // hexgrad's own .pt tensors — see model-conversion/kokoro-mandarin-voices/)
+    // since FluidAudio's repo doesn't host them; KokoroEngineService copies
+    // them into place. All graded "D" overall / thin training data per
+    // hexgrad's own VOICES.md — the tradeoff for using documented,
+    // named voices instead of unverified numbered ones.
     static let mandarinVoices = [
-        "zf_001", "zf_002", "zf_003", "zf_004", "zf_005", "zf_006", "zf_007", "zf_008",
-        "zf_017", "zf_018", "zf_019", "zf_021", "zf_022", "zf_023", "zf_024", "zf_026",
-        "zf_027", "zf_028", "zf_032", "zf_036", "zf_038", "zf_039", "zf_040", "zf_042",
-        "zf_043", "zf_044", "zf_046", "zf_047", "zf_048", "zf_049", "zf_051", "zf_059",
-        "zf_060", "zf_067", "zf_070", "zf_071", "zf_072", "zf_073", "zf_074", "zf_075",
-        "zf_076", "zf_077", "zf_078", "zf_079", "zf_083", "zf_084", "zf_085", "zf_086",
-        "zf_087", "zf_088", "zf_090", "zf_092", "zf_093", "zf_094", "zf_099",
-        "zm_009", "zm_010", "zm_011", "zm_012", "zm_013", "zm_014", "zm_015", "zm_016",
-        "zm_020", "zm_025", "zm_029", "zm_030", "zm_031", "zm_033", "zm_034", "zm_035",
-        "zm_037", "zm_041", "zm_045", "zm_050", "zm_052", "zm_053", "zm_054", "zm_055",
-        "zm_056", "zm_057", "zm_058", "zm_061", "zm_062", "zm_063", "zm_064", "zm_065",
-        "zm_066", "zm_068", "zm_069", "zm_080", "zm_081", "zm_082", "zm_089", "zm_091",
-        "zm_095", "zm_096", "zm_097", "zm_098", "zm_100",
+        "zf_001", "zm_009",
+        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
+        "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
     ]
 
     static func kokoroVoices(for variant: KokoroVariant) -> [String] {
@@ -909,9 +905,11 @@ final class TTSViewModel: ObservableObject {
     /// variant's bundle (`FluidInference/kokoro-82m-coreml/ANE` for English,
     /// `ANE-zh` for Mandarin) — the SDK's own progress callback reports a
     /// fraction, not byte totals, so this is a best-effort, independent
-    /// lookup purely for the "total size" display. `ANE-zh`'s recursive
-    /// listing already includes `voices/` (all 100 real voice `.bin`
-    /// files), matching what `ensureModels` actually fetches for Mandarin.
+    /// lookup purely for the "total size" display. For Mandarin this
+    /// slightly overcounts (it includes FluidAudio's full 100-voice
+    /// `voices/` folder, but `mandarinVoices` only fetches 2 of those) —
+    /// acceptable for a progress display, not worth a second, per-file
+    /// HF lookup.
     private func fetchKokoroTotalBytes(variant: KokoroVariant) async -> Int64? {
         let subdirectory = variant == .english ? "ANE" : "ANE-zh"
         return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(

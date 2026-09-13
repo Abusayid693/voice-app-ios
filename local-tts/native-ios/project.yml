@@ -40,6 +40,17 @@ targets:
       - path: VoicePreviews
         type: folder
         buildPhase: resources
+      # hexgrad/Kokoro-82M's 8 officially-named, officially-graded Mandarin
+      # voice tensors (zf_xiaobei/zf_xiaoni/zf_xiaoxiao/zf_xiaoyi,
+      # zm_yunjian/zm_yunxi/zm_yunxia/zm_yunyang), converted to the same
+      # [510,256] fp32 .bin format CustomKokoroModel's English voices use —
+      # see model-conversion/kokoro-mandarin-voices/. Chosen over FluidAudio's
+      # own ANE-zh/voices/ numbered set (zf_001.../zm_009...) because that
+      # set's speaker provenance is undocumented. `type: folder` keeps this
+      # a flat, unflattened folder reference like the others above.
+      - path: BundledMandarinVoices
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: FluidAudio
         product: FluidAudio
