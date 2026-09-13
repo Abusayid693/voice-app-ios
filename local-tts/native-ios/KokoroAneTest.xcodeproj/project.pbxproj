@@ -66,6 +66,7 @@
 		DF028801F92E66828A7A5322 /* InstantCloneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */; };
 		E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A0D045B3092A9E63F40DEA50 /* LucideSwift */; };
 		EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */; };
+		EFA292B78F701FF44C0FFDC3 /* KokoroVariant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4567A06F6893E77FF005B84F /* KokoroVariant.swift */; };
 		EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */; };
 		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
 /* End PBXBuildFile section */
@@ -77,7 +78,7 @@
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		0A87BD4818896A62FBA71633 /* PocketLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketLanguage.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -93,6 +94,7 @@
 		3B908701D84BB974C827AF15 /* SavedGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGeneration.swift; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
+		4567A06F6893E77FF005B84F /* KokoroVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroVariant.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
@@ -284,6 +286,7 @@
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
 				BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */,
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
+				4567A06F6893E77FF005B84F /* KokoroVariant.swift */,
 				0A87BD4818896A62FBA71633 /* PocketLanguage.swift */,
 				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
 			);
@@ -488,7 +491,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
-						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -556,6 +558,7 @@
 				289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */,
 				EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */,
 				B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */,
+				EFA292B78F701FF44C0FFDC3 /* KokoroVariant.swift in Sources */,
 				8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */,
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
@@ -602,7 +605,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -677,7 +680,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -86,6 +86,14 @@ final class DependencyContainer {
         }
     }
 
+    // Mandarin has no bundled fallback like English's CustomKokoroModel/ —
+    // FluidAudio's own hosted ANE-zh/ repo already has everything needed
+    // (7-stage chain + g2pw Chinese G2P model + all 100 real voice .bin
+    // files), so this is a real, network-downloaded manager, same shape as
+    // the Pocket managers below. `directory: nil` lets
+    // KokoroAneResourceDownloader use its own default cache location.
+    let kokoroMandarinManager = KokoroAneManager(variant: .mandarin, defaultVoice: "zf_001")
+
     // One manager per language — PocketTtsManager.language is fixed at
     // init ("to switch languages, create a new manager", per the SDK's own
     // doc comment), so supporting multiple languages means multiple

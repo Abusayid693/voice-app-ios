@@ -14,6 +14,13 @@ struct VoicePacksView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
+    // nil (not 0) while the exact directory hasn't been resolved yet this
+    // session — see kokoroMandarinModelDirectory's doc comment.
+    private var kokoroMandarinSizeBytes: Int64? {
+        guard let directory = viewModel.kokoroMandarinModelDirectory else { return nil }
+        return DiskStorage.directorySize(at: directory)
+    }
+
     private var pocketSizeBytes: Int64 {
         DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
     }
@@ -24,8 +31,13 @@ struct VoicePacksView: View {
                 packRow(
                     title: "Kokoro-ANE",
                     subtitle: "\(TTSViewModel.kokoroVoices.count) English voices",
-                    isReady: viewModel.isKokoroPackReady,
-                    sizeBytes: viewModel.isKokoroPackReady ? kokoroSizeBytes : nil)
+                    isReady: viewModel.isKokoroPackReady(.english),
+                    sizeBytes: viewModel.isKokoroPackReady(.english) ? kokoroSizeBytes : nil)
+                packRow(
+                    title: "Kokoro-ANE (Mandarin)",
+                    subtitle: "\(TTSViewModel.mandarinVoices.count) Mandarin voices",
+                    isReady: viewModel.isKokoroPackReady(.mandarin),
+                    sizeBytes: viewModel.isKokoroPackReady(.mandarin) ? kokoroMandarinSizeBytes : nil)
                 packRow(
                     title: "Pocket TTS",
                     subtitle: "\(TTSViewModel.pocketVoices.count) English voices",

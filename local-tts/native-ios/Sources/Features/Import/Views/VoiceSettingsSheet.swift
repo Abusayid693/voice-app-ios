@@ -36,10 +36,17 @@ struct VoiceSettingsSheet: View {
                 }
 
                 Section("Kokoro-ANE") {
-                    ForEach(TTSViewModel.kokoroVoices, id: \.self) { name in
+                    Picker("Language", selection: $viewModel.kokoroVariant) {
+                        ForEach(KokoroVariant.allCases) { variant in
+                            Text(variant.displayName).tag(variant)
+                        }
+                    }
+                    .tint(Color.appPrimaryText)
+
+                    ForEach(TTSViewModel.kokoroVoices(for: viewModel.kokoroVariant), id: \.self) { name in
                         voiceRow(
                             name: name,
-                            isAvailable: viewModel.isKokoroPackReady,
+                            isAvailable: viewModel.isKokoroPackReady(viewModel.kokoroVariant),
                             isSelected: viewModel.engine == .kokoroAne && viewModel.kokoroVoice == name
                         ) {
                             viewModel.engine = .kokoroAne
