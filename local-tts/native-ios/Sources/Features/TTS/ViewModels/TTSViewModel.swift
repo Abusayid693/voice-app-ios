@@ -400,6 +400,27 @@ final class TTSViewModel: ObservableObject {
 
     // MARK: - Import screen: voice preview playback
 
+    /// Resolves a voice's bundled preview clip, if one exists — shared by
+    /// `togglePreview` (actual playback) and `hasPreviewClip` (UI-only
+    /// availability check, e.g. to dim a play button before the user taps
+    /// it rather than after).
+    private static func previewClipURL(voiceName: String, engine: Engine) -> URL? {
+        let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
+        return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)
+    }
+
+    /// True if this voice has a bundled preview clip — independent of
+    /// whether its pack has been *downloaded* (`isKokoroPackReady`/
+    /// `isPocketPackDownloaded`), since preview playback is pure bundled
+    /// file playback and never touches the engine at all. Voices without a
+    /// pack downloaded yet can still preview fine; voices without a
+    /// recorded clip yet (currently: all of Pocket TTS — see
+    /// docs/adr/0009-bundled-voice-preview-clips.md) can't preview even if
+    /// their pack is downloaded.
+    func hasPreviewClip(voiceName: String, engine: Engine) -> Bool {
+        Self.previewClipURL(voiceName: voiceName, engine: engine) != nil
+    }
+
     /// Plays (or stops, if already playing) a voice's bundled preview clip
     /// — pure file playback, no synthesis, so this never touches
     /// kokoroService/pocketService and can't collide with an in-progress
@@ -411,9 +432,7 @@ final class TTSViewModel: ObservableObject {
         stopPreview()
         guard !wasPlayingThisVoice else { return }
 
-        let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
-        guard let url = Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)
-        else { return }
+        guard let url = Self.previewClipURL(voiceName: voiceName, engine: engine) else { return }
 
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback)
