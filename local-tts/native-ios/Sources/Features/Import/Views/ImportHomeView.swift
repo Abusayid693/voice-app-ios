@@ -213,6 +213,10 @@ struct ImportHomeView: View {
             VoiceTile(
                 id: "kokoro-\($0)", name: $0, engine: .kokoroAne, engineLabel: "Kokoro-ANE",
                 isAvailable: viewModel.isKokoroPackReady)
+        } + TTSViewModel.mandarinVoices.map {
+            VoiceTile(
+                id: "kokoro-zh-\($0)", name: $0, engine: .kokoroAne, engineLabel: "Kokoro-ANE (Mandarin)",
+                isAvailable: viewModel.isKokoroPackReady(.mandarin))
         } + TTSViewModel.pocketVoices.map {
             VoiceTile(
                 id: "pocket-\($0)", name: $0, engine: .pocketTts, engineLabel: "Pocket TTS",
@@ -617,6 +621,17 @@ enum VoiceCoverArt {
         "am_fenrir": "VoiceAvatar_am_fenrir",
         "bf_alice": "VoiceAvatar_bf_alice",
         "bm_daniel": "VoiceAvatar_bm_daniel",
+        // Mandarin — hexgrad/Kokoro-82M's 8 officially-named voices only
+        // (zf_001/zm_009 have no generated avatar yet, fall back to an orb
+        // like any other voice without one — see TTSViewModel.mandarinVoices).
+        "zf_xiaobei": "VoiceAvatar_zf_xiaobei",
+        "zf_xiaoni": "VoiceAvatar_zf_xiaoni",
+        "zf_xiaoxiao": "VoiceAvatar_zf_xiaoxiao",
+        "zf_xiaoyi": "VoiceAvatar_zf_xiaoyi",
+        "zm_yunjian": "VoiceAvatar_zm_yunjian",
+        "zm_yunxi": "VoiceAvatar_zm_yunxi",
+        "zm_yunxia": "VoiceAvatar_zm_yunxia",
+        "zm_yunyang": "VoiceAvatar_zm_yunyang",
     ]
 
     static func assetName(for voiceName: String) -> String {
@@ -659,6 +674,21 @@ enum VoiceDescription {
         "bm_fable": "Warm storyteller",
         "bm_george": "Distinguished and composed",
         "bm_lewis": "Friendly and approachable",
+        // Mandarin — zf_001/zm_009 have no documented persona (FluidAudio's
+        // hosted defaults), so a plain, honest tagline rather than a guess.
+        // The 8 named voices below are hexgrad/Kokoro-82M's own official
+        // Mandarin personas (VOICES.md) / Azure's original named personas
+        // they're modeled on, not a guess like Pocket's below.
+        "zf_001": "Clear and steady",
+        "zm_009": "Clear and steady",
+        "zf_xiaobei": "Warm and homely",
+        "zf_xiaoni": "Clear and professional",
+        "zf_xiaoxiao": "Warm and lively",
+        "zf_xiaoyi": "Bright and expressive",
+        "zm_yunjian": "Passionate and bold",
+        "zm_yunxi": "Sunny and upbeat",
+        "zm_yunxia": "Playful and youthful",
+        "zm_yunyang": "Professional and reliable",
     ]
 
     static func tagline(for voiceName: String, fallback: String) -> String {
@@ -727,6 +757,16 @@ enum VoiceDescription {
         "rafael": "A warm, textured voice with an expressive, animated delivery.",
         "stuart_bell": "A crisp, articulate voice with a brisk, professional pace.",
         "vera": "A soft, composed voice with a calm, reassuring tone.",
+        "zf_001": "A clear, steady Mandarin voice — the standard default for everyday narration.",
+        "zm_009": "A clear, steady Mandarin voice with an even, dependable delivery.",
+        "zf_xiaobei": "Warm and natural, carrying a touch of Northeastern Chinese character — easy, conversational delivery.",
+        "zf_xiaoni": "Clear and composed, with a Shaanxi-inflected warmth well suited to informational content.",
+        "zf_xiaoxiao": "Warm and lively — a flagship Mandarin persona, expressive across a wide emotional range.",
+        "zf_xiaoyi": "Bright and expressive, with a youthful energy that shifts easily between playful and heartfelt.",
+        "zm_yunjian": "Passionate and dynamic, built for sports commentary and dramatic narration.",
+        "zm_yunxi": "Sunny and upbeat, with a lively conversational warmth.",
+        "zm_yunxia": "Playful and youthful — a bright, cheerful young voice.",
+        "zm_yunyang": "Professional and reliable, with the composed authority of a news anchor.",
     ]
 
     static func longDescription(for voiceName: String) -> String {
@@ -743,6 +783,9 @@ enum VoiceLocale {
     static func flag(for voiceName: String) -> String {
         if voiceName.hasPrefix("bf_") || voiceName.hasPrefix("bm_") {
             return "🇬🇧"
+        }
+        if voiceName.hasPrefix("zf_") || voiceName.hasPrefix("zm_") {
+            return "🇨🇳"
         }
         return "🇺🇸"
     }

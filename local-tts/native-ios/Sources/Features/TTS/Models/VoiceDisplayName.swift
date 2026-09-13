@@ -5,7 +5,7 @@ import Foundation
 /// voice tiles and the Library tab's generation rows, so a raw voice code
 /// never leaks into user-facing text in either place.
 enum VoiceDisplayName {
-    private static let kokoroPrefixes = ["af_", "am_", "bf_", "bm_"]
+    private static let kokoroPrefixes = ["af_", "am_", "bf_", "bm_", "zf_", "zm_"]
 
     static func forCode(_ code: String) -> String {
         var raw = Substring(code)
