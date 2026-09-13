@@ -32,6 +32,15 @@ struct SettingsSheet: View {
                 }
                 .listRowBackground(Color.appSecondaryBackground)
 
+                Section("Experimental") {
+                    NavigationLink {
+                        MossNanoBenchmarkView()
+                    } label: {
+                        row(title: "MOSS-TTS-Nano prototype", icon: .flaskConical)
+                    }
+                }
+                .listRowBackground(Color.appSecondaryBackground)
+
                 Section {
                     OpenSourceCard()
                         .listRowBackground(Color.appBackground)

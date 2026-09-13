@@ -15,6 +15,26 @@ packages:
   LucideSwift:
     url: https://github.com/ajaxjiang96/lucide-swift
     exactVersion: 0.9.4
+  # MOSS-TTS-Nano prototype (Features/MossPrototype, issue #25) — this app's
+  # first ONNX Runtime dependency, evaluating the CoreML execution provider
+  # (which is how ONNX Runtime reaches the ANE) against plain CPU. Separate
+  # from the FluidAudio-based Kokoro/Pocket engines above.
+  onnxruntime:
+    url: https://github.com/microsoft/onnxruntime-swift-package-manager
+    exactVersion: 1.24.2
+  # jkrukowski/swift-sentencepiece was tried first but ships a prebuilt
+  # sentencepiece.xcframework whose Headers/module.modulemap collides with
+  # FluidAudio's own bundled xcframework at the same flattened
+  # Build/Products/<config>/include/module.modulemap path ("Multiple
+  # commands produce" build error — a known SPM binary-target packaging
+  # class, not specific to these two libraries). liuliu/swift-sentencepiece
+  # instead compiles the real SentencePiece C++ source directly (via its
+  # swift-package-support-sentencepiece dependency) — no binaryTarget
+  # anywhere in the chain, so it can't collide this way. No release tags
+  # exist, so pinned by revision instead of exactVersion.
+  SentencePiece:
+    url: https://github.com/liuliu/swift-sentencepiece
+    revision: 4c8baf1b03569428ab38dda7fdecf27886a16c1f
 targets:
   KokoroAneTest:
     type: application
@@ -45,6 +65,10 @@ targets:
         product: FluidAudio
       - package: LucideSwift
         product: LucideSwift
+      - package: onnxruntime
+        product: onnxruntime
+      - package: SentencePiece
+        product: SentencePiece
     info:
       path: Sources/Resources/Info.plist
       properties:

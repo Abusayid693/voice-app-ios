@@ -1,5 +1,5 @@
 {
-  "originHash" : "286eb9542d5fafb398dd52383bcf48c54d2671c50734626711306da5a3900730",
+  "originHash" : "75033e20e4cc39fc7a41dcdd13a9ff4c694aa31432c56725a5430127ff0a7641",
   "pins" : [
     {
       "identity" : "fluidaudio",
@@ -17,6 +17,31 @@
       "state" : {
         "revision" : "a5665c3d2724392e13c092bbd599c7664a5299e1",
         "version" : "0.9.4"
+      }
+    },
+    {
+      "identity" : "onnxruntime-swift-package-manager",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/microsoft/onnxruntime-swift-package-manager",
+      "state" : {
+        "revision" : "b7fb7f7dea8a2469e6335d95a61b8f36d0dc83b2",
+        "version" : "1.24.2"
+      }
+    },
+    {
+      "identity" : "swift-package-support-sentencepiece",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/liuliu/swift-package-support-sentencepiece",
+      "state" : {
+        "revision" : "48f1241971c19dc79c314e5a9c5b9c38cbf25a53"
+      }
+    },
+    {
+      "identity" : "swift-sentencepiece",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/liuliu/swift-sentencepiece",
+      "state" : {
+        "revision" : "4c8baf1b03569428ab38dda7fdecf27886a16c1f"
       }
     }
   ],
