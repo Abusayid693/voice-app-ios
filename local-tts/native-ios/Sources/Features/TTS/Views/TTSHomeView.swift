@@ -55,6 +55,9 @@ struct TTSHomeView: View {
                             }
                         }
                         .disabled(isEngineLocked)
+                    case .chatterboxNano:
+                        Text("One built-in voice — no options to choose.")
+                            .foregroundStyle(Color.appSecondaryText)
                     }
                 }
 
@@ -93,7 +96,7 @@ struct TTSHomeView: View {
                     switch viewModel.engine {
                     case .kokoroAne:
                         KokoroGenerationListView(viewModel: viewModel)
-                    case .pocketTts, .supertonic3:
+                    case .pocketTts, .supertonic3, .chatterboxNano:
                         Button(action: viewModel.runDownloadAndSpeak) {
                             if viewModel.isBusy {
                                 ProgressView()

@@ -33,6 +33,12 @@ struct VoicePacksView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
+    // Same reasoning as supertonic3SizeBytes.
+    private var chatterboxNanoSizeBytes: Int64? {
+        guard let directory = packs.chatterboxNanoModelDirectory else { return nil }
+        return DiskStorage.directorySize(at: directory)
+    }
+
     var body: some View {
         List {
             Section {
@@ -56,6 +62,11 @@ struct VoicePacksView: View {
                     subtitle: "31 languages · 10 voices",
                     isReady: packs.isSupertonic3Downloaded,
                     sizeBytes: packs.isSupertonic3Downloaded ? supertonic3SizeBytes : nil)
+                packRow(
+                    title: "Chatterbox Nano",
+                    subtitle: "1 expressive voice, short passages only",
+                    isReady: packs.isChatterboxNanoDownloaded,
+                    sizeBytes: packs.isChatterboxNanoDownloaded ? chatterboxNanoSizeBytes : nil)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }

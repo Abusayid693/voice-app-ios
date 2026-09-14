@@ -78,6 +78,7 @@ struct SetupSheet: View {
         case .kokoro(let variant): return packs.isKokoroPackReady(variant)
         case .pocket(let language): return packs.isPocketPackDownloaded(language)
         case .supertonic3: return packs.isSupertonic3Downloaded
+        case .chatterboxNano: return packs.isChatterboxNanoDownloaded
         }
     }
 
@@ -87,6 +88,7 @@ struct SetupSheet: View {
             case .kokoro(let variant): await viewModel.downloadKokoroPackIfNeeded(variant: variant)
             case .pocket(let language): await viewModel.downloadPocketPackIfNeeded(language: language)
             case .supertonic3: await viewModel.downloadSupertonic3PackIfNeeded()
+            case .chatterboxNano: await viewModel.downloadChatterboxNanoPackIfNeeded()
             }
         }
     }

@@ -140,4 +140,10 @@ final class DependencyContainer {
     // serves every language/voice combination.
     let supertonic3Manager = Supertonic3Manager(
         vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
+
+    // A single, always-available instance — ChatterboxNanoManager requires
+    // iOS 18, which is this app's deployment target (see
+    // docs/adr/0010-chatterbox-nano-ios18-and-scope.md), so no availability
+    // gating is needed here, unlike a type-erased approach would require.
+    let chatterboxNanoManager = ChatterboxNanoManager()
 }

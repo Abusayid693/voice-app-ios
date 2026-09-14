@@ -5,33 +5,25 @@ import SwiftUI
 /// top, so ImportHomeView can fade the Setup pointer out as soon as the user
 /// scrolls away from it.
 ///
-/// Uses `.onScrollGeometryChange` (iOS 18+) rather than the older
+/// Uses `.onScrollGeometryChange` rather than the older
 /// GeometryReader-in-the-content's-`.background` + PreferenceKey recipe. That
 /// recipe silently stopped working: modern ScrollView doesn't re-evaluate a
 /// background GeometryReader on every scroll tick, so the preference never
 /// fired and the "at top" flag was stuck at `true` forever no matter which
 /// coordinate space it measured against.
-///
-/// On iOS 17 there is no equivalent API, so the pointer simply stays put
-/// until the packs finish downloading — it's a decorative onboarding hint,
-/// and that degradation is preferable to reinstating the broken recipe.
 private struct ScrolledToTopObserver: ViewModifier {
     @Binding var isAtTop: Bool
     var threshold: CGFloat = 10
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: Bool.self) { geometry in
-                // At rest contentOffset.y == -contentInsets.top (the nav bar
-                // and large title are part of the top inset), so the sum —
-                // not contentOffset alone — is the real distance scrolled.
-                geometry.contentOffset.y + geometry.contentInsets.top <= threshold
-            } action: { _, atTop in
-                guard atTop != isAtTop else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { isAtTop = atTop }
-            }
-        } else {
-            content
+        content.onScrollGeometryChange(for: Bool.self) { geometry in
+            // At rest contentOffset.y == -contentInsets.top (the nav bar
+            // and large title are part of the top inset), so the sum —
+            // not contentOffset alone — is the real distance scrolled.
+            geometry.contentOffset.y + geometry.contentInsets.top <= threshold
+        } action: { _, atTop in
+            guard atTop != isAtTop else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { isAtTop = atTop }
         }
     }
 }
@@ -75,6 +67,7 @@ struct ImportHomeView: View {
 
     private var isFullyDownloaded: Bool {
         packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
+            && packs.isChatterboxNanoDownloaded
     }
 
     var body: some View {
@@ -234,7 +227,12 @@ struct ImportHomeView: View {
                 id: "supertonic3-\(voice.code)", voice: voice, engine: .supertonic3,
                 engineLabel: "Supertonic-3", isAvailable: packs.isSupertonic3Downloaded)
         }
-        return kokoro + pocket + supertonic3
+        let chatterboxNano = VoiceCatalog.chatterboxNano.map { voice in
+            VoiceTile(
+                id: "chatterbox-nano-\(voice.code)", voice: voice, engine: .chatterboxNano,
+                engineLabel: "Chatterbox Nano", isAvailable: packs.isChatterboxNanoDownloaded)
+        }
+        return kokoro + pocket + supertonic3 + chatterboxNano
     }
 
     private var trendingVoicesSection: some View {

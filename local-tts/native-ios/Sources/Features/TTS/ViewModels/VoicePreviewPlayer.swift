@@ -87,6 +87,7 @@ final class VoicePreviewPlayer: ObservableObject {
         // resolves to a folder with nothing in it, same as any other
         // voice with no clip recorded.
         case .supertonic3: engineFolder = "Supertonic3"
+        case .chatterboxNano: engineFolder = "ChatterboxNano"
         }
         let subdirectory = "VoicePreviews/\(engineFolder)"
         return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)

@@ -4,8 +4,8 @@ import SwiftUI
 /// Full-screen text entry reached from Import's "Write text" card. Floating
 /// Generate + Settings buttons at the bottom. Kokoro's Generate navigates
 /// straight to ReadAlongPlayerView (issue #10) — no inline player here
-/// anymore. Pocket TTS and Supertonic-3 still show progress inline
-/// (`statusCard`), unchanged.
+/// anymore. Pocket TTS, Supertonic-3, and Chatterbox Nano all still show
+/// progress inline (`statusCard`), unchanged.
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
@@ -17,6 +17,19 @@ struct WriteTextView: View {
     // use this; their Generate keeps today's inline statusCard, no navigation.
     @State private var readAlongGenerationID: KokoroGeneration.ID?
 
+    // Chatterbox Nano's real cap is on *generated audio duration*
+    // (~10s — ChatterboxNanoConstants.flowTokenBucket minus the bundled
+    // voice's fixed 250-token prompt, see docs/adr/0010), not on input
+    // text directly, so there's no exact character limit to enforce —
+    // spoken pacing, punctuation, and tags like [chuckle] all affect the
+    // real token count in ways this app can't predict without running the
+    // model. This is a conservative estimate (confirmed empirically: a
+    // ~148-char clip generated fine, ~156 chars did not) meant to catch
+    // clearly-too-long text before a guaranteed-wasted attempt — the SDK's
+    // own `ChatterboxError.generationTooLong` is still the real backstop
+    // for text that slips under this and still runs long.
+    private static let chatterboxNanoSoftCharLimit = 140
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -26,6 +39,9 @@ struct WriteTextView: View {
                     .scrollContentBackground(.hidden)
                     .background(Color.appBackground)
                     .padding(4)
+
+                chatterboxNanoTagHint
+                    .padding(.horizontal)
 
                 progressArea
                     .padding(.horizontal)
@@ -52,14 +68,47 @@ struct WriteTextView: View {
         }
     }
 
+    private var isChatterboxNanoTextTooLong: Bool {
+        viewModel.engine == .chatterboxNano
+            && viewModel.text.count > Self.chatterboxNanoSoftCharLimit
+    }
+
+    // No tag-insertion UI (see docs/adr/0010) — just naming a few examples
+    // so they're discoverable without reading external docs. The character
+    // count doubles as the length warning — see chatterboxNanoSoftCharLimit.
+    @ViewBuilder
+    private var chatterboxNanoTagHint: some View {
+        if viewModel.engine == .chatterboxNano {
+            HStack {
+                Text("Try [laugh], [sigh], [whispering] inline in your text.")
+                    .font(.caption)
+                    .foregroundStyle(Color.appTertiaryText)
+                Spacer()
+                Text("\(viewModel.text.count)/\(Self.chatterboxNanoSoftCharLimit)")
+                    .font(.caption)
+                    .foregroundStyle(isChatterboxNanoTextTooLong ? .red : Color.appTertiaryText)
+            }
+        }
+    }
+
     // Kokoro no longer shows its own inline player here — Generate
     // navigates straight to ReadAlongPlayerView, which is now the only
-    // place Kokoro generations are played back from. Pocket and
-    // Supertonic-3 share this same inline card — neither has a dedicated
-    // playback screen (see SavedGeneration's doc comment).
+    // place Kokoro generations are played back from. Pocket, Supertonic-3,
+    // and Chatterbox Nano share this same inline card — none has a
+    // dedicated playback screen (see SavedGeneration's doc comment).
     @ViewBuilder
     private var progressArea: some View {
-        if viewModel.engine != .kokoroAne, viewModel.isBusy || viewModel.timeToFirstAudio != nil {
+        // `status != "Idle"` catches a failed run for Supertonic-3/Chatterbox
+        // Nano: both set `status` to an error message and `isBusy = false`
+        // together, with no lingering flag like Pocket's `timeToFirstAudio`
+        // to keep the card up — without this, a run that fails before ever
+        // starting playback flips isBusy false and the error disappears on
+        // the very next render, never actually seen. Every success path
+        // resets `status` back to "Idle" (its declared initial value), so
+        // this only stays true while an unread error is sitting in it.
+        if viewModel.engine != .kokoroAne,
+            viewModel.isBusy || viewModel.timeToFirstAudio != nil || viewModel.status != "Idle"
+        {
             statusCard
         }
     }
@@ -99,13 +148,13 @@ struct WriteTextView: View {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                 } else {
-                    Text("Generate")
+                    Text(isChatterboxNanoTextTooLong ? "Text too long" : "Generate")
                         .bold()
                         .frame(maxWidth: .infinity)
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.isBusy || viewModel.text.isEmpty)
+            .disabled(viewModel.isBusy || viewModel.text.isEmpty || isChatterboxNanoTextTooLong)
             .frame(height: 44)
         }
         .padding()
@@ -130,6 +179,8 @@ struct WriteTextView: View {
             voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
         case .supertonic3:
             voiceName = viewModel.supertonicVoice.displayName
+        case .chatterboxNano:
+            voiceName = "Expressive"
         }
         let savedID = libraryViewModel.save(text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
 
@@ -143,7 +194,7 @@ struct WriteTextView: View {
                 viewModel.toggleKokoroPlayback(for: newID)
                 readAlongGenerationID = newID
             }
-        case .pocketTts, .supertonic3:
+        case .pocketTts, .supertonic3, .chatterboxNano:
             viewModel.runDownloadAndSpeak()
         }
     }

@@ -122,10 +122,10 @@ struct LibraryTabView: View {
             {
                 readAlongGenerationID = newID
             }
-        case .pocketTts, .supertonic3:
-            // Neither has a player screen or saved audio yet (see
+        case .pocketTts, .supertonic3, .chatterboxNano:
+            // None has a player screen or saved audio yet (see
             // SavedGeneration's doc comment) — keep the existing read-only
-            // text view as the tap action for both.
+            // text view as the tap action for all three.
             viewingGeneration = generation
         }
     }

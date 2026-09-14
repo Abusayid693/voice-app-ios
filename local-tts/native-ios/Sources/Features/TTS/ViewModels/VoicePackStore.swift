@@ -40,6 +40,11 @@ final class VoicePackStore: ObservableObject {
     /// whole-shared-cache measurement so Storage doesn't count it twice.
     @Published private(set) var supertonic3ModelDirectory: URL?
 
+    /// Same shape as `isSupertonic3Downloaded` — one Chatterbox Nano pack,
+    /// no per-variant axis (see `VoicePack.chatterboxNano`).
+    @Published private(set) var isChatterboxNanoDownloaded = false
+    @Published private(set) var chatterboxNanoModelDirectory: URL?
+
     // MARK: - Download progress
 
     /// Which pack (`VoicePack.id`) is downloading, if any. `TTSViewModel.isBusy`
@@ -62,12 +67,15 @@ final class VoicePackStore: ObservableObject {
     // Original single-language flag, kept only to migrate existing installs.
     private static let legacyPocketPackDownloadedBoolKey = "pocketPackDownloaded"
     private static let supertonic3DownloadedDefaultsKey = "supertonic3Downloaded"
+    private static let chatterboxNanoDownloadedDefaultsKey = "chatterboxNanoDownloaded"
 
     init(kokoroModelDirectory: URL?, isKokoroPackBundled: Bool) {
         self.kokoroModelDirectory = kokoroModelDirectory
         kokoroDownloadedVariants = Self.loadKokoroDownloadedVariants(bundledEnglish: isKokoroPackBundled)
         pocketDownloadedLanguages = Self.loadPocketDownloadedLanguages()
         isSupertonic3Downloaded = UserDefaults.standard.bool(forKey: Self.supertonic3DownloadedDefaultsKey)
+        isChatterboxNanoDownloaded = UserDefaults.standard.bool(
+            forKey: Self.chatterboxNanoDownloadedDefaultsKey)
     }
 
     // MARK: - Readiness
@@ -105,6 +113,10 @@ final class VoicePackStore: ObservableObject {
         supertonic3ModelDirectory = directory
     }
 
+    func noteChatterboxNanoModelDirectory(_ directory: URL) {
+        chatterboxNanoModelDirectory = directory
+    }
+
     func markKokoroDownloaded(_ variant: KokoroVariant) {
         kokoroDownloadedVariants.insert(variant)
         UserDefaults.standard.set(
@@ -121,6 +133,11 @@ final class VoicePackStore: ObservableObject {
     func markSupertonic3Downloaded() {
         isSupertonic3Downloaded = true
         UserDefaults.standard.set(true, forKey: Self.supertonic3DownloadedDefaultsKey)
+    }
+
+    func markChatterboxNanoDownloaded() {
+        isChatterboxNanoDownloaded = true
+        UserDefaults.standard.set(true, forKey: Self.chatterboxNanoDownloadedDefaultsKey)
     }
 
     private static func loadKokoroDownloadedVariants(bundledEnglish: Bool) -> Set<KokoroVariant> {

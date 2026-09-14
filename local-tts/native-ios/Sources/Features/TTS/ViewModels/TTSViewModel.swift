@@ -128,6 +128,12 @@ final class TTSViewModel: ObservableObject {
     private var supertonicPlayer: AVAudioPlayer?
     private var supertonicPlayerDelegate: AudioPlaybackDelegate?
 
+    // A single, always-available service — Chatterbox Nano has one voice
+    // and no language axis (see DependencyContainer.chatterboxNanoManager).
+    private let chatterboxNanoService: ChatterboxNanoEngineService
+    private var chatterboxNanoPlayer: AVAudioPlayer?
+    private var chatterboxNanoPlayerDelegate: AudioPlaybackDelegate?
+
     init(dependencies: DependencyContainer) {
         kokoroServices = Dictionary(
             uniqueKeysWithValues: KokoroVariant.allCases.map { variant in
@@ -160,6 +166,7 @@ final class TTSViewModel: ObservableObject {
         supertonicService = Supertonic3EngineService(
             manager: dependencies.supertonic3Manager, directory: nil,
             vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
+        chatterboxNanoService = ChatterboxNanoEngineService(manager: dependencies.chatterboxNanoManager)
         packs = VoicePackStore(
             kokoroModelDirectory: dependencies.kokoroModelDirectory,
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
@@ -180,6 +187,8 @@ final class TTSViewModel: ObservableObject {
             runPocketTts()
         case .supertonic3:
             runSupertonicTts()
+        case .chatterboxNano:
+            runChatterboxNanoTts()
         }
     }
 
@@ -280,6 +289,39 @@ final class TTSViewModel: ObservableObject {
         }
     }
 
+    /// One pack, one voice — no per-variant/per-language argument (see
+    /// `VoicePack.chatterboxNano`).
+    func downloadChatterboxNanoPackIfNeeded() async {
+        guard !packs.isChatterboxNanoDownloaded else { return }
+        status = "Downloading Chatterbox Nano pack…"
+        isBusy = true
+        packs.beginDownload(packID: VoicePack.chatterboxNano.id)
+        defer {
+            isBusy = false
+            packs.endDownload()
+        }
+        do {
+            // ensureModels/initialize both call the SDK's single
+            // initialize(progressHandler:) — the second call here just
+            // no-ops immediately (see ChatterboxNanoEngineService).
+            let resolvedDirectory = try await chatterboxNanoService.ensureModels(progressHandler: {
+                [weak self] progress in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.status = self.packs.apply(
+                        progress, phaseWeight: 1.0,
+                        fetchTotal: { await VoicePackSizeService.chatterboxNanoTotalBytes() })
+                }
+            })
+            packs.noteChatterboxNanoModelDirectory(resolvedDirectory)
+            try await chatterboxNanoService.initialize()
+            packs.markChatterboxNanoDownloaded()
+            status = "Idle"
+        } catch {
+            status = "Chatterbox Nano pack download failed: \(error.localizedDescription)"
+        }
+    }
+
     private func resetRunState() {
         stopAllPlayback()
         isBusy = true
@@ -294,6 +336,9 @@ final class TTSViewModel: ObservableObject {
         supertonicPlayer?.stop()
         supertonicPlayer = nil
         supertonicPlayerDelegate = nil
+        chatterboxNanoPlayer?.stop()
+        chatterboxNanoPlayer = nil
+        chatterboxNanoPlayerDelegate = nil
         // Stop every language's service, not just the current
         // `pocketLanguage` — this can run from that same property's
         // didSet, which fires *after* the value already changed, so
@@ -729,6 +774,65 @@ final class TTSViewModel: ObservableObject {
                 player.delegate = delegate
                 supertonicPlayerDelegate = delegate
                 supertonicPlayer = player
+                player.play()
+
+                status = "Idle"
+            } catch {
+                status = "Error: \(error.localizedDescription)"
+            }
+            isBusy = false
+        }
+    }
+
+    /// Single-shot, same shape as `runSupertonicTts()`, with one difference:
+    /// the SDK has no separate download-only step (`ensureModels` and
+    /// `initialize` both call the same idempotent SDK call), so unlike the
+    /// other engines' two-phase "Checking cache…"/"Loading models…" status
+    /// text, all the real work happens under one phase here — splitting it
+    /// the same way would flash "Loading models…" for ~0ms every time.
+    /// Long text fails via the existing generic catch below, surfacing the
+    /// SDK's own clear "text tokenizes to N tokens" message — no chunker
+    /// exists for this engine (see docs/adr/0010).
+    private func runChatterboxNanoTts() {
+        resetRunState()
+        let inputText = text
+
+        Task {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback)
+                try AVAudioSession.sharedInstance().setActive(true)
+
+                status = "Checking cache…"
+                let initStart = Date()
+                let resolvedDirectory = try await chatterboxNanoService.ensureModels(progressHandler: {
+                    [weak self] progress in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.status = self.packs.apply(
+                            progress, phaseWeight: 1.0,
+                            fetchTotal: { await VoicePackSizeService.chatterboxNanoTotalBytes() })
+                    }
+                })
+                packs.noteChatterboxNanoModelDirectory(resolvedDirectory)
+                isWarmInit = !packs.didDownload
+                try await chatterboxNanoService.initialize()
+                initSeconds = Date().timeIntervalSince(initStart)
+
+                status = "Synthesizing…"
+                let synthStart = Date()
+                let data = try await chatterboxNanoService.synthesize(text: inputText)
+                synthSeconds = Date().timeIntervalSince(synthStart)
+
+                let player = try AVAudioPlayer(data: data)
+                let delegate = AudioPlaybackDelegate { [weak self] in
+                    Task { @MainActor in
+                        self?.chatterboxNanoPlayer = nil
+                        self?.chatterboxNanoPlayerDelegate = nil
+                    }
+                }
+                player.delegate = delegate
+                chatterboxNanoPlayerDelegate = delegate
+                chatterboxNanoPlayer = player
                 player.play()
 
                 status = "Idle"

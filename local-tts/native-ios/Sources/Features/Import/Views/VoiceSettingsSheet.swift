@@ -1,10 +1,10 @@
 import LucideSwift
 import SwiftUI
 
-/// Combined Kokoro + Pocket + Supertonic-3 voice picker for the Write text
-/// screen — one list, each voice tagged available/not-available based on
-/// whether that engine's pack has been downloaded (see SetupSheet).
-/// Selecting an available voice also switches `viewModel.engine` to match.
+/// Combined voice picker for all four engines, for the Write text screen —
+/// one list, each voice tagged available/not-available based on whether
+/// that engine's pack has been downloaded (see SetupSheet). Selecting an
+/// available voice also switches `viewModel.engine` to match.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
@@ -105,6 +105,21 @@ struct VoiceSettingsSheet: View {
                             viewModel.selectedClonedVoice = nil
                             dismiss()
                         }
+                    }
+                }
+                .listRowBackground(Color.appSecondaryBackground)
+
+                // One voice, no language — the SDK doesn't even take a
+                // voice argument, so this is a single row, not a ForEach.
+                Section("Chatterbox Nano") {
+                    voiceRow(
+                        name: "Expressive",
+                        isAvailable: packs.isChatterboxNanoDownloaded,
+                        isSelected: viewModel.engine == .chatterboxNano
+                    ) {
+                        viewModel.engine = .chatterboxNano
+                        viewModel.selectedClonedVoice = nil
+                        dismiss()
                     }
                 }
                 .listRowBackground(Color.appSecondaryBackground)

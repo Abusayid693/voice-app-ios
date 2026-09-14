@@ -1,3 +1,4 @@
+import FluidAudio
 import Foundation
 
 /// Best-effort "total download size" lookups for the voice packs, read from
@@ -74,5 +75,21 @@ enum VoicePackSizeService {
             url:
                 "https://huggingface.co/api/models/FluidInference/supertonic-3-coreml/tree/main?recursive=true",
             matching: { path in required.contains { path.hasPrefix($0) || path == $0 } })
+    }
+
+    /// Same idea for the Chatterbox Nano pack. Unlike Supertonic-3/Pocket,
+    /// the SDK's own required-file list (`ModelNames.ChatterboxNano`) is
+    /// public, so this reads it directly instead of hand-duplicating it —
+    /// the repo root also holds every `.mlpackage` (uncompiled) source and
+    /// a non-stateful decode variant, neither of which `ensureModels` fetches.
+    static func chatterboxNanoTotalBytes() async -> Int64? {
+        let modelDirs = ModelNames.ChatterboxNano.requiredModels.map { "\($0)/" }
+        let auxFiles = ModelNames.ChatterboxNano.auxFiles
+        return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
+            url:
+                "https://huggingface.co/api/models/FluidInference/chatterbox-nano-coreml/tree/main?recursive=true",
+            matching: { path in
+                modelDirs.contains { path.hasPrefix($0) } || auxFiles.contains(path)
+            })
     }
 }

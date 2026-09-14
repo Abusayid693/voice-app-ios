@@ -67,6 +67,7 @@
 		B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */; };
 		B64F04C5E6B2A8C4A73DB923 /* Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCF88E3915597CD4B7FD58D /* Voice.swift */; };
 		BB75A4408D01E36AE4E242C6 /* VoicePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F951C1610075724A48F1647E /* VoicePreviewSheet.swift */; };
+		C3B2D4B1434CC29B4FFF8A4E /* ChatterboxNanoEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8050276CE0FD6ACA4BC968C3 /* ChatterboxNanoEngineService.swift */; };
 		C77F75D0042DF99C044F6115 /* ClonedVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC33F2E0CA90E2F7D873E5 /* ClonedVoice.swift */; };
 		CCB679D4688F3306170DDDF0 /* GenerationTextSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD37E25F7F1C1EA70217E7B9 /* GenerationTextSheet.swift */; };
 		CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */; };
@@ -88,7 +89,7 @@
 		0A87BD4818896A62FBA71633 /* PocketLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketLanguage.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackDelegate.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -117,6 +118,7 @@
 		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
+		8050276CE0FD6ACA4BC968C3 /* ChatterboxNanoEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatterboxNanoEngineService.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
 		8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantCloneView.swift; sourceTree = "<group>"; };
 		9016A555EFF94E335E35D39C /* TrendingBookCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBookCard.swift; sourceTree = "<group>"; };
@@ -440,6 +442,7 @@
 		C3136C4922CD16E3877F8C14 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				8050276CE0FD6ACA4BC968C3 /* ChatterboxNanoEngineService.swift */,
 				431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */,
 				70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */,
 				93E831F0E313B5D438E899A4 /* Supertonic3EngineService.swift */,
@@ -529,6 +532,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
+						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -580,6 +584,7 @@
 				655CE0F29DF8F2A9F95FBF3E /* AudioPlaybackDelegate.swift in Sources */,
 				053A30AD8C7AE06777C0EA2C /* BlobShape.swift in Sources */,
 				599F1B0430B2A85E9E7A8BA2 /* CardText.swift in Sources */,
+				C3B2D4B1434CC29B4FFF8A4E /* ChatterboxNanoEngineService.swift in Sources */,
 				FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */,
 				C77F75D0042DF99C044F6115 /* ClonedVoice.swift in Sources */,
 				7CCF792E32580E0A413F0C91 /* Colors.swift in Sources */,
@@ -653,7 +658,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -711,7 +716,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -728,7 +733,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -792,7 +797,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

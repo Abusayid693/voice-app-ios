@@ -39,12 +39,20 @@ struct StorageView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
+    // Same reasoning as supertonic3Bytes.
+    private var chatterboxNanoBytes: Int64 {
+        guard packs.isChatterboxNanoDownloaded, let directory = packs.chatterboxNanoModelDirectory
+        else { return 0 }
+        return DiskStorage.directorySize(at: directory)
+    }
+
     private var clonedVoicesBytes: Int64 {
         DiskStorage.directorySize(at: ClonedVoice.directory)
     }
 
     private var totalBytes: Int64 {
-        kokoroBytes + kokoroMandarinBytes + pocketBytes + supertonic3Bytes + clonedVoicesBytes
+        kokoroBytes + kokoroMandarinBytes + pocketBytes + supertonic3Bytes + chatterboxNanoBytes
+            + clonedVoicesBytes
     }
 
     var body: some View {
@@ -54,6 +62,7 @@ struct StorageView: View {
                 row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
                 row(title: "Pocket TTS pack", bytes: pocketBytes)
                 row(title: "Supertonic-3 pack", bytes: supertonic3Bytes)
+                row(title: "Chatterbox Nano pack", bytes: chatterboxNanoBytes)
                 row(
                     title: "My voices (\(voiceCloneViewModel.clonedVoices.count))",
                     bytes: clonedVoicesBytes)

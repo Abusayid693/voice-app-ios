@@ -19,7 +19,8 @@ enum VoiceCatalog {
         }
     }
 
-    static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese + pocket + supertonic3
+    static let all: [Voice] =
+        kokoroEnglish + kokoroMandarin + kokoroJapanese + pocket + supertonic3 + chatterboxNano
 
     /// Precomputed rather than scanned: cover-art resolution calls this
     /// once per visible tile while the Trending row scrolls, and a linear
@@ -345,5 +346,21 @@ enum VoiceCatalog {
         Voice(code: "M3", flagOverride: "🌐"),
         Voice(code: "M4", flagOverride: "🌐"),
         Voice(code: "M5", flagOverride: "🌐"),
+    ]
+
+    // MARK: - Chatterbox Nano (1 voice, English only — issue #30)
+
+    // "expressive", not "default" — the one thing this voice can do that no
+    // other engine's voices can is take inline tags like [laugh]/[sigh] and
+    // actually change delivery; the name and tagline should say that, not
+    // read as a generic fallback option next to Alloy/Xiaobei.
+    static let chatterboxNano: [Voice] = [
+        Voice(
+            code: "expressive",
+            tagline: "Reacts to inline tags like [laugh] and [whispering]",
+            longDescription:
+                "An expressive English voice that reads paralinguistic tags — "
+                + "[laugh], [sigh], [whispering], and others — as real delivery changes, "
+                + "not just text. Built for short, expressive passages rather than long-form reading."),
     ]
 }
