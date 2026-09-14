@@ -13,7 +13,7 @@ final class TTSViewModel: ObservableObject {
     // genuinely work once paired with FluidAudio's real
     // KokoroNoise_v2/KokoroTail_v2 stages — our own stock conversion of
     // those two specifically had audible pitch/loudness bugs.
-    static let kokoroVoices = [
+    nonisolated static let kokoroVoices = [
         "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore",
         "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
         "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael",
@@ -37,7 +37,7 @@ final class TTSViewModel: ObservableObject {
     // them into place. All graded "D" overall / thin training data per
     // hexgrad's own VOICES.md — the tradeoff for using documented,
     // named voices instead of unverified numbered ones.
-    static let mandarinVoices = [
+    nonisolated static let mandarinVoices = [
         "zf_001", "zm_009",
         "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
         "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
@@ -48,9 +48,9 @@ final class TTSViewModel: ObservableObject {
     // numbered set, this one has no provenance ambiguity: it's the SDK's
     // own curated list, all 5 confirmed present as real voice .bin files
     // on FluidAudio's hosted repo. No bundling step needed.
-    static let japaneseVoices = ["jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo"]
+    nonisolated static let japaneseVoices = ["jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo"]
 
-    static func kokoroVoices(for variant: KokoroVariant) -> [String] {
+    nonisolated static func kokoroVoices(for variant: KokoroVariant) -> [String] {
         switch variant {
         case .english: return kokoroVoices
         case .mandarin: return mandarinVoices
@@ -60,7 +60,7 @@ final class TTSViewModel: ObservableObject {
 
     // All 26 published in constants_bin/ for the English v2.1 pack — these
     // are real, no missing-asset gap like the Kokoro voices above.
-    static let pocketVoices = [
+    nonisolated static let pocketVoices = [
         "alba", "anna", "azelma", "bill_boerst", "caro_davy", "charles",
         "cosette", "eponine", "estelle", "eve", "fantine", "george", "giovanni",
         "jane", "javert", "jean", "juergen", "lola", "marius", "mary", "michael",
