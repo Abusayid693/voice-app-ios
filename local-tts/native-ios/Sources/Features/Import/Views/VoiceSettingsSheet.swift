@@ -7,6 +7,7 @@ import SwiftUI
 /// available voice also switches `viewModel.engine` to match.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var packs: VoicePackStore
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -46,7 +47,7 @@ struct VoiceSettingsSheet: View {
                     ForEach(TTSViewModel.kokoroVoices(for: viewModel.kokoroVariant), id: \.self) { name in
                         voiceRow(
                             name: name,
-                            isAvailable: viewModel.isKokoroPackReady(viewModel.kokoroVariant),
+                            isAvailable: packs.isKokoroPackReady(viewModel.kokoroVariant),
                             isSelected: viewModel.engine == .kokoroAne && viewModel.kokoroVoice == name
                         ) {
                             viewModel.engine = .kokoroAne
@@ -69,7 +70,7 @@ struct VoiceSettingsSheet: View {
                     ForEach(TTSViewModel.pocketVoices, id: \.self) { name in
                         voiceRow(
                             name: name,
-                            isAvailable: viewModel.isPocketPackDownloaded(viewModel.pocketLanguage),
+                            isAvailable: packs.isPocketPackDownloaded(viewModel.pocketLanguage),
                             isSelected: viewModel.engine == .pocketTts && viewModel.pocketVoice == name
                                 && viewModel.selectedClonedVoice == nil
                         ) {
@@ -117,7 +118,8 @@ struct VoiceSettingsSheet: View {
 
 #Preview {
     let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     VoiceSettingsSheet(
-        viewModel: TTSViewModel(dependencies: dependencies),
+        viewModel: viewModel, packs: viewModel.packs,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
 }

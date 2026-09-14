@@ -23,12 +23,16 @@ Views bind to a ViewModel; ViewModels own `@Published` UI state and orchestrate;
 - **Core/** — cross-feature utilities with no feature-specific meaning (e.g. a generic HTTP/JSON helper used by more than one feature's Service).
 - **`DesignSystem/`** — cross-feature UI tokens (currently just the Import screens' fixed dark color palette). **`Shared/`** — not created yet; add only when a real second consumer exists, same as everything else here.
 
+**One ObservableObject per concern — object granularity *is* re-render granularity.** `objectWillChange` carries no information about *which* property changed, so every `@Published` write re-renders every view observing that object. Two concrete bugs came from ignoring this while everything lived on `TTSViewModel`: the preview metering loop (~15 writes/sec) re-rendered Import's whole 70-tile Trending scroll for the length of every preview, and pack-download progress re-rendered every screen that merely reads pack readiness. Both were fixed by splitting the state onto its own object (`VoicePreviewPlayer`, `VoicePackStore`), not by memoizing views. Two rules follow: when adding state to a ViewModel, ask whether it changes at a different *rate* than what's already there — if so it wants its own object; and a view that only forwards such an object holds it as a plain `let`, never `@ObservedObject`, so it doesn't subscribe to updates it never reads (see `RootTabView`/`ImportHomeView` and `previewPlayer`). Note nested `ObservableObject` changes do **not** reach a parent's `objectWillChange` — that's why views reach the store as `viewModel.packs` and observe it directly, rather than through a forwarding property on `TTSViewModel`.
+
+**Voice metadata belongs in `VoiceCatalog`, nowhere else.** Anything describing a voice — display copy, avatar, persona tagline, preview line, locale — goes on `Voice` and into that catalog. It used to live as five sparse dictionaries plus two divergent prefix parsers spread across a View file and a ViewModel, which meant adding one language touched six files and shipped a bug from a missed spot. Don't reintroduce a per-voice lookup table next to the code that consumes it; add a field to `Voice` instead. Same rule for the code-prefix convention (`af_`/`bf_`/`zf_`/`jf_`): `VoiceCode` is the only place that parses it.
+
 ## Target file tree
 
 ```
 Sources/
   App/
-    KokoroAneTestApp.swift        // @main — creates DependencyContainer + one shared TTSViewModel + VoiceCloneViewModel, passes both into RootTabView
+    KokoroAneTestApp.swift        // @main — creates DependencyContainer + the four long-lived observable objects (TTSViewModel, VoiceCloneViewModel, LibraryViewModel, VoicePreviewPlayer) and passes them into RootTabView
     RootTabView.swift             // DONE — 4-tab TabView shell (Home/Library/Tools/Voices) + a floating "+" action button (separate from the tabs, no action yet); Home hosts ImportHomeView and is selected by default
     PlaceholderTabView.swift      // DONE — trivial "coming soon" content, currently reused for the Tools tab
     AppCoordinator.swift          // NOT YET BUILT — ObservableObject: owns hasCompletedOnboarding (persisted), decides Onboarding vs TTS root
@@ -46,6 +50,7 @@ Sources/
         WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress
         VoiceSettingsSheet.swift  // DONE — Kokoro + Pocket + "My Voices" (cloned) picker, tagged available/not-available
         VoicePreviewSheet.swift   // DONE — half-sheet voice preview: horizontally scrolling carousel of whole sheet cards (one per voice, neighbours peeking), system sheet made invisible via .presentationBackground(.clear) so the card itself slides; snapping via .scrollTargetBehavior(.viewAligned)
+        ReadAlongPlayerView.swift // DONE — chunk-highlighting read-along player for a Kokoro generation (issue #10), pushed from WriteTextView's Generate and from Library/Projects; its own read-only screen, not an overlay on the editor (see docs/adr/0004)
         TrendingBookCard.swift    // DONE — shared book cover card (Import's row + AllTrendingBooksView's grid)
         AllTrendingBooksView.swift // DONE — "See all" infinite-scroll grid, paginated via TrendingBooksViewModel
       ViewModels/
@@ -54,9 +59,17 @@ Sources/
         GutendexBookService.swift // DONE — fetches/paginates trending public-domain books from gutendex.com
       Models/
         VoicePack.swift           // DONE — enum { kokoro(KokoroVariant), pocket(PocketLanguage) }, drives SetupSheet's rows
-        VoicePreviewLines.swift   // DONE — per-voice 16-20 word preview sentences (Kokoro's 28; used to generate bundled clips)
         TrendingBook.swift        // DONE — normalized Gutendex book (title, author, cover URL)
         DemoContent.swift         // DONE — static demo data: Projects placeholder rows only (Trending voices/What's trending are real now)
+    Library/                       // DONE — the Library tab: every past "Generate" tap, replayable
+      Views/
+        LibraryTabView.swift       // DONE — lists saved generations; tapping a Kokoro row opens ReadAlongPlayerView, swipe for Delete or the pen icon
+        GenerationTextSheet.swift  // DONE — read-only view of a saved generation's original text (the pen icon), not an editor
+      ViewModels/
+        LibraryViewModel.swift     // DONE — the persisted generations list; no Service needed (UserDefaults+JSON metadata + small file I/O for Kokoro audio, no SDK calls)
+      Models/
+        SavedGeneration.swift      // DONE — { text, voice, engine, … } persisted via UserDefaults+JSON; Kokoro entries also persist per-chunk audio files so replay rebuilds the exact chunk structure read-along needs (Pocket streams frames, so it saves none — issue #11)
+      LibraryPlayback.swift        // DONE — shared "open a saved Kokoro generation" logic for both the Library tab and Import's Projects row: plays persisted chunk audio, else regenerates live and backfills it. Deliberately not in Views/ or Services/ — it's a small @MainActor helper over two ViewModels, not either layer
     Settings/                      // DONE — app Settings, reached via the gear icon on Import (issue #9)
       Views/
         SettingsSheet.swift        // DONE — presented like SetupSheet; list of Voice Packs/Storage/About, each a real NavigationLink push
@@ -66,8 +79,11 @@ Sources/
         OpenSourceCard.swift       // DONE — promo card below About: cover image header, open-source pitch, "Contribute" link to the repo; frosted-glass style (Material, not real iOS 26 Liquid Glass — see file header)
     VoiceClone/                   // DONE — record/clone/manage the user's own PocketTTS voices (Voices tab + Import's "Create your own voice")
       Views/
-        VoicesTabView.swift       // DONE — list cloned voices, preview (live synth) / delete; "+" opens RecordVoiceView
-        RecordVoiceView.swift     // DONE — record (~10s, capped 20s) or import a file, preview, name, clone
+        VoicesTabView.swift       // DONE — list cloned voices, preview (live synth) / delete; "+" opens CreateVoiceSheet
+        CreateVoiceSheet.swift    // DONE — bottom-sheet chooser (Instant Clone vs Upload file); reports the choice up via onSelect, doesn't navigate itself
+        InstantCloneView.swift    // DONE — pushed page: record ~10s reading a suggested passage ("Try another" shuffles), then the shared preview/name/Clone step
+        UploadVoiceView.swift     // DONE — pushed page: pick an audio file, then the same shared step
+        VoiceSamplePreviewSection.swift // DONE — the shared preview/name/Clone UI both of the above reuse once a sample exists
       ViewModels/
         VoiceCloneViewModel.swift // DONE — recording/cloning state, persisted clonedVoices list, own PocketEngineService instance
       Services/
@@ -80,13 +96,19 @@ Sources/
         TextEntrySheet.swift      // DONE — still used by TTSHomeView's own flow (distinct from Import's WriteTextView)
         KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar; reused inside WriteTextView too
       ViewModels/
-        TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration; single instance shared by the Home and Import tabs
+        TTSViewModel.swift        // DONE — @MainActor ObservableObject, generation/playback/pack-download state + orchestration; single instance shared by the Home and Import tabs
+        VoicePreviewPlayer.swift  // DONE — bundled voice-preview clip playback (play/stop, progress, live level), split out of TTSViewModel so its ~15x/sec metering only re-renders the two views that show it
+        VoicePackStore.swift      // DONE — which packs are on disk (+ UserDefaults persistence), where they live, and the one download in flight; reached as `viewModel.packs` and observed directly by the views that show pack state
       Services/
         KokoroEngineService.swift   // DONE — takes the manager's own directory so ensureModels() checks the right on-disk path
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback + voice-cloning wrapper methods
+        VoicePackSizeService.swift  // DONE — per-pack "total download size" lookups against HuggingFace's tree API, for the progress display only
       Models/
         Engine.swift               // DONE
-        KokoroVariant.swift        // DONE — app-level wrapper over the SDK's KokoroAneVariant (english bundled; mandarin: 2 voices downloaded from FluidAudio's repo + 8 bundled hexgrad-official voices, ~242MB download); mirrors PocketLanguage's shape
+        Voice.swift                // DONE — one voice's whole identity (code, tagline, longDescription, hasAvatar, previewLine) + VoiceCode, the single prefix table both displayName and flag read from
+        VoiceCatalog.swift         // DONE — **the single source of truth for voices**: all 69 grouped by pack (kokoroEnglish/kokoroMandarin/kokoroJapanese/pocket) + an O(1) byCode index. Adding a language = one array here + a KokoroVariant case, nothing else
+        VoiceDisplayName.swift     // DONE — thin `forCode` shim over VoiceCode, for call sites holding only a raw code (Library's saved generations)
+        KokoroVariant.swift        // DONE — app-level wrapper over the SDK's KokoroAneVariant (english bundled; mandarin: 2 voices downloaded from FluidAudio's repo + 8 bundled hexgrad-official voices, ~242MB download; japanese: 5 official voices, ~85MB); mirrors PocketLanguage's shape
         ChunkState.swift           // DONE — .waiting/.generated/.playing/.failed, drives each row's segmented bar colors
         KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap
         KokoroGeneration.swift     // DONE — one independent track (Generate tap): its sub-chunks, audio, play state
@@ -94,6 +116,7 @@ Sources/
     Colors.swift                  // DONE — fixed dark palette for the Import/VoiceClone screens + shared placeholder-gradient helper
     BlobShape.swift                // DONE — organic sine-harmonic blob Shape (amplitude/phase animatable), drives VoicePreviewSheet's audio-reactive deformation
     OrbCoverArt.swift               // DONE — deterministic name/id -> orb-image lookup (7 orbs), fallback cover art for any voice without a real per-voice avatar, available or not, plus cloned voices
+    VoiceCoverArt.swift             // DONE — resolves a voice's own bundled avatar (from VoiceCatalog) or falls back to OrbCoverArt; one rule for every caller, no branching on availability
     CardText.swift                  // DONE — shared card title/description typography (CardTitle/CardDesc), used by VoiceTileView and Import's ReadAnythingCard
   Core/
     Networking/
@@ -110,7 +133,7 @@ VoicePreviews/
 assets/                             // source-of-truth exports (voice-covers/, kokoro-previews/, orbs/) copied into Sources/Resources or VoicePreviews/ above
 ```
 
-**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` — 4 tabs (Home/Library/Tools/Voices) plus a floating "+" action button that's deliberately not a 5th tab (no action wired yet). Home now hosts `ImportHomeView` (formerly the separate "Import" tab, now the default/first tab); the original `TTSHomeView` engine/voice debug screen has been retired from the tab bar (file left in place, just unreferenced — not deleted); Tools is a new `PlaceholderTabView` stand-in (Explore was dropped from the tab bar entirely); Voices and Library are real (`VoicesTabView`, `LibraryTabView`). `ImportHomeView`'s Trending voices (all real voices, play-preview via a swipeable card carousel), Read Anything (promo cards), and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `docs/adr/0008-voice-cloning-integration.md`). `Features/Settings/` (issue #9) is real: Voice Packs and Storage report actual on-disk pack/size data, About reports the real bundle version — no more placeholders. Kokoro-ANE now supports Mandarin as a second, downloadable variant (issue #26) alongside the bundled English pack — `KokoroVariant`, per-variant `kokoroServices`/`kokoroDownloadedVariants` on `TTSViewModel`, a language picker in `VoiceSettingsSheet`, its own `SetupSheet` row. 10 voices total (`TTSViewModel.mandarinVoices`): `zf_001`/`zm_009` fetched from FluidAudio's own hosted repo at download time, plus 8 officially-named/graded hexgrad/Kokoro-82M voices (`zf_xiaobei`/`zm_yunjian`/etc., all "D" grade per hexgrad's own `VOICES.md`) converted from their `.pt` tensors and bundled in the app (`BundledMandarinVoices/`, see `model-conversion/kokoro-mandarin-voices/`) since FluidAudio's repo doesn't host them — `KokoroEngineService` copies them into the downloaded pack's `voices/` folder on first `ensureModels()`. FluidAudio's own hosted 100-voice numbered set (`zf_002`...`zf_099`, `zm_010`...`zm_100`) was deliberately **not** used — its speaker provenance traces to an undocumented third-party project, not hexgrad. **Not yet verified end-to-end on a real device** (download → generate → persistence across relaunch). **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
+**Current status (update this line when it changes):** `TTS` feature is fully MVVM+Services; `TTSViewModel` and `VoiceCloneViewModel` are each one instance shared across tabs via constructor injection (no environment injection). The app root is `RootTabView` — 4 tabs (Home/Library/Tools/Voices) plus a floating "+" action button that's deliberately not a 5th tab (no action wired yet). Home now hosts `ImportHomeView` (formerly the separate "Import" tab, now the default/first tab); the original `TTSHomeView` engine/voice debug screen has been retired from the tab bar (file left in place, just unreferenced — not deleted); Tools is a new `PlaceholderTabView` stand-in (Explore was dropped from the tab bar entirely); Voices and Library are real (`VoicesTabView`, `LibraryTabView`). `ImportHomeView`'s Trending voices (all real voices, play-preview via a swipeable card carousel), Read Anything (promo cards), and What's trending (live Gutendex feed) are real; Paste a link/Upload a file/Scan text/Create your own book/Projects are still static/no-op per the current design pass. Voice cloning (`Features/VoiceClone/`) is newly built and **not yet verified on-device** (see `docs/adr/0008-voice-cloning-integration.md`). `Features/Settings/` (issue #9) is real: Voice Packs and Storage report actual on-disk pack/size data, About reports the real bundle version — no more placeholders. Kokoro-ANE now supports Mandarin as a second, downloadable variant (issue #26) alongside the bundled English pack — `KokoroVariant`, per-variant `kokoroServices` on `TTSViewModel` and `kokoroDownloadedVariants` on `VoicePackStore`, a language picker in `VoiceSettingsSheet`, its own `SetupSheet` row. 10 voices total (`TTSViewModel.mandarinVoices`): `zf_001`/`zm_009` fetched from FluidAudio's own hosted repo at download time, plus 8 officially-named/graded hexgrad/Kokoro-82M voices (`zf_xiaobei`/`zm_yunjian`/etc., all "D" grade per hexgrad's own `VOICES.md`) converted from their `.pt` tensors and bundled in the app (`BundledMandarinVoices/`, see `model-conversion/kokoro-mandarin-voices/`) since FluidAudio's repo doesn't host them — `KokoroEngineService` copies them into the downloaded pack's `voices/` folder on first `ensureModels()`. FluidAudio's own hosted 100-voice numbered set (`zf_002`...`zf_099`, `zm_010`...`zm_100`) was deliberately **not** used — its speaker provenance traces to an undocumented third-party project, not hexgrad. Japanese is a third variant (5 official voices, ~85MB + a ~114MB MeCab dictionary fetched lazily on first synthesis), requiring FluidAudio pinned past v0.15.7 by `revision:` — the text-frontend fix (FluidInference/FluidAudio#915) isn't in a tagged release yet. **None of the Mandarin/Japanese work is verified end-to-end on a real device** (download → generate → persistence across relaunch). Voice metadata was since consolidated into `VoiceCatalog` (see the architecture note above); `ImportHomeView`'s Trending row is now driven by `KokoroVariant.allCases`, so every variant's voices appear there automatically — Japanese included — though Settings' Voice Packs/Storage pages still only list English/Mandarin rows. **Not yet built**: `AppCoordinator` and the `Onboarding` feature (no onboarding gate exists — the app opens straight into `RootTabView`). Original 3-commit plan at `/Users/rehanchoudhury/.claude/plans/can-we-strcure-this-polished-book.md`; commits 1 (relocation) and 3 (ViewModel+Services extraction) are done, commit 2 (onboarding/AppCoordinator) is not — that plan predates the Import redesign and no longer reflects the current root view.
 
 ## Adding a new feature/screen
 

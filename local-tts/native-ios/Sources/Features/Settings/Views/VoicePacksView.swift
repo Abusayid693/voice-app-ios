@@ -8,16 +8,17 @@ import SwiftUI
 /// follow-ups in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
 struct VoicePacksView: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var packs: VoicePackStore
 
     private var kokoroSizeBytes: Int64 {
-        guard let directory = viewModel.kokoroModelDirectory else { return 0 }
+        guard let directory = packs.kokoroModelDirectory else { return 0 }
         return DiskStorage.directorySize(at: directory)
     }
 
     // nil (not 0) while the exact directory hasn't been resolved yet this
     // session — see kokoroMandarinModelDirectory's doc comment.
     private var kokoroMandarinSizeBytes: Int64? {
-        guard let directory = viewModel.kokoroMandarinModelDirectory else { return nil }
+        guard let directory = packs.kokoroMandarinModelDirectory else { return nil }
         return DiskStorage.directorySize(at: directory)
     }
 
@@ -31,18 +32,18 @@ struct VoicePacksView: View {
                 packRow(
                     title: "Kokoro-ANE",
                     subtitle: "\(TTSViewModel.kokoroVoices.count) English voices",
-                    isReady: viewModel.isKokoroPackReady(.english),
-                    sizeBytes: viewModel.isKokoroPackReady(.english) ? kokoroSizeBytes : nil)
+                    isReady: packs.isKokoroPackReady(.english),
+                    sizeBytes: packs.isKokoroPackReady(.english) ? kokoroSizeBytes : nil)
                 packRow(
                     title: "Kokoro-ANE (Mandarin)",
                     subtitle: "\(TTSViewModel.mandarinVoices.count) Mandarin voices",
-                    isReady: viewModel.isKokoroPackReady(.mandarin),
-                    sizeBytes: viewModel.isKokoroPackReady(.mandarin) ? kokoroMandarinSizeBytes : nil)
+                    isReady: packs.isKokoroPackReady(.mandarin),
+                    sizeBytes: packs.isKokoroPackReady(.mandarin) ? kokoroMandarinSizeBytes : nil)
                 packRow(
                     title: "Pocket TTS",
                     subtitle: "\(TTSViewModel.pocketVoices.count) English voices",
-                    isReady: viewModel.isPocketPackDownloaded,
-                    sizeBytes: viewModel.isPocketPackDownloaded ? pocketSizeBytes : nil)
+                    isReady: packs.isPocketPackDownloaded,
+                    sizeBytes: packs.isPocketPackDownloaded ? pocketSizeBytes : nil)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }
@@ -78,7 +79,8 @@ struct VoicePacksView: View {
 }
 
 #Preview {
+    let viewModel = TTSViewModel(dependencies: DependencyContainer())
     NavigationStack {
-        VoicePacksView(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+        VoicePacksView(viewModel: viewModel, packs: viewModel.packs)
     }
 }

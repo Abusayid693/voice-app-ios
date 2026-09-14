@@ -7,9 +7,10 @@ import SwiftUI
 struct StorageView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    @ObservedObject var packs: VoicePackStore
 
     private var kokoroBytes: Int64 {
-        guard viewModel.isKokoroPackReady(.english), let directory = viewModel.kokoroModelDirectory else {
+        guard packs.isKokoroPackReady(.english), let directory = packs.kokoroModelDirectory else {
             return 0
         }
         return DiskStorage.directorySize(at: directory)
@@ -20,13 +21,13 @@ struct StorageView: View {
     // comment. Total below still undercounts in that window, same known
     // imprecision as Pocket's own whole-cache-dir measurement.
     private var kokoroMandarinBytes: Int64 {
-        guard viewModel.isKokoroPackReady(.mandarin), let directory = viewModel.kokoroMandarinModelDirectory
+        guard packs.isKokoroPackReady(.mandarin), let directory = packs.kokoroMandarinModelDirectory
         else { return 0 }
         return DiskStorage.directorySize(at: directory)
     }
 
     private var pocketBytes: Int64 {
-        guard viewModel.isPocketPackDownloaded else { return 0 }
+        guard packs.isPocketPackDownloaded else { return 0 }
         return DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
     }
 
@@ -75,9 +76,11 @@ struct StorageView: View {
 
 #Preview {
     let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     NavigationStack {
         StorageView(
-            viewModel: TTSViewModel(dependencies: dependencies),
-            voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+            viewModel: viewModel,
+            voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+            packs: viewModel.packs)
     }
 }

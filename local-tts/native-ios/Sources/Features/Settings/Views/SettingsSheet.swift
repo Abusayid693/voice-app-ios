@@ -15,12 +15,14 @@ struct SettingsSheet: View {
             List {
                 Section {
                     NavigationLink {
-                        VoicePacksView(viewModel: viewModel)
+                        VoicePacksView(viewModel: viewModel, packs: viewModel.packs)
                     } label: {
                         row(title: "Voice Packs", icon: .packageIcon)
                     }
                     NavigationLink {
-                        StorageView(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+                        StorageView(
+                            viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                            packs: viewModel.packs)
                     } label: {
                         row(title: "Storage", icon: .hardDrive)
                     }

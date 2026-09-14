@@ -45,6 +45,13 @@ struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
+    // Passed down to the tiles and the preview sheet, which observe it
+    // themselves — this screen's own body doesn't read preview state, so
+    // observing it here would re-render the whole page on every meter tick.
+    let previewPlayer: VoicePreviewPlayer
+    // Observed: this screen's tile availability and the Setup pointer both
+    // read pack readiness.
+    @ObservedObject var packs: VoicePackStore
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -67,7 +74,7 @@ struct ImportHomeView: View {
     @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
-        viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
+        packs.isKokoroPackReady && packs.isPocketPackDownloaded
     }
 
     var body: some View {
@@ -138,12 +145,12 @@ struct ImportHomeView: View {
             }
         }
         .sheet(isPresented: $viewModel.isSetupPresented) {
-            SetupSheet(viewModel: viewModel)
+            SetupSheet(viewModel: viewModel, packs: packs)
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
             WriteTextView(
                 viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel)
+                libraryViewModel: libraryViewModel, packs: packs)
         }
         .sheet(isPresented: $isCreateVoicePresented) {
             CreateVoiceSheet { route in
@@ -152,7 +159,7 @@ struct ImportHomeView: View {
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, viewModel: viewModel)
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: previewPlayer)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
@@ -209,19 +216,20 @@ struct ImportHomeView: View {
     // available"); isAvailable just controls cover art vs. a gradient
     // placeholder below.
     private var voiceTiles: [VoiceTile] {
-        TTSViewModel.kokoroVoices.map {
-            VoiceTile(
-                id: "kokoro-\($0)", name: $0, engine: .kokoroAne, engineLabel: "Kokoro-ANE",
-                isAvailable: viewModel.isKokoroPackReady)
-        } + TTSViewModel.mandarinVoices.map {
-            VoiceTile(
-                id: "kokoro-zh-\($0)", name: $0, engine: .kokoroAne, engineLabel: "Kokoro-ANE (Mandarin)",
-                isAvailable: viewModel.isKokoroPackReady(.mandarin))
-        } + TTSViewModel.pocketVoices.map {
-            VoiceTile(
-                id: "pocket-\($0)", name: $0, engine: .pocketTts, engineLabel: "Pocket TTS",
-                isAvailable: viewModel.isPocketPackDownloaded)
+        let kokoro = KokoroVariant.allCases.flatMap { variant in
+            VoiceCatalog.voices(for: variant).map { voice in
+                VoiceTile(
+                    id: "kokoro-\(variant.rawValue)-\(voice.code)", voice: voice, engine: .kokoroAne,
+                    engineLabel: variant == .english ? "Kokoro-ANE" : "Kokoro-ANE (\(variant.displayName))",
+                    isAvailable: packs.isKokoroPackReady(variant))
+            }
         }
+        let pocket = VoiceCatalog.pocket.map { voice in
+            VoiceTile(
+                id: "pocket-\(voice.code)", voice: voice, engine: .pocketTts,
+                engineLabel: "Pocket TTS", isAvailable: packs.isPocketPackDownloaded)
+        }
+        return kokoro + pocket
     }
 
     private var trendingVoicesSection: some View {
@@ -236,7 +244,7 @@ struct ImportHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile, viewModel: viewModel) {
+                        VoiceTileView(tile: tile, previewPlayer: previewPlayer) {
                             selectedVoiceTile = tile
                         }
                     }
@@ -522,30 +530,26 @@ private struct ImportActionCard: View {
     }
 }
 
+/// A voice plus the per-screen context the catalog doesn't own: which
+/// engine will speak it, and whether its pack is downloaded yet.
 struct VoiceTile: Identifiable {
     let id: String
-    // Raw voice code passed to the engine (e.g. "af_alloy", "bill_boerst") —
-    // kept separate from the display name so cover-art selection stays keyed
-    // off the same stable identifier regardless of how it's shown.
-    let name: String
+    let voice: Voice
     let engine: Engine
     let engineLabel: String
     let isAvailable: Bool
 
-    // "af_alloy" -> "Alloy", "bill_boerst" -> "Bill Boerst".
-    var displayName: String { VoiceDisplayName.forCode(name) }
+    /// Raw code passed to the engine (e.g. "af_alloy", "bill_boerst").
+    var name: String { voice.code }
+    var displayName: String { voice.displayName }
+    var countryFlag: String { voice.flag }
 
-    // A short persona tagline ("Warm and friendly") in place of the raw
-    // engine label, falling back to that label for voices without one.
-    var descriptionText: String { VoiceDescription.tagline(for: name, fallback: engineLabel) }
-
-    // A fuller, 1-2 sentence description of the voice's character — used on
-    // VoicePreviewSheet's card in place of the raw engine label.
-    var longDescription: String { VoiceDescription.longDescription(for: name) }
-
-    // Emoji flag for the voice's accent/locale, shown beside its name on
-    // VoicePreviewSheet's card.
-    var countryFlag: String { VoiceLocale.flag(for: name) }
+    // Falls back to the engine label for voices with no persona written
+    // yet (all of Pocket TTS and Japanese today).
+    var descriptionText: String { voice.tagline ?? engineLabel }
+    var longDescription: String {
+        voice.longDescription ?? "A distinctive voice with its own character."
+    }
 }
 
 /// One row per voice: cover image, name, a short persona tagline, and a
@@ -554,10 +558,10 @@ struct VoiceTile: Identifiable {
 /// card is the tap target — tapping opens VoicePreviewSheet.
 private struct VoiceTileView: View {
     let tile: VoiceTile
-    @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var previewPlayer: VoicePreviewPlayer
     let onTap: () -> Void
 
-    private var isPreviewing: Bool { viewModel.previewingVoiceID == tile.name }
+    private var isPreviewing: Bool { previewPlayer.playingVoiceID == tile.name }
 
     var body: some View {
         Button(action: onTap) {
@@ -594,210 +598,12 @@ private struct VoiceTileView: View {
     }
 }
 
-/// Voice avatars: a real, per-voice AI-generated cover image for voices
-/// that have one, or an orb (`OrbCoverArt`, `DesignSystem/OrbCoverArt.swift`)
-/// for every other voice — available or not, Kokoro or Pocket TTS. One
-/// rule regardless of engine/download state, so every caller here can just
-/// ask for "the" cover art without branching on availability itself.
-enum VoiceCoverArt {
-    // Real, per-voice AI-generated avatars (issue #18) — keyed by the exact
-    // voice code. Sparse on purpose: only voices with a generated avatar
-    // appear here; every other voice falls back to OrbCoverArt until its
-    // own avatar exists. Add an entry here as each new avatar lands.
-    private static let realAvatarAssetNames: [String: String] = [
-        "af_heart": "VoiceAvatar_af_heart",
-        "af_alloy": "VoiceAvatar_af_alloy",
-        "af_nova": "VoiceAvatar_af_nova",
-        "af_aoede": "VoiceAvatar_af_aoede",
-        "af_bella": "VoiceAvatar_af_bella",
-        "af_jessica": "VoiceAvatar_af_jessica",
-        "af_kore": "VoiceAvatar_af_kore",
-        "af_nicole": "VoiceAvatar_af_nicole",
-        "af_river": "VoiceAvatar_af_river",
-        "af_sarah": "VoiceAvatar_af_sarah",
-        "af_sky": "VoiceAvatar_af_sky",
-        "am_adam": "VoiceAvatar_am_adam",
-        "am_liam": "VoiceAvatar_am_liam",
-        "am_fenrir": "VoiceAvatar_am_fenrir",
-        "bf_alice": "VoiceAvatar_bf_alice",
-        "bm_daniel": "VoiceAvatar_bm_daniel",
-        // Mandarin — hexgrad/Kokoro-82M's 8 officially-named voices only
-        // (zf_001/zm_009 have no generated avatar yet, fall back to an orb
-        // like any other voice without one — see TTSViewModel.mandarinVoices).
-        "zf_xiaobei": "VoiceAvatar_zf_xiaobei",
-        "zf_xiaoni": "VoiceAvatar_zf_xiaoni",
-        "zf_xiaoxiao": "VoiceAvatar_zf_xiaoxiao",
-        "zf_xiaoyi": "VoiceAvatar_zf_xiaoyi",
-        "zm_yunjian": "VoiceAvatar_zm_yunjian",
-        "zm_yunxi": "VoiceAvatar_zm_yunxi",
-        "zm_yunxia": "VoiceAvatar_zm_yunxia",
-        "zm_yunyang": "VoiceAvatar_zm_yunyang",
-    ]
-
-    static func assetName(for voiceName: String) -> String {
-        realAvatarAssetNames[voiceName] ?? OrbCoverArt.assetName(for: voiceName)
-    }
-}
-
-/// Short persona taglines shown under a voice's name in Trending voices,
-/// instead of the raw engine label — same personas used to brief the
-/// avatar images (issue #18), condensed to a couple of words. Sparse like
-/// `VoiceCoverArt.realAvatarAssetNames`: falls back to the engine label for
-/// any voice without one yet (currently all of Pocket TTS).
-enum VoiceDescription {
-    private static let taglines: [String: String] = [
-        "af_heart": "Warm and friendly",
-        "af_alloy": "Poised and composed",
-        "af_aoede": "Dreamy and artistic",
-        "af_bella": "Warm and confident",
-        "af_jessica": "Friendly and professional",
-        "af_kore": "Bright and youthful",
-        "af_nicole": "Sophisticated and polished",
-        "af_nova": "Vibrant and energetic",
-        "af_river": "Free-spirited and relaxed",
-        "af_sarah": "Sweet and genuine",
-        "af_sky": "Bright and airy",
-        "am_adam": "Warm and easygoing",
-        "am_echo": "Sharp and composed",
-        "am_eric": "Friendly and warm",
-        "am_fenrir": "Rugged, deep voice",
-        "am_liam": "Youthful and relaxed",
-        "am_michael": "Reliable and warm",
-        "am_onyx": "Sleek and cool",
-        "am_puck": "Playful and mischievous",
-        "am_santa": "Warm and jolly",
-        "bf_alice": "Elegant and refined",
-        "bf_emma": "Poised and elegant",
-        "bf_isabella": "Graceful and refined",
-        "bf_lily": "Gentle and delicate",
-        "bm_daniel": "Distinguished and calm",
-        "bm_fable": "Warm storyteller",
-        "bm_george": "Distinguished and composed",
-        "bm_lewis": "Friendly and approachable",
-        // Mandarin — zf_001/zm_009 have no documented persona (FluidAudio's
-        // hosted defaults), so a plain, honest tagline rather than a guess.
-        // The 8 named voices below are hexgrad/Kokoro-82M's own official
-        // Mandarin personas (VOICES.md) / Azure's original named personas
-        // they're modeled on, not a guess like Pocket's below.
-        "zf_001": "Clear and steady",
-        "zm_009": "Clear and steady",
-        "zf_xiaobei": "Warm and homely",
-        "zf_xiaoni": "Clear and professional",
-        "zf_xiaoxiao": "Warm and lively",
-        "zf_xiaoyi": "Bright and expressive",
-        "zm_yunjian": "Passionate and bold",
-        "zm_yunxi": "Sunny and upbeat",
-        "zm_yunxia": "Playful and youthful",
-        "zm_yunyang": "Professional and reliable",
-    ]
-
-    static func tagline(for voiceName: String, fallback: String) -> String {
-        taglines[voiceName] ?? fallback
-    }
-
-    // Fuller descriptions for VoicePreviewSheet's card — same
-    // name-association-guess basis as the taglines above (Kokoro's
-    // af_/am_/bf_/bm_ prefix gives real gender/accent; the character
-    // adjectives are still a guess, not verified against each clip). Pocket
-    // TTS voices are named after LibriVox-style audiobook narrators/
-    // characters with no persona data at all, so those are freshly-written,
-    // generic narration-toned descriptions rather than anything sourced.
-    private static let longDescriptions: [String: String] = [
-        "af_alloy": "Poised and composed, with a polished, professional edge — clear enough for crisp narration or presentations.",
-        "af_aoede": "Dreamy and artistic, with a soft, unhurried delivery well suited to reflective or lyrical text.",
-        "af_bella": "Warm and confident, with a rich, assured tone that carries a room.",
-        "af_heart": "Warm and friendly, with an easy, conversational tone — great for everyday narration and casual reads.",
-        "af_jessica": "Friendly and professional, with a clear, approachable delivery suited to explainers and guides.",
-        "af_kore": "Bright and youthful, with an upbeat, energetic lift to every line.",
-        "af_nicole": "Sophisticated and polished, with a smooth, refined cadence.",
-        "af_nova": "Vibrant and energetic, with a lively pace that suits upbeat, fast-moving content.",
-        "af_river": "Free-spirited and relaxed, with an unhurried, laid-back delivery.",
-        "af_sarah": "Sweet and genuine, with a warm, down-to-earth tone that feels personal.",
-        "af_sky": "Bright and airy, with a light, cheerful lilt.",
-        "am_adam": "Warm and easygoing, with a relaxed, approachable delivery.",
-        "am_echo": "Sharp and composed, with a crisp, confident edge.",
-        "am_eric": "Friendly and warm, with a steady, welcoming tone.",
-        "am_fenrir": "Rugged and deep, with a strong, grounded presence.",
-        "am_liam": "Youthful and relaxed, with a casual, easy pace.",
-        "am_michael": "Reliable and warm, with a dependable, trustworthy tone.",
-        "am_onyx": "Sleek and cool, with a smooth, understated confidence.",
-        "am_puck": "Playful and mischievous, with a light, spirited energy.",
-        "am_santa": "Warm and jolly, with a hearty, good-natured cheer.",
-        "bf_alice": "Elegant and refined, with a crisp, well-mannered British delivery.",
-        "bf_emma": "Poised and elegant, with a graceful, composed tone.",
-        "bf_isabella": "Graceful and refined, with a smooth, cultivated cadence.",
-        "bf_lily": "Gentle and delicate, with a soft, soothing British lilt.",
-        "bm_daniel": "Distinguished and calm, with an even, authoritative delivery.",
-        "bm_fable": "A warm storyteller's voice, rich and expressive — built for narration.",
-        "bm_george": "Distinguished and composed, with a steady, refined British tone.",
-        "bm_lewis": "Friendly and approachable, with a warm, easy-going British manner.",
-        "alba": "A clear, gentle narrator voice with a calm, steady pace.",
-        "anna": "A warm, expressive voice well suited to storytelling and long-form reads.",
-        "azelma": "A soft, measured voice with a quiet, thoughtful delivery.",
-        "bill_boerst": "A steady, seasoned narrator voice with a relaxed, confident cadence.",
-        "caro_davy": "A bright, articulate voice with a brisk, engaging pace.",
-        "charles": "A calm, deliberate voice suited to serious or reflective narration.",
-        "cosette": "A soft, youthful voice with a gentle, sincere tone.",
-        "eponine": "An expressive, emotive voice with a slightly melancholic warmth.",
-        "estelle": "A refined, articulate voice with a smooth, unhurried delivery.",
-        "eve": "A clear, natural voice with an easy, conversational rhythm.",
-        "fantine": "A tender, soft-spoken voice with a quiet emotional depth.",
-        "george": "A steady, dependable voice with a classic narrator's tone.",
-        "giovanni": "A warm, expressive voice with a touch of theatrical flair.",
-        "jane": "A composed, articulate voice with a gentle, measured pace.",
-        "javert": "A firm, resolute voice with a serious, commanding edge.",
-        "jean": "A grounded, weathered voice with quiet, steady conviction.",
-        "juergen": "A deep, deliberate voice with a calm, authoritative presence.",
-        "lola": "A lively, expressive voice with a playful, energetic lift.",
-        "marius": "A youthful, earnest voice with an open, sincere tone.",
-        "mary": "A warm, gentle voice with a comforting, familiar quality.",
-        "michael": "A clear, confident voice suited to straightforward narration.",
-        "paul": "A steady, even voice with an unassuming, practical tone.",
-        "peter_yearsley": "A rich, classic narrator's voice with a measured, deliberate pace.",
-        "rafael": "A warm, textured voice with an expressive, animated delivery.",
-        "stuart_bell": "A crisp, articulate voice with a brisk, professional pace.",
-        "vera": "A soft, composed voice with a calm, reassuring tone.",
-        "zf_001": "A clear, steady Mandarin voice — the standard default for everyday narration.",
-        "zm_009": "A clear, steady Mandarin voice with an even, dependable delivery.",
-        "zf_xiaobei": "Warm and natural, carrying a touch of Northeastern Chinese character — easy, conversational delivery.",
-        "zf_xiaoni": "Clear and composed, with a Shaanxi-inflected warmth well suited to informational content.",
-        "zf_xiaoxiao": "Warm and lively — a flagship Mandarin persona, expressive across a wide emotional range.",
-        "zf_xiaoyi": "Bright and expressive, with a youthful energy that shifts easily between playful and heartfelt.",
-        "zm_yunjian": "Passionate and dynamic, built for sports commentary and dramatic narration.",
-        "zm_yunxi": "Sunny and upbeat, with a lively conversational warmth.",
-        "zm_yunxia": "Playful and youthful — a bright, cheerful young voice.",
-        "zm_yunyang": "Professional and reliable, with the composed authority of a news anchor.",
-    ]
-
-    static func longDescription(for voiceName: String) -> String {
-        longDescriptions[voiceName] ?? "A distinctive voice with its own character."
-    }
-}
-
-/// Emoji flag for a voice's accent/locale, derived from Kokoro's own
-/// af_/am_ (American) / bf_/bm_ (British) naming convention. Pocket TTS
-/// voices carry no locale info in their name at all — those default to US
-/// English until real per-voice locale data exists; flag this assumption if
-/// it turns out wrong for a specific voice.
-enum VoiceLocale {
-    static func flag(for voiceName: String) -> String {
-        if voiceName.hasPrefix("bf_") || voiceName.hasPrefix("bm_") {
-            return "🇬🇧"
-        }
-        if voiceName.hasPrefix("zf_") || voiceName.hasPrefix("zm_") {
-            return "🇨🇳"
-        }
-        if voiceName.hasPrefix("jf_") || voiceName.hasPrefix("jm_") {
-            return "🇯🇵"
-        }
-        return "🇺🇸"
-    }
-}
-
 #Preview {
     let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     ImportHomeView(
-        viewModel: TTSViewModel(dependencies: dependencies),
+        viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel())
+        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
+        packs: viewModel.packs)
 }
