@@ -84,7 +84,8 @@ Sources/
         TextEntrySheet.swift      // DONE — still used by TTSHomeView's own flow (distinct from Import's WriteTextView)
         KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar; reused inside WriteTextView too
       ViewModels/
-        TTSViewModel.swift        // DONE — @MainActor ObservableObject, all @Published state + orchestration; single instance shared by the Home and Import tabs
+        TTSViewModel.swift        // DONE — @MainActor ObservableObject, generation/playback/pack-download state + orchestration; single instance shared by the Home and Import tabs
+        VoicePreviewPlayer.swift  // DONE — bundled voice-preview clip playback (play/stop, progress, live level), split out of TTSViewModel so its ~15x/sec metering only re-renders the two views that show it
       Services/
         KokoroEngineService.swift   // DONE — takes the manager's own directory so ensureModels() checks the right on-disk path
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback + voice-cloning wrapper methods

@@ -19,7 +19,9 @@ import SwiftUI
 struct VoicePreviewSheet: View {
     let tiles: [VoiceTile]
     let initialTileID: String
-    @ObservedObject var viewModel: TTSViewModel
+    // Not observed here — each card observes it, so a meter tick doesn't
+    // re-evaluate the whole carousel.
+    let previewPlayer: VoicePreviewPlayer
 
     @State private var currentTileID: String?
 
@@ -29,10 +31,10 @@ struct VoicePreviewSheet: View {
     private let cardPeek: CGFloat = 28
     private let cardSpacing: CGFloat = 12
 
-    init(tiles: [VoiceTile], initialTileID: String, viewModel: TTSViewModel) {
+    init(tiles: [VoiceTile], initialTileID: String, previewPlayer: VoicePreviewPlayer) {
         self.tiles = tiles
         self.initialTileID = initialTileID
-        self.viewModel = viewModel
+        self.previewPlayer = previewPlayer
         _currentTileID = State(initialValue: initialTileID)
     }
 
@@ -52,7 +54,7 @@ struct VoicePreviewSheet: View {
                     // needlessly heavy.
                     LazyHStack(spacing: cardSpacing) {
                         ForEach(tiles) { tile in
-                            VoicePreviewCard(tile: tile, viewModel: viewModel)
+                            VoicePreviewCard(tile: tile, previewPlayer: previewPlayer)
                                 .frame(width: cardWidth)
                                 .id(tile.id)
                         }
@@ -85,10 +87,10 @@ struct VoicePreviewSheet: View {
         // audio would otherwise keep going under a different voice's card.
         // Doesn't auto-start the new one; matches today's tap-to-play.
         .onChange(of: currentTileID) { _, _ in
-            viewModel.stopPreview()
+            previewPlayer.stop()
         }
         .onDisappear {
-            viewModel.stopPreview()
+            previewPlayer.stop()
         }
     }
 }
@@ -99,16 +101,16 @@ struct VoicePreviewSheet: View {
 /// sheet rather than content inside a shared one.
 private struct VoicePreviewCard: View {
     let tile: VoiceTile
-    @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var previewPlayer: VoicePreviewPlayer
 
-    private var isPlaying: Bool { viewModel.previewingVoiceID == tile.name }
+    private var isPlaying: Bool { previewPlayer.playingVoiceID == tile.name }
     // Preview playback is pure bundled-file playback, independent of
     // whether the voice's pack has been downloaded — gating the button on
     // `tile.isAvailable` (pack-download state) made every voice whose pack
     // isn't downloaded yet unplayable even when it has a real clip (this is
     // exactly why Mandarin previews silently did nothing before any
     // Mandarin pack was downloaded). Gate on clip existence instead.
-    private var hasPreview: Bool { viewModel.hasPreviewClip(voiceName: tile.name, engine: tile.engine) }
+    private var hasPreview: Bool { previewPlayer.hasClip(voiceName: tile.name, engine: tile.engine) }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -133,15 +135,15 @@ private struct VoicePreviewCard: View {
             }
 
             // The "track" — playback progress for the current clip. Gated on
-            // isPlaying: previewProgress is one shared value on the view
-            // model, so a neighbouring card would otherwise show the
-            // *playing* voice's progress on a card that isn't playing.
-            ProgressView(value: isPlaying ? viewModel.previewProgress : 0)
+            // isPlaying: progress is one shared value on the player, so a
+            // neighbouring card would otherwise show the *playing* voice's
+            // progress on a card that isn't playing.
+            ProgressView(value: isPlaying ? previewPlayer.progress : 0)
                 .tint(Color.appPrimaryText)
                 .padding(.horizontal, 40)
 
             Button {
-                viewModel.togglePreview(voiceName: tile.name, engine: tile.engine)
+                previewPlayer.toggle(voiceName: tile.name, engine: tile.engine)
             } label: {
                 LucideIcon(isPlaying ? .circlePause : .circlePlay, size: 64, color: Color.appPrimaryText)
             }
@@ -203,10 +205,10 @@ private struct VoicePreviewCard: View {
     private func blobClippedCoverArt(phase: CGFloat) -> some View {
         coverArt
             .frame(width: 180, height: 180)
-            .clipShape(BlobShape(amplitude: isPlaying ? viewModel.previewLevel : 0, phase: phase))
-            .scaleEffect(isPlaying ? 1 + viewModel.previewLevel * 0.12 : 1)
-            .opacity(isPlaying ? 0.85 + viewModel.previewLevel * 0.15 : 1)
-            .animation(.easeInOut(duration: 0.12), value: viewModel.previewLevel)
+            .clipShape(BlobShape(amplitude: isPlaying ? previewPlayer.level : 0, phase: phase))
+            .scaleEffect(isPlaying ? 1 + previewPlayer.level * 0.12 : 1)
+            .opacity(isPlaying ? 0.85 + previewPlayer.level * 0.15 : 1)
+            .animation(.easeInOut(duration: 0.12), value: previewPlayer.level)
     }
 
     // Radians/sec — slow, organic drift rather than a visible spin.
@@ -224,6 +226,5 @@ private struct VoicePreviewCard: View {
             engineLabel: "Kokoro-ANE", isAvailable: true)
     }
     VoicePreviewSheet(
-        tiles: tiles, initialTileID: tiles[0].id,
-        viewModel: TTSViewModel(dependencies: DependencyContainer()))
+        tiles: tiles, initialTileID: tiles[0].id, previewPlayer: VoicePreviewPlayer())
 }

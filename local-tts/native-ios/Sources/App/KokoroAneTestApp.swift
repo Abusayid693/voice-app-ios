@@ -6,6 +6,7 @@ struct KokoroAneTestApp: App {
     private let viewModel: TTSViewModel
     private let voiceCloneViewModel: VoiceCloneViewModel
     private let libraryViewModel = LibraryViewModel()
+    private let previewPlayer = VoicePreviewPlayer()
 
     init() {
         viewModel = TTSViewModel(dependencies: dependencies)
@@ -16,7 +17,7 @@ struct KokoroAneTestApp: App {
         WindowGroup {
             RootTabView(
                 viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel)
+                libraryViewModel: libraryViewModel, previewPlayer: previewPlayer)
         }
     }
 }

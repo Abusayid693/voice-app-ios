@@ -45,6 +45,10 @@ struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
+    // Passed down to the tiles and the preview sheet, which observe it
+    // themselves — this screen's own body doesn't read preview state, so
+    // observing it here would re-render the whole page on every meter tick.
+    let previewPlayer: VoicePreviewPlayer
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -152,7 +156,7 @@ struct ImportHomeView: View {
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, viewModel: viewModel)
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: previewPlayer)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
@@ -237,7 +241,7 @@ struct ImportHomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile, viewModel: viewModel) {
+                        VoiceTileView(tile: tile, previewPlayer: previewPlayer) {
                             selectedVoiceTile = tile
                         }
                     }
@@ -551,10 +555,10 @@ struct VoiceTile: Identifiable {
 /// card is the tap target — tapping opens VoicePreviewSheet.
 private struct VoiceTileView: View {
     let tile: VoiceTile
-    @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var previewPlayer: VoicePreviewPlayer
     let onTap: () -> Void
 
-    private var isPreviewing: Bool { viewModel.previewingVoiceID == tile.name }
+    private var isPreviewing: Bool { previewPlayer.playingVoiceID == tile.name }
 
     var body: some View {
         Button(action: onTap) {
@@ -596,5 +600,5 @@ private struct VoiceTileView: View {
     ImportHomeView(
         viewModel: TTSViewModel(dependencies: dependencies),
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel())
+        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer())
 }

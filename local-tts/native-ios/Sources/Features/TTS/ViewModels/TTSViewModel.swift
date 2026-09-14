@@ -127,23 +127,6 @@ final class TTSViewModel: ObservableObject {
     private static let legacyPocketPackDownloadedBoolKey = "pocketPackDownloaded"
     private static let kokoroDownloadedVariantsDefaultsKey = "kokoroDownloadedVariants"
 
-    // MARK: - Import screen: voice preview playback (bundled clips, no synthesis)
-
-    // Which voice (if any) is currently playing its preview clip — drives
-    // the preview sheet's play/pause icon.
-    @Published private(set) var previewingVoiceID: String?
-    // 0...1 playback position, and a 0...1 normalized live audio level
-    // (from AVAudioPlayer metering) — the preview sheet's progress track
-    // and the cover art's audio-reactive pulse bind to these directly.
-    @Published private(set) var previewProgress: Double = 0
-    @Published private(set) var previewLevel: Double = 0
-    // Deliberately separate from kokoroPlayer/pocketService's engine — a
-    // preview never touches either engine's state, so it can't collide
-    // with an in-progress "Write text" generation.
-    private var previewPlayer: AVAudioPlayer?
-    private var previewPlayerDelegate: PreviewPlaybackDelegate?
-    private var previewMeterTask: Task<Void, Never>?
-
     // MARK: - Kokoro: one independent track per "Generate" tap
 
     // Append-only, like a playlist — each Generate tap adds a new track
@@ -362,103 +345,6 @@ final class TTSViewModel: ObservableObject {
         } catch {
             status = "Pocket TTS pack (\(language.displayName)) download failed: \(error.localizedDescription)"
         }
-    }
-
-    // MARK: - Import screen: voice preview playback
-
-    /// Resolves a voice's bundled preview clip, if one exists — shared by
-    /// `togglePreview` (actual playback) and `hasPreviewClip` (UI-only
-    /// availability check, e.g. to dim a play button before the user taps
-    /// it rather than after).
-    private static func previewClipURL(voiceName: String, engine: Engine) -> URL? {
-        let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
-        return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)
-    }
-
-    /// True if this voice has a bundled preview clip — independent of
-    /// whether its pack has been *downloaded* (`isKokoroPackReady`/
-    /// `isPocketPackDownloaded`), since preview playback is pure bundled
-    /// file playback and never touches the engine at all. Voices without a
-    /// pack downloaded yet can still preview fine; voices without a
-    /// recorded clip yet (currently: all of Pocket TTS — see
-    /// docs/adr/0009-bundled-voice-preview-clips.md) can't preview even if
-    /// their pack is downloaded.
-    func hasPreviewClip(voiceName: String, engine: Engine) -> Bool {
-        Self.previewClipURL(voiceName: voiceName, engine: engine) != nil
-    }
-
-    /// Plays (or stops, if already playing) a voice's bundled preview clip
-    /// — pure file playback, no synthesis, so this never touches
-    /// kokoroService/pocketService and can't collide with an in-progress
-    /// "Write text" generation. No-ops if the clip isn't bundled yet (e.g.
-    /// Pocket voices before their pass — see
-    /// docs/adr/0009-bundled-voice-preview-clips.md).
-    func togglePreview(voiceName: String, engine: Engine) {
-        let wasPlayingThisVoice = previewingVoiceID == voiceName
-        stopPreview()
-        guard !wasPlayingThisVoice else { return }
-
-        guard let url = Self.previewClipURL(voiceName: voiceName, engine: engine) else { return }
-
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.isMeteringEnabled = true
-            let delegate = PreviewPlaybackDelegate { [weak self] in
-                Task { @MainActor in
-                    guard let self, self.previewingVoiceID == voiceName else { return }
-                    self.stopPreview()
-                }
-            }
-            player.delegate = delegate
-            previewPlayerDelegate = delegate
-            previewPlayer = player
-            previewingVoiceID = voiceName
-            player.play()
-            startPreviewMetering(for: player)
-        } catch {
-            previewingVoiceID = nil
-        }
-    }
-
-    /// Stops whatever preview is playing (if any) and resets the sheet's
-    /// progress/level state — called both when the user explicitly stops
-    /// and when a clip finishes on its own.
-    func stopPreview() {
-        previewMeterTask?.cancel()
-        previewMeterTask = nil
-        previewPlayer?.stop()
-        previewPlayer = nil
-        previewPlayerDelegate = nil
-        previewingVoiceID = nil
-        previewProgress = 0
-        previewLevel = 0
-    }
-
-    /// Polls AVAudioPlayer's metering ~15 times a second while the preview
-    /// plays, translating raw dB into a 0...1 level the cover art's
-    /// scale/opacity pulse binds to, plus 0...1 playback progress for the
-    /// track. Exits on its own once the player stops (finished or replaced).
-    private func startPreviewMetering(for player: AVAudioPlayer) {
-        previewMeterTask = Task { [weak self] in
-            while let self, !Task.isCancelled, self.previewPlayer === player, player.isPlaying {
-                player.updateMeters()
-                self.previewLevel = Self.normalizedLevel(fromDecibels: player.averagePower(forChannel: 0))
-                self.previewProgress = player.duration > 0 ? player.currentTime / player.duration : 0
-                try? await Task.sleep(nanoseconds: 66_000_000)
-            }
-        }
-    }
-
-    /// AVAudioPlayer's metering reports roughly -160 (silence) to 0 dB
-    /// (peak) — clamping to a much narrower, perceptually-useful floor
-    /// (typical speech rarely gets near 0 dB) keeps the pulse visible
-    /// instead of pinned near zero.
-    private static func normalizedLevel(fromDecibels power: Float) -> Double {
-        let floorDb: Float = -50
-        let clamped = max(power, floorDb)
-        return Double((clamped - floorDb) / -floorDb)
     }
 
     private func resetRunState() {
@@ -952,17 +838,3 @@ private final class KokoroChunkPlaybackDelegate: NSObject, AVAudioPlayerDelegate
     }
 }
 
-/// Same bridge as `KokoroChunkPlaybackDelegate`, for the dedicated voice
-/// preview player — kept separate so the two AVAudioPlayer instances never
-/// share a delegate.
-private final class PreviewPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
-    private let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
-    }
-}

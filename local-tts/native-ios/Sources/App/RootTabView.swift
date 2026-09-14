@@ -41,6 +41,10 @@ struct RootTabView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
+    // Not observed here — only the two Import views that show preview state
+    // observe it, so its ~15x/second metering updates don't re-render the
+    // whole tab shell.
+    let previewPlayer: VoicePreviewPlayer
     @State private var selectedTab: RootTab = .home
 
     var body: some View {
@@ -48,7 +52,7 @@ struct RootTabView: View {
             TabView(selection: $selectedTab) {
                 ImportHomeView(
                     viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                    libraryViewModel: libraryViewModel
+                    libraryViewModel: libraryViewModel, previewPlayer: previewPlayer
                 )
                 .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
                 .tag(RootTab.home)
@@ -89,5 +93,5 @@ struct RootTabView: View {
     RootTabView(
         viewModel: TTSViewModel(dependencies: dependencies),
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel())
+        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer())
 }
