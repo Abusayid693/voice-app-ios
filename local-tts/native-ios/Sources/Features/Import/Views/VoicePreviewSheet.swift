@@ -218,14 +218,11 @@ private struct VoicePreviewCard: View {
 }
 
 #Preview {
-    let tiles = [
+    let tiles = VoiceCatalog.kokoroEnglish.prefix(2).map { voice in
         VoiceTile(
-            id: "kokoro-af_heart", name: "af_heart", engine: .kokoroAne, engineLabel: "Kokoro-ANE",
-            isAvailable: true),
-        VoiceTile(
-            id: "kokoro-af_alloy", name: "af_alloy", engine: .kokoroAne, engineLabel: "Kokoro-ANE",
-            isAvailable: true),
-    ]
+            id: "kokoro-english-\(voice.code)", voice: voice, engine: .kokoroAne,
+            engineLabel: "Kokoro-ANE", isAvailable: true)
+    }
     VoicePreviewSheet(
         tiles: tiles, initialTileID: tiles[0].id,
         viewModel: TTSViewModel(dependencies: DependencyContainer()))

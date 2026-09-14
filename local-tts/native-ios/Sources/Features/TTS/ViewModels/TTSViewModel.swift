@@ -4,68 +4,18 @@ import FluidAudio
 
 @MainActor
 final class TTSViewModel: ObservableObject {
-    // All 28 standard Kokoro-82M English voices. FluidAudio's own hosted
-    // ANE repo only publishes af_heart (a real model-conversion
-    // constraint, not just a missing download — see
-    // docs/adr/0002-custom-kokoro-model-bundle.md), but
-    // a custom from-scratch conversion (laishere/kokoro-coreml, bundled
-    // via DependencyContainer's CustomKokoroModel) confirmed the rest
-    // genuinely work once paired with FluidAudio's real
-    // KokoroNoise_v2/KokoroTail_v2 stages — our own stock conversion of
-    // those two specifically had audible pitch/loudness bugs.
-    nonisolated static let kokoroVoices = [
-        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore",
-        "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
-        "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam", "am_michael",
-        "am_onyx", "am_puck", "am_santa",
-        "bf_alice", "bf_emma", "bf_isabella", "bf_lily",
-        "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
-    ]
-
-    // 2 voices from FluidAudio's own hosted numbered set (zf_001 — the
-    // documented default — and zm_009, the lowest-numbered male voice
-    // available there; zm_001 doesn't exist, confirmed via a direct HTTP
-    // check) plus the 8 voices hexgrad/Kokoro-82M itself names and grades
-    // in VOICES.md. The other 98 numbered voices FluidAudio hosts
-    // (zf_002...zf_099, zm_010...zm_100) are deliberately excluded — their
-    // provenance traces to an undocumented third-party project
-    // (ardorleo/kokoro-tts-zh), not to hexgrad, so there's no way to
-    // confirm they're genuinely distinct speakers. The 8 named voices
-    // below are bundled in the app (BundledMandarinVoices/, converted from
-    // hexgrad's own .pt tensors — see model-conversion/kokoro-mandarin-voices/)
-    // since FluidAudio's repo doesn't host them; KokoroEngineService copies
-    // them into place. All graded "D" overall / thin training data per
-    // hexgrad's own VOICES.md — the tradeoff for using documented,
-    // named voices instead of unverified numbered ones.
-    nonisolated static let mandarinVoices = [
-        "zf_001", "zm_009",
-        "zf_xiaobei", "zf_xiaoni", "zf_xiaoxiao", "zf_xiaoyi",
-        "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
-    ]
-
-    // FluidAudio's own official roster (KokoroAneConstants.japaneseVoices,
-    // as of the pinned commit — see project.yml) — unlike Mandarin's
-    // numbered set, this one has no provenance ambiguity: it's the SDK's
-    // own curated list, all 5 confirmed present as real voice .bin files
-    // on FluidAudio's hosted repo. No bundling step needed.
-    nonisolated static let japaneseVoices = ["jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo"]
+    // Voice rosters live in `VoiceCatalog` alongside each voice's
+    // avatar/tagline/description/preview line — these stay as plain code
+    // lists for the call sites that only need names (pickers, counts, the
+    // eager per-voice download loop).
+    nonisolated static var kokoroVoices: [String] { kokoroVoices(for: .english) }
+    nonisolated static var mandarinVoices: [String] { kokoroVoices(for: .mandarin) }
+    nonisolated static var japaneseVoices: [String] { kokoroVoices(for: .japanese) }
+    nonisolated static var pocketVoices: [String] { VoiceCatalog.pocket.map(\.code) }
 
     nonisolated static func kokoroVoices(for variant: KokoroVariant) -> [String] {
-        switch variant {
-        case .english: return kokoroVoices
-        case .mandarin: return mandarinVoices
-        case .japanese: return japaneseVoices
-        }
+        VoiceCatalog.voices(for: variant).map(\.code)
     }
-
-    // All 26 published in constants_bin/ for the English v2.1 pack — these
-    // are real, no missing-asset gap like the Kokoro voices above.
-    nonisolated static let pocketVoices = [
-        "alba", "anna", "azelma", "bill_boerst", "caro_davy", "charles",
-        "cosette", "eponine", "estelle", "eve", "fantine", "george", "giovanni",
-        "jane", "javert", "jean", "juergen", "lola", "marius", "mary", "michael",
-        "paul", "peter_yearsley", "rafael", "stuart_bell", "vera",
-    ]
 
     @Published var engine: Engine = .kokoroAne
     // Changing voice mid-session would otherwise mix voices across
