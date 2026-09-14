@@ -10,6 +10,7 @@ struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var packs: VoicePackStore
     // Set the moment a Kokoro Generate tap creates a new track — pushes
     // ReadAlongPlayerView immediately (chunks stream in progressively there,
     // same as today's inline list did). Pocket TTS doesn't use this; its
@@ -46,7 +47,8 @@ struct WriteTextView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
-            VoiceSettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+            VoiceSettingsSheet(
+                viewModel: viewModel, packs: packs, voiceCloneViewModel: voiceCloneViewModel)
         }
     }
 
@@ -67,7 +69,7 @@ struct WriteTextView: View {
             }
             .foregroundStyle(Color.appPrimaryText)
             if viewModel.isBusy, viewModel.initSeconds == nil {
-                ProgressView(value: viewModel.downloadFraction)
+                ProgressView(value: packs.fraction)
             }
             if let streamChunkProgress = viewModel.streamChunkProgress {
                 LabeledContent("Chunk") {
@@ -145,8 +147,9 @@ struct WriteTextView: View {
 
 #Preview {
     let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     WriteTextView(
-        viewModel: TTSViewModel(dependencies: dependencies),
+        viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel())
+        libraryViewModel: LibraryViewModel(), packs: viewModel.packs)
 }

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TTSHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var packs: VoicePackStore
 
     // Kokoro playback keeps running after isBusy drops back to false (that
     // only covers the download/init phase) — lock engine/voice switching
@@ -96,12 +97,12 @@ struct TTSHomeView: View {
                 Section("Status") {
                     LabeledContent("State", value: viewModel.status)
 
-                    if viewModel.didDownload, viewModel.isBusy, viewModel.initSeconds == nil {
-                        ProgressView(value: viewModel.downloadFraction)
+                    if packs.didDownload, viewModel.isBusy, viewModel.initSeconds == nil {
+                        ProgressView(value: packs.fraction)
                         LabeledContent("Downloaded") {
-                            Text(viewModel.downloadProgressLabel)
+                            Text(packs.progressLabel)
                         }
-                        if let downloadFileProgress = viewModel.downloadFileProgress {
+                        if let downloadFileProgress = packs.fileProgress {
                             LabeledContent("Files", value: downloadFileProgress)
                         }
                     }
@@ -140,5 +141,6 @@ struct TTSHomeView: View {
 }
 
 #Preview {
-    TTSHomeView(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let viewModel = TTSViewModel(dependencies: DependencyContainer())
+    TTSHomeView(viewModel: viewModel, packs: viewModel.packs)
 }

@@ -52,7 +52,8 @@ struct RootTabView: View {
             TabView(selection: $selectedTab) {
                 ImportHomeView(
                     viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                    libraryViewModel: libraryViewModel, previewPlayer: previewPlayer
+                    libraryViewModel: libraryViewModel, previewPlayer: previewPlayer,
+                    packs: viewModel.packs
                 )
                 .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
                 .tag(RootTab.home)

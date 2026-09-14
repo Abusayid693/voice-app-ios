@@ -86,9 +86,11 @@ Sources/
       ViewModels/
         TTSViewModel.swift        // DONE — @MainActor ObservableObject, generation/playback/pack-download state + orchestration; single instance shared by the Home and Import tabs
         VoicePreviewPlayer.swift  // DONE — bundled voice-preview clip playback (play/stop, progress, live level), split out of TTSViewModel so its ~15x/sec metering only re-renders the two views that show it
+        VoicePackStore.swift      // DONE — which packs are on disk (+ UserDefaults persistence), where they live, and the one download in flight; reached as `viewModel.packs` and observed directly by the views that show pack state
       Services/
         KokoroEngineService.swift   // DONE — takes the manager's own directory so ensureModels() checks the right on-disk path
         PocketEngineService.swift   // DONE — also owns AVAudioEngine/AVAudioPlayerNode playback + voice-cloning wrapper methods
+        VoicePackSizeService.swift  // DONE — per-pack "total download size" lookups against HuggingFace's tree API, for the progress display only
       Models/
         Engine.swift               // DONE
         Voice.swift                // DONE — one voice's whole identity (code, tagline, longDescription, hasAvatar, previewLine) + VoiceCode, the single prefix table both displayName and flag read from

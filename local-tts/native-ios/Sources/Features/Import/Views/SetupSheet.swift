@@ -6,6 +6,7 @@ import SwiftUI
 /// as done instead of offering a download button again.
 struct SetupSheet: View {
     @ObservedObject var viewModel: TTSViewModel
+    @ObservedObject var packs: VoicePackStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -40,7 +41,7 @@ struct SetupSheet: View {
         // every pack (and generation), so with 6 rows now (Kokoro + 5
         // Pocket languages) gating the spinner on it made every
         // not-yet-downloaded row spin the instant any one started.
-        let isDownloadingThis = viewModel.downloadingPackID == pack.id
+        let isDownloadingThis = packs.downloadingPackID == pack.id
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -63,8 +64,8 @@ struct SetupSheet: View {
                 }
             }
             if isDownloadingThis {
-                ProgressView(value: viewModel.downloadFraction)
-                Text(viewModel.downloadProgressLabel)
+                ProgressView(value: packs.fraction)
+                Text(packs.progressLabel)
                     .font(.caption2)
                     .foregroundStyle(Color.appSecondaryText)
             }
@@ -74,8 +75,8 @@ struct SetupSheet: View {
 
     private func isReady(_ pack: VoicePack) -> Bool {
         switch pack {
-        case .kokoro(let variant): return viewModel.isKokoroPackReady(variant)
-        case .pocket(let language): return viewModel.isPocketPackDownloaded(language)
+        case .kokoro(let variant): return packs.isKokoroPackReady(variant)
+        case .pocket(let language): return packs.isPocketPackDownloaded(language)
         }
     }
 
@@ -90,5 +91,6 @@ struct SetupSheet: View {
 }
 
 #Preview {
-    SetupSheet(viewModel: TTSViewModel(dependencies: DependencyContainer()))
+    let viewModel = TTSViewModel(dependencies: DependencyContainer())
+    SetupSheet(viewModel: viewModel, packs: viewModel.packs)
 }

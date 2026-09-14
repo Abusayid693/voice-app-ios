@@ -1,7 +1,7 @@
 import Foundation
 
 /// Sums file sizes from HuggingFace's public tree API for a given repo
-/// path — used by `TTSViewModel`'s "total download size" display, since
+/// path — used by `VoicePackSizeService`'s "total download size" lookups, since
 /// FluidAudio's own progress callback reports a fraction, not byte totals.
 enum HuggingFaceTreeSizeFetcher {
     private struct Entry: Decodable {

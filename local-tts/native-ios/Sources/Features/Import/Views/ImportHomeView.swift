@@ -49,6 +49,9 @@ struct ImportHomeView: View {
     // themselves — this screen's own body doesn't read preview state, so
     // observing it here would re-render the whole page on every meter tick.
     let previewPlayer: VoicePreviewPlayer
+    // Observed: this screen's tile availability and the Setup pointer both
+    // read pack readiness.
+    @ObservedObject var packs: VoicePackStore
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive, so "See all" resumes pagination
@@ -71,7 +74,7 @@ struct ImportHomeView: View {
     @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
-        viewModel.isKokoroPackReady && viewModel.isPocketPackDownloaded
+        packs.isKokoroPackReady && packs.isPocketPackDownloaded
     }
 
     var body: some View {
@@ -142,12 +145,12 @@ struct ImportHomeView: View {
             }
         }
         .sheet(isPresented: $viewModel.isSetupPresented) {
-            SetupSheet(viewModel: viewModel)
+            SetupSheet(viewModel: viewModel, packs: packs)
         }
         .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
             WriteTextView(
                 viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel)
+                libraryViewModel: libraryViewModel, packs: packs)
         }
         .sheet(isPresented: $isCreateVoicePresented) {
             CreateVoiceSheet { route in
@@ -218,13 +221,13 @@ struct ImportHomeView: View {
                 VoiceTile(
                     id: "kokoro-\(variant.rawValue)-\(voice.code)", voice: voice, engine: .kokoroAne,
                     engineLabel: variant == .english ? "Kokoro-ANE" : "Kokoro-ANE (\(variant.displayName))",
-                    isAvailable: viewModel.isKokoroPackReady(variant))
+                    isAvailable: packs.isKokoroPackReady(variant))
             }
         }
         let pocket = VoiceCatalog.pocket.map { voice in
             VoiceTile(
                 id: "pocket-\(voice.code)", voice: voice, engine: .pocketTts,
-                engineLabel: "Pocket TTS", isAvailable: viewModel.isPocketPackDownloaded)
+                engineLabel: "Pocket TTS", isAvailable: packs.isPocketPackDownloaded)
         }
         return kokoro + pocket
     }
@@ -597,8 +600,10 @@ private struct VoiceTileView: View {
 
 #Preview {
     let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     ImportHomeView(
-        viewModel: TTSViewModel(dependencies: dependencies),
+        viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer())
+        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
+        packs: viewModel.packs)
 }
