@@ -2,10 +2,10 @@ import LucideSwift
 import SwiftUI
 
 /// The Library tab: every past "Generate" tap's original text + voice
-/// used. Tapping a Kokoro row re-synthesizes it and opens the same
-/// ReadAlongPlayerView a live Generate uses (no audio is persisted — see
-/// SavedGeneration — so "opening" a saved entry means regenerating it
-/// fresh). Pocket rows still just open the read-only text view, since
+/// used. Tapping a Kokoro row opens the same ReadAlongPlayerView a live
+/// Generate uses, playing the persisted per-chunk audio where it exists and
+/// regenerating live where it doesn't — see LibraryPlayback, which owns that
+/// fallback. Pocket rows still just open the read-only text view, since
 /// there's no Pocket player screen yet. Swipe for Delete or the pen icon
 /// (view the original text, read-only, regardless of engine).
 struct LibraryTabView: View {
