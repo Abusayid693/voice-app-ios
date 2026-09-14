@@ -31,11 +31,21 @@ struct StorageView: View {
         return DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
     }
 
+    // Same "0 until resolved this session" reasoning as kokoroMandarinBytes
+    // — tracked as its own directory (not folded into pocketBytes' whole-
+    // cache measurement) so this row doesn't double-count against Pocket's.
+    private var supertonic3Bytes: Int64 {
+        guard packs.isSupertonic3Downloaded, let directory = packs.supertonic3ModelDirectory else { return 0 }
+        return DiskStorage.directorySize(at: directory)
+    }
+
     private var clonedVoicesBytes: Int64 {
         DiskStorage.directorySize(at: ClonedVoice.directory)
     }
 
-    private var totalBytes: Int64 { kokoroBytes + kokoroMandarinBytes + pocketBytes + clonedVoicesBytes }
+    private var totalBytes: Int64 {
+        kokoroBytes + kokoroMandarinBytes + pocketBytes + supertonic3Bytes + clonedVoicesBytes
+    }
 
     var body: some View {
         List {
@@ -43,6 +53,7 @@ struct StorageView: View {
                 row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
                 row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
                 row(title: "Pocket TTS pack", bytes: pocketBytes)
+                row(title: "Supertonic-3 pack", bytes: supertonic3Bytes)
                 row(
                     title: "My voices (\(voiceCloneViewModel.clonedVoices.count))",
                     bytes: clonedVoicesBytes)

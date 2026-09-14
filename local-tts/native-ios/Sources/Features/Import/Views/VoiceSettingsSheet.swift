@@ -1,10 +1,10 @@
 import LucideSwift
 import SwiftUI
 
-/// Combined Kokoro + Pocket voice picker for the Write text screen — one
-/// list, each voice tagged available/not-available based on whether that
-/// engine's pack has been downloaded (see SetupSheet). Selecting an
-/// available voice also switches `viewModel.engine` to match.
+/// Combined Kokoro + Pocket + Supertonic-3 voice picker for the Write text
+/// screen — one list, each voice tagged available/not-available based on
+/// whether that engine's pack has been downloaded (see SetupSheet).
+/// Selecting an available voice also switches `viewModel.engine` to match.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
@@ -76,6 +76,32 @@ struct VoiceSettingsSheet: View {
                         ) {
                             viewModel.engine = .pocketTts
                             viewModel.pocketVoice = name
+                            viewModel.selectedClonedVoice = nil
+                            dismiss()
+                        }
+                    }
+                }
+                .listRowBackground(Color.appSecondaryBackground)
+
+                // Two independent pickers, unlike Kokoro/Pocket's one —
+                // Supertonic-3's voice and language aren't tied together
+                // (the same voice speaks any language, chosen separately).
+                Section("Supertonic-3") {
+                    Picker("Language", selection: $viewModel.supertonicLanguage) {
+                        ForEach(SupertonicLanguage.all) { language in
+                            Text(language.displayName).tag(language)
+                        }
+                    }
+                    .tint(Color.appPrimaryText)
+
+                    ForEach(SupertonicVoice.allCases) { voice in
+                        voiceRow(
+                            name: voice.displayName,
+                            isAvailable: packs.isSupertonic3Downloaded,
+                            isSelected: viewModel.engine == .supertonic3 && viewModel.supertonicVoice == voice
+                        ) {
+                            viewModel.engine = .supertonic3
+                            viewModel.supertonicVoice = voice
                             viewModel.selectedClonedVoice = nil
                             dismiss()
                         }

@@ -22,7 +22,7 @@ final class VoicePreviewPlayer: ObservableObject {
     @Published private(set) var level: Double = 0
 
     private var player: AVAudioPlayer?
-    private var playerDelegate: PreviewPlaybackDelegate?
+    private var playerDelegate: AudioPlaybackDelegate?
     private var meterTask: Task<Void, Never>?
 
     /// True if this voice has a bundled clip — independent of whether its
@@ -48,7 +48,7 @@ final class VoicePreviewPlayer: ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
             let player = try AVAudioPlayer(contentsOf: url)
             player.isMeteringEnabled = true
-            let delegate = PreviewPlaybackDelegate { [weak self] in
+            let delegate = AudioPlaybackDelegate { [weak self] in
                 Task { @MainActor in
                     guard let self, self.playingVoiceID == voiceName else { return }
                     self.stop()
@@ -79,7 +79,16 @@ final class VoicePreviewPlayer: ObservableObject {
     }
 
     private static func clipURL(voiceName: String, engine: Engine) -> URL? {
-        let subdirectory = "VoicePreviews/\(engine == .kokoroAne ? "Kokoro" : "Pocket")"
+        let engineFolder: String
+        switch engine {
+        case .kokoroAne: engineFolder = "Kokoro"
+        case .pocketTts: engineFolder = "Pocket"
+        // No bundled clips exist yet (see docs/adr/0009) — this just
+        // resolves to a folder with nothing in it, same as any other
+        // voice with no clip recorded.
+        case .supertonic3: engineFolder = "Supertonic3"
+        }
+        let subdirectory = "VoicePreviews/\(engineFolder)"
         return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)
     }
 
@@ -103,19 +112,5 @@ final class VoicePreviewPlayer: ObservableObject {
         let floorDb: Float = -50
         let clamped = max(power, floorDb)
         return Double((clamped - floorDb) / -floorDb)
-    }
-}
-
-/// Bridges `AVAudioPlayerDelegate`'s completion callback to a plain closure
-/// so `VoicePreviewPlayer` doesn't have to conform to `NSObject` itself.
-private final class PreviewPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
-    private let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
     }
 }

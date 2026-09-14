@@ -46,4 +46,33 @@ enum VoicePackSizeService {
                 "https://huggingface.co/api/models/FluidInference/pocket-tts-coreml/tree/main/v2.1/\(langPath)?recursive=true",
             matching: { path in required.contains { path.hasPrefix($0) } })
     }
+
+    /// Same idea for the Supertonic-3 pack — the repo root also holds the
+    /// `.mlpackage` (uncompiled) sources, every other VectorEstimator
+    /// quantization/bucket build, and per-voice `.json` style files under
+    /// `voice_styles/`. Filtered to exactly what
+    /// `Supertonic3EngineService.ensureModels` fetches: the 3 shared stages,
+    /// the config files, the 3 ANE-bucketed int4 VectorEstimator builds
+    /// (`Supertonic3EngineService.vectorEstimator`'s default), and all 10
+    /// voice styles (fetched eagerly, same "complete the roster" pattern as
+    /// Kokoro's Mandarin voices). Verified directly against the live tree —
+    /// ~164MB total, not the ~398MB figure in issue #27 (that's for a
+    /// different, larger VectorEstimator build).
+    static func supertonic3TotalBytes() async -> Int64? {
+        let required = [
+            "TextEncoder.mlmodelc/",
+            "DurationPredictor.mlmodelc/",
+            "Vocoder.mlmodelc/",
+            "tts.json",
+            "unicode_indexer.json",
+            "VectorEstimatorVariants/VectorEstimator_L128_int4.mlmodelc/",
+            "VectorEstimatorVariants/VectorEstimator_L256_int4.mlmodelc/",
+            "VectorEstimatorVariants/VectorEstimator_L512_int4.mlmodelc/",
+            "voice_styles/",
+        ]
+        return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
+            url:
+                "https://huggingface.co/api/models/FluidInference/supertonic-3-coreml/tree/main?recursive=true",
+            matching: { path in required.contains { path.hasPrefix($0) || path == $0 } })
+    }
 }
