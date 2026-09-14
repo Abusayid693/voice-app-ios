@@ -9,7 +9,19 @@ struct StorageView: View {
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
 
     private var kokoroBytes: Int64 {
-        guard viewModel.isKokoroPackReady, let directory = viewModel.kokoroModelDirectory else { return 0 }
+        guard viewModel.isKokoroPackReady(.english), let directory = viewModel.kokoroModelDirectory else {
+            return 0
+        }
+        return DiskStorage.directorySize(at: directory)
+    }
+
+    // 0 (not shown as "unknown") while the exact directory hasn't been
+    // resolved yet this session — see kokoroMandarinModelDirectory's doc
+    // comment. Total below still undercounts in that window, same known
+    // imprecision as Pocket's own whole-cache-dir measurement.
+    private var kokoroMandarinBytes: Int64 {
+        guard viewModel.isKokoroPackReady(.mandarin), let directory = viewModel.kokoroMandarinModelDirectory
+        else { return 0 }
         return DiskStorage.directorySize(at: directory)
     }
 
@@ -22,12 +34,13 @@ struct StorageView: View {
         DiskStorage.directorySize(at: ClonedVoice.directory)
     }
 
-    private var totalBytes: Int64 { kokoroBytes + pocketBytes + clonedVoicesBytes }
+    private var totalBytes: Int64 { kokoroBytes + kokoroMandarinBytes + pocketBytes + clonedVoicesBytes }
 
     var body: some View {
         List {
             Section {
                 row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
+                row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
                 row(title: "Pocket TTS pack", bytes: pocketBytes)
                 row(
                     title: "My voices (\(voiceCloneViewModel.clonedVoices.count))",

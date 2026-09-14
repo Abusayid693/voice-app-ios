@@ -15,6 +15,7 @@
 		189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86834E3B2D30FE974DB64B0 /* HuggingFaceTreeSizeFetcher.swift */; };
 		19D4C9EBF3CF872D79F687F5 /* SavedGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B908701D84BB974C827AF15 /* SavedGeneration.swift */; };
 		19D8C1A9FDD2C430A18F8359 /* VoicesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BCBB265406E5783559C7D7 /* VoicesTabView.swift */; };
+		1E98E9FCEC97B9E778B7E8A3 /* PocketLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A87BD4818896A62FBA71633 /* PocketLanguage.swift */; };
 		208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06231A578E9AA46671656B29 /* SettingsSheet.swift */; };
 		213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */; };
 		289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */; };
@@ -55,6 +56,7 @@
 		B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */; };
 		B43FF140251F0F882F5521C4 /* TTSHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F031436CEB5A91169A486C /* TTSHomeView.swift */; };
 		B48D061C014B0B1E8233E5CA /* VoiceCloneRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29DEF9399180D4508313E7B /* VoiceCloneRoute.swift */; };
+		B4FCB1E26C6862D67A977F94 /* BundledMandarinVoices in Resources */ = {isa = PBXBuildFile; fileRef = 5D1118094C4B055386486F9B /* BundledMandarinVoices */; };
 		B5CF09948E8C053C21856313 /* KokoroEngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */; };
 		BB75A4408D01E36AE4E242C6 /* VoicePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F951C1610075724A48F1647E /* VoicePreviewSheet.swift */; };
 		C77F75D0042DF99C044F6115 /* ClonedVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCC33F2E0CA90E2F7D873E5 /* ClonedVoice.swift */; };
@@ -65,6 +67,7 @@
 		DF028801F92E66828A7A5322 /* InstantCloneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */; };
 		E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A0D045B3092A9E63F40DEA50 /* LucideSwift */; };
 		EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30DC14DD25B2D35ED2919FA /* SetupSheet.swift */; };
+		EFA292B78F701FF44C0FFDC3 /* KokoroVariant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4567A06F6893E77FF005B84F /* KokoroVariant.swift */; };
 		EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0DBACD3AD85BF0F79630B80 /* KokoroGenerationListView.swift */; };
 		FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4839B571DC8F7200C26BC98 /* ChunkState.swift */; };
 /* End PBXBuildFile section */
@@ -74,6 +77,7 @@
 		046CF8805E70FDE33206289F /* VoicePacksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePacksView.swift; sourceTree = "<group>"; };
 		05C3028FB9AED5F554B76E0A /* VoicePreviewLines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePreviewLines.swift; sourceTree = "<group>"; };
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
+		0A87BD4818896A62FBA71633 /* PocketLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketLanguage.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
@@ -91,7 +95,9 @@
 		3B908701D84BB974C827AF15 /* SavedGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGeneration.swift; sourceTree = "<group>"; };
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
+		4567A06F6893E77FF005B84F /* KokoroVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroVariant.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
+		5D1118094C4B055386486F9B /* BundledMandarinVoices */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledMandarinVoices; sourceTree = SOURCE_ROOT; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
 		784AE95CAB2310D364034251 /* VoiceRecorderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorderService.swift; sourceTree = "<group>"; };
@@ -282,6 +288,8 @@
 				C07EEB3027B4E022D555A931 /* Engine.swift */,
 				BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */,
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
+				4567A06F6893E77FF005B84F /* KokoroVariant.swift */,
+				0A87BD4818896A62FBA71633 /* PocketLanguage.swift */,
 				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
 			);
 			path = Models;
@@ -434,6 +442,7 @@
 		E2D61FA31C9A901C783E83E6 = {
 			isa = PBXGroup;
 			children = (
+				5D1118094C4B055386486F9B /* BundledMandarinVoices */,
 				336FA80C01B8751C4A246C5D /* CustomKokoroModel */,
 				CAFE6273C18A193545CA0FF7 /* VoicePreviews */,
 				BF369F6F170087D8BCCB6182 /* Sources */,
@@ -519,6 +528,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1421B60BAE59E1C18246FC2A /* Assets.xcassets in Resources */,
+				B4FCB1E26C6862D67A977F94 /* BundledMandarinVoices in Resources */,
 				5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */,
 				7BA3D073D03AC978E3131ABE /* VoicePreviews in Resources */,
 			);
@@ -553,6 +563,7 @@
 				289C89C39289CDA754F865AB /* KokoroGeneration.swift in Sources */,
 				EFDEB7C85AC27DBD26A69A0B /* KokoroGenerationListView.swift in Sources */,
 				B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */,
+				EFA292B78F701FF44C0FFDC3 /* KokoroVariant.swift in Sources */,
 				8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */,
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
@@ -560,6 +571,7 @@
 				3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */,
 				213E319B38CDFE72D01CFFA7 /* PlaceholderTabView.swift in Sources */,
 				00D4C8FA490E8AB5CED4CCA0 /* PocketEngineService.swift in Sources */,
+				1E98E9FCEC97B9E778B7E8A3 /* PocketLanguage.swift in Sources */,
 				4ADB19DFAD01740CD328AF29 /* PrimaryButtonStyle.swift in Sources */,
 				59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */,
 				873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */,
@@ -777,8 +789,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio";
 			requirement = {
-				kind = exactVersion;
-				version = 0.15.6;
+				kind = revision;
+				revision = 71242fa6df36ed956ee347690df4428a736eb761;
 			};
 		};
 		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {

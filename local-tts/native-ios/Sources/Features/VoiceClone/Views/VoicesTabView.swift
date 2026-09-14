@@ -129,7 +129,7 @@ struct VoicesTabView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(voice.name)
                     .foregroundStyle(Color.appPrimaryText)
-                Text(voice.createdAt.formatted(date: .abbreviated, time: .omitted))
+                Text("\(voice.createdAt.formatted(date: .abbreviated, time: .omitted)) · \(voice.language.displayName)")
                     .font(.caption)
                     .foregroundStyle(Color.appSecondaryText)
             }

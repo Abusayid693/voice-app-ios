@@ -23,6 +23,10 @@ struct VoiceSettingsSheet: View {
                                     && viewModel.selectedClonedVoice?.id == clonedVoice.id
                             ) {
                                 viewModel.engine = .pocketTts
+                                // Match the manager/service the voice was
+                                // actually cloned with — generating always
+                                // routes through the current pocketLanguage.
+                                viewModel.pocketLanguage = clonedVoice.language
                                 viewModel.selectedClonedVoice = clonedVoice
                                 dismiss()
                             }
@@ -32,10 +36,17 @@ struct VoiceSettingsSheet: View {
                 }
 
                 Section("Kokoro-ANE") {
-                    ForEach(TTSViewModel.kokoroVoices, id: \.self) { name in
+                    Picker("Language", selection: $viewModel.kokoroVariant) {
+                        ForEach(KokoroVariant.allCases) { variant in
+                            Text(variant.displayName).tag(variant)
+                        }
+                    }
+                    .tint(Color.appPrimaryText)
+
+                    ForEach(TTSViewModel.kokoroVoices(for: viewModel.kokoroVariant), id: \.self) { name in
                         voiceRow(
                             name: name,
-                            isAvailable: viewModel.isKokoroPackReady,
+                            isAvailable: viewModel.isKokoroPackReady(viewModel.kokoroVariant),
                             isSelected: viewModel.engine == .kokoroAne && viewModel.kokoroVoice == name
                         ) {
                             viewModel.engine = .kokoroAne
@@ -48,10 +59,17 @@ struct VoiceSettingsSheet: View {
                 .listRowBackground(Color.appSecondaryBackground)
 
                 Section("Pocket TTS") {
+                    Picker("Language", selection: $viewModel.pocketLanguage) {
+                        ForEach(PocketLanguage.allCases) { language in
+                            Text(language.displayName).tag(language)
+                        }
+                    }
+                    .tint(Color.appPrimaryText)
+
                     ForEach(TTSViewModel.pocketVoices, id: \.self) { name in
                         voiceRow(
                             name: name,
-                            isAvailable: viewModel.isPocketPackDownloaded,
+                            isAvailable: viewModel.isPocketPackDownloaded(viewModel.pocketLanguage),
                             isSelected: viewModel.engine == .pocketTts && viewModel.pocketVoice == name
                                 && viewModel.selectedClonedVoice == nil
                         ) {

@@ -86,12 +86,35 @@ final class DependencyContainer {
         }
     }
 
+    // Mandarin/Japanese have no bundled fallback like English's
+    // CustomKokoroModel/ — FluidAudio's own hosted ANE-zh/ANE-ja repos have
+    // everything needed (7-stage chain + G2P frontend assets + voices), so
+    // these are real, network-downloaded managers, same shape as the
+    // Pocket managers below. `directory: nil` lets
+    // KokoroAneResourceDownloader use its own default cache location.
+    let kokoroMandarinManager = KokoroAneManager(variant: .mandarin, defaultVoice: "zf_001")
+    // Japanese requires FluidAudio pinned past v0.15.7 (see project.yml) —
+    // KokoroAneManager.phonemes(for:) unconditionally threw for this
+    // variant before FluidInference/FluidAudio#915 added a real MeCab +
+    // Cutlet text frontend.
+    let kokoroJapaneseManager = KokoroAneManager(variant: .japanese, defaultVoice: "jf_alpha")
+
+    // One manager per language — PocketTtsManager.language is fixed at
+    // init ("to switch languages, create a new manager", per the SDK's own
+    // doc comment), so supporting multiple languages means multiple
+    // instances, not a mutable property on one. All share the audio
+    // engine/node below (that's output-only plumbing, not per-manager
+    // state — only one language ever generates/plays at a time).
+    //
     // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
     // (rank-4 flowlm_step_ane/cond_prefill_ane) instead of GPU — the SDK
     // defaults to .gpu, but that default is benchmarked on M-series Macs;
     // .ane is documented as the iOS-appropriate placement. Precision is
     // ignored under .ane (those variants are fp16-only).
-    let pocketManager = PocketTtsManager(language: .english, placement: .ane)
+    let pocketManagers: [PocketLanguage: PocketTtsManager] = Dictionary(
+        uniqueKeysWithValues: PocketLanguage.allCases.map {
+            ($0, PocketTtsManager(language: $0.sdkLanguage, placement: .ane))
+        })
 
     // PocketTTS streams 80ms frames rather than one complete WAV, so
     // playback goes through AVAudioEngine/AVAudioPlayerNode (which accepts

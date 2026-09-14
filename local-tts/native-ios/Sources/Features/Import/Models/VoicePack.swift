@@ -1,23 +1,34 @@
 import Foundation
 
-/// The two independently-downloadable voice packs shown in `SetupSheet`.
-enum VoicePack: CaseIterable, Identifiable {
-    case kokoro
-    case pocket
+/// The independently-downloadable voice packs shown in `SetupSheet` — one
+/// Kokoro pack per variant (English bundled, Mandarin downloaded) plus one
+/// Pocket TTS pack per supported language.
+enum VoicePack: Identifiable, Equatable {
+    case kokoro(KokoroVariant)
+    case pocket(PocketLanguage)
 
-    var id: Self { self }
+    static var allCases: [VoicePack] {
+        KokoroVariant.allCases.map { .kokoro($0) } + PocketLanguage.allCases.map { .pocket($0) }
+    }
+
+    var id: String {
+        switch self {
+        case .kokoro(let variant): return "kokoro-\(variant.rawValue)"
+        case .pocket(let language): return "pocket-\(language.rawValue)"
+        }
+    }
 
     var title: String {
         switch self {
-        case .kokoro: return "Kokoro voice pack"
-        case .pocket: return "Pocket TTS pack"
+        case .kokoro(let variant): return variant.packTitle
+        case .pocket(let language): return language.packTitle
         }
     }
 
     var subtitle: String {
         switch self {
-        case .kokoro: return "28 English voices, bundled with the app"
-        case .pocket: return "26 English voices, ~500MB download"
+        case .kokoro(let variant): return variant.packSubtitle
+        case .pocket(let language): return language.packSubtitle
         }
     }
 }

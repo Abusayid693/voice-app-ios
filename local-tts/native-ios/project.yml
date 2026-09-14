@@ -4,9 +4,16 @@ options:
     iOS: "17.0"
   bundleIdPrefix: com.rehanchoudhury.kokoroanetest
 packages:
+  # Pinned past the latest tagged release (v0.15.7, 2026-09-10) to a
+  # specific main commit — FluidInference/FluidAudio#915 (merged
+  # 2026-09-13), the fix that gives KokoroAneVariant.japanese a real text
+  # frontend, isn't in any tagged release yet. Also picks up #918 (a real
+  # ModelHub download-verification bug fix, unrelated to Kokoro) and the
+  # new Chatterbox backends (unused by this app). Revisit once a release
+  # ships that includes 71242fa and switch back to exactVersion.
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio
-    exactVersion: 0.15.6
+    revision: 71242fa6df36ed956ee347690df4428a736eb761
   # Smoother, rounded icon set replacing SF Symbols in the app's own UI
   # chrome (not a system-level override — SF Symbols are still used
   # wherever a truly native/system look is expected). ISC-licensed,
@@ -38,6 +45,17 @@ targets:
       # Bundle.main.url(forResource:withExtension:subdirectory:)) —
       # `type: folder` preserves the real directory structure instead.
       - path: VoicePreviews
+        type: folder
+        buildPhase: resources
+      # hexgrad/Kokoro-82M's 8 officially-named, officially-graded Mandarin
+      # voice tensors (zf_xiaobei/zf_xiaoni/zf_xiaoxiao/zf_xiaoyi,
+      # zm_yunjian/zm_yunxi/zm_yunxia/zm_yunyang), converted to the same
+      # [510,256] fp32 .bin format CustomKokoroModel's English voices use —
+      # see model-conversion/kokoro-mandarin-voices/. Chosen over FluidAudio's
+      # own ANE-zh/voices/ numbered set (zf_001.../zm_009...) because that
+      # set's speaker provenance is undocumented. `type: folder` keeps this
+      # a flat, unflattened folder reference like the others above.
+      - path: BundledMandarinVoices
         type: folder
         buildPhase: resources
     dependencies:

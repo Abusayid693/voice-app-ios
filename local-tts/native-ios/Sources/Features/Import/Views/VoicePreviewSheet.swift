@@ -102,6 +102,13 @@ private struct VoicePreviewCard: View {
     @ObservedObject var viewModel: TTSViewModel
 
     private var isPlaying: Bool { viewModel.previewingVoiceID == tile.name }
+    // Preview playback is pure bundled-file playback, independent of
+    // whether the voice's pack has been downloaded — gating the button on
+    // `tile.isAvailable` (pack-download state) made every voice whose pack
+    // isn't downloaded yet unplayable even when it has a real clip (this is
+    // exactly why Mandarin previews silently did nothing before any
+    // Mandarin pack was downloaded). Gate on clip existence instead.
+    private var hasPreview: Bool { viewModel.hasPreviewClip(voiceName: tile.name, engine: tile.engine) }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -138,7 +145,14 @@ private struct VoicePreviewCard: View {
             } label: {
                 LucideIcon(isPlaying ? .circlePause : .circlePlay, size: 64, color: Color.appPrimaryText)
             }
-            .disabled(!tile.isAvailable)
+            .disabled(!hasPreview)
+            .opacity(hasPreview ? 1 : 0.6)
+
+            if !hasPreview {
+                Text("Preview coming soon")
+                    .font(.caption2)
+                    .foregroundStyle(Color.appTertiaryText)
+            }
 
             Spacer(minLength: 0)
         }

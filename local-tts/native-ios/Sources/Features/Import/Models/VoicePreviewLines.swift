@@ -39,5 +39,19 @@ enum VoicePreviewLines {
         "bm_fable": "The old storyteller sat by the fire, beginning a tale that had been passed down through many generations before him.",
         "bm_george": "The professor closed his notes and looked out at the class, asking if anyone still had questions before the exam.",
         "bm_lewis": "The mechanic wiped his hands on a rag, satisfied that the engine finally sounded right after hours of careful work.",
+
+        // Kokoro-ANE (Mandarin, 10) — zf_001/zm_009 from FluidAudio's own
+        // hosted default; the other 8 are hexgrad/Kokoro-82M's officially
+        // named voices (see TTSViewModel.mandarinVoices).
+        "zf_001": "清晨的阳光洒进窗户,街道上渐渐热闹起来,人们开始了新一天的生活。",
+        "zm_009": "老师站在讲台前,耐心地讲解着今天的课程内容,学生们认真地做着笔记。",
+        "zf_xiaobei": "东北的冬天格外寒冷,雪花静静地落在屋顶上,街道显得格外安静祥和。",
+        "zf_xiaoni": "她坐在图书馆里,仔细地翻阅着一本古老的书籍,窗外的树叶轻轻飘落。",
+        "zf_xiaoxiao": "春天来了,公园里的花朵竞相开放,孩子们在草地上快乐地奔跑嬉戏。",
+        "zf_xiaoyi": "演唱会上灯光闪烁,观众们跟着音乐节拍欢呼,气氛热烈而充满活力。",
+        "zm_yunjian": "比赛进行到最后一刻,现场观众屏住呼吸,期待着这激动人心的结果。",
+        "zm_yunxi": "周末的午后,他和朋友们一起去爬山,呼吸着新鲜空气,心情格外愉快。",
+        "zm_yunxia": "小男孩举着风筝在草地上奔跑,笑声传遍了整个公园,十分天真可爱。",
+        "zm_yunyang": "新闻播报员沉稳地念着今天的头条新闻,语气专业而值得信赖。",
     ]
 }
