@@ -47,6 +47,21 @@ final class TTSViewModel: ObservableObject {
             stopAllPlayback()
         }
     }
+    // Independent of each other, unlike Kokoro's variant (= language) or
+    // Pocket's language (= manager) — the same voice speaks any language,
+    // chosen separately. Same stop-in-flight-generation guard as the others.
+    @Published var supertonicLanguage: SupertonicLanguage = .default {
+        didSet {
+            guard oldValue != supertonicLanguage else { return }
+            stopAllPlayback()
+        }
+    }
+    @Published var supertonicVoice: SupertonicVoice = .default {
+        didSet {
+            guard oldValue != supertonicVoice else { return }
+            stopAllPlayback()
+        }
+    }
     // Set by VoiceSettingsSheet's "My Voices" section — when non-nil (and
     // engine == .pocketTts), runPocketTts() synthesizes with this cloned
     // voice's conditioning data instead of the named `pocketVoice` preset.
@@ -91,7 +106,7 @@ final class TTSViewModel: ObservableObject {
     private var kokoroCompletionHandlers: [KokoroGeneration.ID: ([Data]) -> Void] = [:]
     private var kokoroGenerationTask: Task<Void, Never>?
     private var kokoroPlayer: AVAudioPlayer?
-    private var kokoroPlayerDelegate: KokoroChunkPlaybackDelegate?
+    private var kokoroPlayerDelegate: AudioPlaybackDelegate?
 
     // One service per variant, each wrapping that variant's own manager.
     // `kokoroService` below reads whichever one matches the current
@@ -106,7 +121,12 @@ final class TTSViewModel: ObservableObject {
     // existing `pocketService.xxx` call site keeps working unchanged.
     private let pocketServices: [PocketLanguage: PocketEngineService]
     private var pocketService: PocketEngineService { pocketServices[pocketLanguage]! }
-    private var audioPlayer: AVAudioPlayer?
+
+    // A single service, unlike the per-variant/per-language dictionaries
+    // above — see DependencyContainer.supertonic3Manager's doc comment.
+    private let supertonicService: Supertonic3EngineService
+    private var supertonicPlayer: AVAudioPlayer?
+    private var supertonicPlayerDelegate: AudioPlaybackDelegate?
 
     init(dependencies: DependencyContainer) {
         kokoroServices = Dictionary(
@@ -137,6 +157,9 @@ final class TTSViewModel: ObservableObject {
                         streamFormat: dependencies.streamFormat)
                 )
             })
+        supertonicService = Supertonic3EngineService(
+            manager: dependencies.supertonic3Manager, directory: nil,
+            vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
         packs = VoicePackStore(
             kokoroModelDirectory: dependencies.kokoroModelDirectory,
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
@@ -155,6 +178,8 @@ final class TTSViewModel: ObservableObject {
             }
         case .pocketTts:
             runPocketTts()
+        case .supertonic3:
+            runSupertonicTts()
         }
     }
 
@@ -225,6 +250,36 @@ final class TTSViewModel: ObservableObject {
         }
     }
 
+    /// Unlike the other two, there's exactly one Supertonic-3 pack — no
+    /// per-variant/per-language argument (see `VoicePack.supertonic3`).
+    func downloadSupertonic3PackIfNeeded() async {
+        guard !packs.isSupertonic3Downloaded else { return }
+        status = "Downloading Supertonic-3 pack…"
+        isBusy = true
+        packs.beginDownload(packID: VoicePack.supertonic3.id)
+        defer {
+            isBusy = false
+            packs.endDownload()
+        }
+        do {
+            let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
+                [weak self] progress in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.status = self.packs.apply(
+                        progress, phaseWeight: 1.0,
+                        fetchTotal: { await VoicePackSizeService.supertonic3TotalBytes() })
+                }
+            })
+            packs.noteSupertonic3ModelDirectory(resolvedDirectory)
+            try await supertonicService.initialize()
+            packs.markSupertonic3Downloaded()
+            status = "Idle"
+        } catch {
+            status = "Supertonic-3 pack download failed: \(error.localizedDescription)"
+        }
+    }
+
     private func resetRunState() {
         stopAllPlayback()
         isBusy = true
@@ -236,8 +291,9 @@ final class TTSViewModel: ObservableObject {
     }
 
     private func stopAllPlayback() {
-        audioPlayer?.stop()
-        audioPlayer = nil
+        supertonicPlayer?.stop()
+        supertonicPlayer = nil
+        supertonicPlayerDelegate = nil
         // Stop every language's service, not just the current
         // `pocketLanguage` — this can run from that same property's
         // didSet, which fires *after* the value already changed, so
@@ -518,7 +574,7 @@ final class TTSViewModel: ObservableObject {
         }
         do {
             let player = try AVAudioPlayer(data: data)
-            let delegate = KokoroChunkPlaybackDelegate { [weak self] in
+            let delegate = AudioPlaybackDelegate { [weak self] in
                 Task { @MainActor in self?.advanceKokoroChunk(generationID: generationID) }
             }
             player.delegate = delegate
@@ -621,20 +677,67 @@ final class TTSViewModel: ObservableObject {
             isBusy = false
         }
     }
+
+    /// Single-shot generate-then-play, closer to `runPocketTts()`'s overall
+    /// shape than Kokoro's persistent-worker pattern: Supertonic-3 has no
+    /// background queue, one call returns one complete clip. Unlike Kokoro,
+    /// text isn't pre-chunked here — the SDK chunks internally and the app
+    /// has no visibility into where, so there's no per-chunk read-along for
+    /// this engine; it plays back as one track, same UX tier as Pocket.
+    private func runSupertonicTts() {
+        resetRunState()
+        let inputText = text
+        let language = supertonicLanguage
+        let voice = supertonicVoice
+
+        Task {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback)
+                try AVAudioSession.sharedInstance().setActive(true)
+
+                status = "Checking cache…"
+                let initStart = Date()
+                let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
+                    [weak self] progress in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.status = self.packs.apply(
+                            progress, phaseWeight: 1.0,
+                            fetchTotal: { await VoicePackSizeService.supertonic3TotalBytes() })
+                    }
+                })
+                packs.noteSupertonic3ModelDirectory(resolvedDirectory)
+                isWarmInit = !packs.didDownload
+
+                status = "Loading models…"
+                try await supertonicService.initialize()
+                initSeconds = Date().timeIntervalSince(initStart)
+
+                status = "Synthesizing…"
+                let synthStart = Date()
+                let data = try await supertonicService.synthesize(
+                    text: inputText, language: language.code, voice: voice)
+                synthSeconds = Date().timeIntervalSince(synthStart)
+
+                let player = try AVAudioPlayer(data: data)
+                let delegate = AudioPlaybackDelegate { [weak self] in
+                    Task { @MainActor in
+                        self?.supertonicPlayer = nil
+                        self?.supertonicPlayerDelegate = nil
+                    }
+                }
+                player.delegate = delegate
+                supertonicPlayerDelegate = delegate
+                supertonicPlayer = player
+                player.play()
+
+                status = "Idle"
+            } catch {
+                status = "Error: \(error.localizedDescription)"
+            }
+            isBusy = false
+        }
+    }
 }
 
-/// Bridges `AVAudioPlayerDelegate`'s completion callback to a plain closure
-/// so `TTSViewModel` can advance to the next chunk without conforming to
-/// `NSObject` itself.
-private final class KokoroChunkPlaybackDelegate: NSObject, AVAudioPlayerDelegate {
-    private let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
-    }
-}
 

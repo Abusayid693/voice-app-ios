@@ -42,6 +42,19 @@ struct TTSHomeView: View {
                             }
                         }
                         .disabled(isEngineLocked)
+                    case .supertonic3:
+                        Picker("Language", selection: $viewModel.supertonicLanguage) {
+                            ForEach(SupertonicLanguage.all) { language in
+                                Text(language.displayName).tag(language)
+                            }
+                        }
+                        .disabled(isEngineLocked)
+                        Picker("Voice", selection: $viewModel.supertonicVoice) {
+                            ForEach(SupertonicVoice.allCases) { voice in
+                                Text(voice.displayName).tag(voice)
+                            }
+                        }
+                        .disabled(isEngineLocked)
                     }
                 }
 
@@ -80,7 +93,7 @@ struct TTSHomeView: View {
                     switch viewModel.engine {
                     case .kokoroAne:
                         KokoroGenerationListView(viewModel: viewModel)
-                    case .pocketTts:
+                    case .pocketTts, .supertonic3:
                         Button(action: viewModel.runDownloadAndSpeak) {
                             if viewModel.isBusy {
                                 ProgressView()

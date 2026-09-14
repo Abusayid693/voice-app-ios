@@ -31,7 +31,10 @@
 		5456C9361F89DA9F44A07634 /* CustomKokoroModel in Resources */ = {isa = PBXBuildFile; fileRef = 336FA80C01B8751C4A246C5D /* CustomKokoroModel */; };
 		599F1B0430B2A85E9E7A8BA2 /* CardText.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE877075D043476A69F82D2F /* CardText.swift */; };
 		59AACAA79C276580F3D2A917 /* ReadAlongPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF60F7A71F5E9FFA62ADDF16 /* ReadAlongPlayerView.swift */; };
+		5AB338DB909FA7A28268A31B /* SupertonicLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 333D432EC9388D7C22E5D81F /* SupertonicLanguage.swift */; };
+		655CE0F29DF8F2A9F95FBF3E /* AudioPlaybackDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */; };
 		67801616FA55DBDEC073FE1E /* CreateVoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */; };
+		67A6730CC9678ADA29D6D727 /* Supertonic3EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E831F0E313B5D438E899A4 /* Supertonic3EngineService.swift */; };
 		6AA586D1EF397B16E67E331D /* DemoContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
 		7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */; };
@@ -44,6 +47,7 @@
 		801C80FF1382D90ED246370E /* TrendingBookCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9016A555EFF94E335E35D39C /* TrendingBookCard.swift */; };
 		83975B79CB40408F447C561F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA21F0B398C4B3DA5EE02D6 /* AboutView.swift */; };
 		846BCD15B53DBF85CD1BF2BB /* TrendingBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C3E7070E8D2293BE1EEC9E /* TrendingBook.swift */; };
+		858CED334C1AC7A9F9B8D1D7 /* SupertonicVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
 		87945B798B5808A1DE54193D /* VoiceDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */; };
 		8CCDD010CEB39749F8D06671 /* VoiceRecorderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784AE95CAB2310D364034251 /* VoiceRecorderService.swift */; };
@@ -83,7 +87,8 @@
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		0A87BD4818896A62FBA71633 /* PocketLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketLanguage.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackDelegate.swift; sourceTree = "<group>"; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -91,6 +96,7 @@
 		296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoContent.swift; sourceTree = "<group>"; };
 		3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroAneTestApp.swift; sourceTree = "<group>"; };
 		30A3AE469CA3D6649CCD731F /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		333D432EC9388D7C22E5D81F /* SupertonicLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupertonicLanguage.swift; sourceTree = "<group>"; };
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
 		344A4ABF20807BF76484A45D /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
 		3770C618DD7E313B98AF2EC5 /* LibraryPlayback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPlayback.swift; sourceTree = "<group>"; };
@@ -101,6 +107,7 @@
 		42F031436CEB5A91169A486C /* TTSHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSHomeView.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
 		4567A06F6893E77FF005B84F /* KokoroVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroVariant.swift; sourceTree = "<group>"; };
+		4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupertonicVoice.swift; sourceTree = "<group>"; };
 		53E1EBEEA3D87A28330ED0B3 /* VoicePackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePackStore.swift; sourceTree = "<group>"; };
 		5A2F360DCA771A11690BA6DD /* PrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryButtonStyle.swift; sourceTree = "<group>"; };
 		5D1118094C4B055386486F9B /* BundledMandarinVoices */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledMandarinVoices; sourceTree = SOURCE_ROOT; };
@@ -113,6 +120,7 @@
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
 		8740E1BD4725F44C401BEA83 /* InstantCloneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantCloneView.swift; sourceTree = "<group>"; };
 		9016A555EFF94E335E35D39C /* TrendingBookCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBookCard.swift; sourceTree = "<group>"; };
+		93E831F0E313B5D438E899A4 /* Supertonic3EngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supertonic3EngineService.swift; sourceTree = "<group>"; };
 		99AC5E4F811FF7A2FA024EB7 /* TrendingBooksViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingBooksViewModel.swift; sourceTree = "<group>"; };
 		99BCBB265406E5783559C7D7 /* VoicesTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicesTabView.swift; sourceTree = "<group>"; };
 		9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskStorage.swift; sourceTree = "<group>"; };
@@ -302,6 +310,8 @@
 				C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */,
 				4567A06F6893E77FF005B84F /* KokoroVariant.swift */,
 				0A87BD4818896A62FBA71633 /* PocketLanguage.swift */,
+				333D432EC9388D7C22E5D81F /* SupertonicLanguage.swift */,
+				4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */,
 				FBCF88E3915597CD4B7FD58D /* Voice.swift */,
 				3E216E7D8A7A543D1795B03D /* VoiceCatalog.swift */,
 				79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */,
@@ -390,6 +400,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		B44AB737974FCE387847E3DB /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
 		BD6A2CBF28D480E9C5088724 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -424,6 +442,7 @@
 			children = (
 				431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */,
 				70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */,
+				93E831F0E313B5D438E899A4 /* Supertonic3EngineService.swift */,
 				F56A5F0063B6AF17EADB554F /* VoicePackSizeService.swift */,
 			);
 			path = Services;
@@ -432,6 +451,7 @@
 		CB7D39C73A5D9F773FAF3F54 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				B44AB737974FCE387847E3DB /* Audio */,
 				6AB352A9173D78AA8828F4BA /* FileSystem */,
 				2DBFDF6410F4960A15949668 /* Networking */,
 			);
@@ -509,7 +529,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
-						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -558,6 +577,7 @@
 			files = (
 				83975B79CB40408F447C561F /* AboutView.swift in Sources */,
 				95BAE181CEFF899DB13372AF /* AllTrendingBooksView.swift in Sources */,
+				655CE0F29DF8F2A9F95FBF3E /* AudioPlaybackDelegate.swift in Sources */,
 				053A30AD8C7AE06777C0EA2C /* BlobShape.swift in Sources */,
 				599F1B0430B2A85E9E7A8BA2 /* CardText.swift in Sources */,
 				FA13C1A8152C56C1D29BFC27 /* ChunkState.swift in Sources */,
@@ -594,6 +614,9 @@
 				208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */,
 				EC57AD2AB0A41972F87CFA99 /* SetupSheet.swift in Sources */,
 				918CCAA9F1918E9F3B1C7CF1 /* StorageView.swift in Sources */,
+				67A6730CC9678ADA29D6D727 /* Supertonic3EngineService.swift in Sources */,
+				5AB338DB909FA7A28268A31B /* SupertonicLanguage.swift in Sources */,
+				858CED334C1AC7A9F9B8D1D7 /* SupertonicVoice.swift in Sources */,
 				B43FF140251F0F882F5521C4 /* TTSHomeView.swift in Sources */,
 				2F6455AAA7ACC110E25C2620 /* TTSViewModel.swift in Sources */,
 				A31090C8406142856F289B20 /* TextEntrySheet.swift in Sources */,
@@ -630,7 +653,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -705,7 +728,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Q2F3H94YUP;
+				DEVELOPMENT_TEAM = V667L4VT6C;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

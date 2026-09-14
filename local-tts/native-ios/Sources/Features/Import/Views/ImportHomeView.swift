@@ -74,7 +74,7 @@ struct ImportHomeView: View {
     @State private var isScrolledToTop = true
 
     private var isFullyDownloaded: Bool {
-        packs.isKokoroPackReady && packs.isPocketPackDownloaded
+        packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
     }
 
     var body: some View {
@@ -229,7 +229,12 @@ struct ImportHomeView: View {
                 id: "pocket-\(voice.code)", voice: voice, engine: .pocketTts,
                 engineLabel: "Pocket TTS", isAvailable: packs.isPocketPackDownloaded)
         }
-        return kokoro + pocket
+        let supertonic3 = VoiceCatalog.supertonic3.map { voice in
+            VoiceTile(
+                id: "supertonic3-\(voice.code)", voice: voice, engine: .supertonic3,
+                engineLabel: "Supertonic-3", isAvailable: packs.isSupertonic3Downloaded)
+        }
+        return kokoro + pocket + supertonic3
     }
 
     private var trendingVoicesSection: some View {

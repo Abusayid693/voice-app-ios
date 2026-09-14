@@ -32,6 +32,14 @@ final class VoicePackStore: ObservableObject {
     /// imprecision ADR 7 documents for Pocket TTS.
     @Published private(set) var kokoroMandarinModelDirectory: URL?
 
+    /// A single bool, not a Set — one Supertonic-3 pack covers all 31
+    /// languages and all 10 voices (see `VoicePack.supertonic3`).
+    @Published private(set) var isSupertonic3Downloaded = false
+    /// Resolved the same way (and with the same caveat) as
+    /// `kokoroMandarinModelDirectory`. Kept separate from Pocket's
+    /// whole-shared-cache measurement so Storage doesn't count it twice.
+    @Published private(set) var supertonic3ModelDirectory: URL?
+
     // MARK: - Download progress
 
     /// Which pack (`VoicePack.id`) is downloading, if any. `TTSViewModel.isBusy`
@@ -53,11 +61,13 @@ final class VoicePackStore: ObservableObject {
     private static let pocketPackDownloadedLanguagesDefaultsKey = "pocketPackDownloadedLanguages"
     // Original single-language flag, kept only to migrate existing installs.
     private static let legacyPocketPackDownloadedBoolKey = "pocketPackDownloaded"
+    private static let supertonic3DownloadedDefaultsKey = "supertonic3Downloaded"
 
     init(kokoroModelDirectory: URL?, isKokoroPackBundled: Bool) {
         self.kokoroModelDirectory = kokoroModelDirectory
         kokoroDownloadedVariants = Self.loadKokoroDownloadedVariants(bundledEnglish: isKokoroPackBundled)
         pocketDownloadedLanguages = Self.loadPocketDownloadedLanguages()
+        isSupertonic3Downloaded = UserDefaults.standard.bool(forKey: Self.supertonic3DownloadedDefaultsKey)
     }
 
     // MARK: - Readiness
@@ -87,6 +97,14 @@ final class VoicePackStore: ObservableObject {
         kokoroMandarinModelDirectory = directory
     }
 
+    /// Same idea as `noteModelDirectory(_:for:)`, for the one Supertonic-3
+    /// pack — called separately from `markSupertonic3Downloaded()` so the
+    /// generation path (which resolves the directory but shouldn't mark the
+    /// pack "downloaded" for Setup-UI purposes) can still record it.
+    func noteSupertonic3ModelDirectory(_ directory: URL) {
+        supertonic3ModelDirectory = directory
+    }
+
     func markKokoroDownloaded(_ variant: KokoroVariant) {
         kokoroDownloadedVariants.insert(variant)
         UserDefaults.standard.set(
@@ -98,6 +116,11 @@ final class VoicePackStore: ObservableObject {
         UserDefaults.standard.set(
             pocketDownloadedLanguages.map(\.rawValue),
             forKey: Self.pocketPackDownloadedLanguagesDefaultsKey)
+    }
+
+    func markSupertonic3Downloaded() {
+        isSupertonic3Downloaded = true
+        UserDefaults.standard.set(true, forKey: Self.supertonic3DownloadedDefaultsKey)
     }
 
     private static func loadKokoroDownloadedVariants(bundledEnglish: Bool) -> Set<KokoroVariant> {

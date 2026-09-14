@@ -10,7 +10,11 @@ import Foundation
 /// chunk-level read-along highlighting works identically either way.
 /// Pocket TTS never gets audio saved (it has no accumulated buffer to
 /// save, only streamed frames — see issue #11), so a Pocket entry can
-/// only ever be viewed as text.
+/// only ever be viewed as text. Supertonic-3 (issue #27) is saved the same
+/// way — text only, no audio — even though it does produce one complete
+/// buffer like Kokoro: the SDK chunks its text internally with no
+/// app-visible boundaries, so it can't reuse Kokoro's chunk-reconstruction
+/// replay path, and has no read-along screen of its own.
 struct SavedGeneration: Identifiable, Codable, Equatable {
     let id: UUID
     let text: String

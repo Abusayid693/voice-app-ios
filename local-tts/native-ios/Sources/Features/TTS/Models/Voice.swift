@@ -22,12 +22,19 @@ struct Voice: Identifiable, Hashable, Sendable {
     /// The sentence this voice's bundled preview clip says — kept so the
     /// clips stay regenerable (see docs/adr/0009-bundled-voice-preview-clips.md).
     var previewLine: String?
+    /// Overrides `VoiceCode`'s prefix-based flag lookup. `VoiceCode` assumes
+    /// a code's prefix names one locale (`af_` = American, `zf_` = Mandarin);
+    /// Supertonic-3's `F1`/`M1`-style codes carry no such prefix and aren't
+    /// tied to one language at all — the same voice speaks whichever
+    /// language you pass alongside it. Set this instead of inventing a fake
+    /// prefix for a convention those codes don't follow.
+    var flagOverride: String?
 
     var id: String { code }
 
     /// `af_alloy` -> `Alloy`, `bill_boerst` -> `Bill Boerst`.
     var displayName: String { VoiceCode.displayName(for: code) }
-    var flag: String { VoiceCode.flag(for: code) }
+    var flag: String { flagOverride ?? VoiceCode.flag(for: code) }
     var avatarAssetName: String? { hasAvatar ? "VoiceAvatar_\(code)" : nil }
 }
 

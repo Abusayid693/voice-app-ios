@@ -1,11 +1,11 @@
 import LucideSwift
 import SwiftUI
 
-/// Settings > Voice Packs — real download/size status for both engines'
+/// Settings > Voice Packs — real download/size status for every engine's
 /// packs (see issue #9). Deletion isn't offered yet: Kokoro's pack is
-/// bundled with the app (nothing to re-download if removed), and Pocket has
-/// no re-download-on-demand path from here yet — both are flagged as
-/// follow-ups in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
+/// bundled with the app (nothing to re-download if removed), and Pocket/
+/// Supertonic-3 have no re-download-on-demand path from here yet — all
+/// flagged as follow-ups in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
 struct VoicePacksView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
@@ -26,6 +26,13 @@ struct VoicePacksView: View {
         DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
     }
 
+    // nil (not 0) until a Setup download or a generation resolves the exact
+    // directory this session — see supertonic3ModelDirectory's doc comment.
+    private var supertonic3SizeBytes: Int64? {
+        guard let directory = packs.supertonic3ModelDirectory else { return nil }
+        return DiskStorage.directorySize(at: directory)
+    }
+
     var body: some View {
         List {
             Section {
@@ -44,6 +51,11 @@ struct VoicePacksView: View {
                     subtitle: "\(TTSViewModel.pocketVoices.count) English voices",
                     isReady: packs.isPocketPackDownloaded,
                     sizeBytes: packs.isPocketPackDownloaded ? pocketSizeBytes : nil)
+                packRow(
+                    title: "Supertonic-3",
+                    subtitle: "31 languages · 10 voices",
+                    isReady: packs.isSupertonic3Downloaded,
+                    sizeBytes: packs.isSupertonic3Downloaded ? supertonic3SizeBytes : nil)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }

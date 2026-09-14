@@ -16,7 +16,7 @@ enum VoiceRecorderError: Error {
 final class VoiceRecorderService {
     private var recorder: AVAudioRecorder?
     private var previewPlayer: AVAudioPlayer?
-    private var previewDelegate: RecorderPreviewDelegate?
+    private var previewDelegate: AudioPlaybackDelegate?
 
     private lazy var recordingURL: URL =
         FileManager.default.temporaryDirectory.appendingPathComponent("voice-clone-sample.wav")
@@ -103,7 +103,7 @@ final class VoiceRecorderService {
         }
         do {
             let player = try AVAudioPlayer(contentsOf: url)
-            let delegate = RecorderPreviewDelegate(onFinish: onFinish)
+            let delegate = AudioPlaybackDelegate(onFinish: onFinish)
             player.delegate = delegate
             previewDelegate = delegate
             previewPlayer = player
@@ -117,17 +117,5 @@ final class VoiceRecorderService {
         previewPlayer?.stop()
         previewPlayer = nil
         previewDelegate = nil
-    }
-}
-
-private final class RecorderPreviewDelegate: NSObject, AVAudioPlayerDelegate {
-    private let onFinish: () -> Void
-
-    init(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-    }
-
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        onFinish()
     }
 }
