@@ -43,10 +43,18 @@ final class TTSViewModel: ObservableObject {
         "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
     ]
 
+    // FluidAudio's own official roster (KokoroAneConstants.japaneseVoices,
+    // as of the pinned commit — see project.yml) — unlike Mandarin's
+    // numbered set, this one has no provenance ambiguity: it's the SDK's
+    // own curated list, all 5 confirmed present as real voice .bin files
+    // on FluidAudio's hosted repo. No bundling step needed.
+    static let japaneseVoices = ["jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo"]
+
     static func kokoroVoices(for variant: KokoroVariant) -> [String] {
         switch variant {
         case .english: return kokoroVoices
         case .mandarin: return mandarinVoices
+        case .japanese: return japaneseVoices
         }
     }
 
@@ -221,12 +229,20 @@ final class TTSViewModel: ObservableObject {
     init(dependencies: DependencyContainer) {
         kokoroServices = Dictionary(
             uniqueKeysWithValues: KokoroVariant.allCases.map { variant in
-                let manager = variant == .english ? dependencies.kokoroManager : dependencies.kokoroMandarinManager
-                let directory = variant == .english ? dependencies.kokoroModelDirectory : nil
-                return (
-                    variant,
-                    KokoroEngineService(manager: manager, directory: directory, variant: variant.sdkVariant)
-                )
+                let manager: KokoroAneManager
+                let directory: URL?
+                switch variant {
+                case .english:
+                    manager = dependencies.kokoroManager
+                    directory = dependencies.kokoroModelDirectory
+                case .mandarin:
+                    manager = dependencies.kokoroMandarinManager
+                    directory = nil
+                case .japanese:
+                    manager = dependencies.kokoroJapaneseManager
+                    directory = nil
+                }
+                return (variant, KokoroEngineService(manager: manager, directory: directory, variant: variant))
             })
         pocketServices = Dictionary(
             uniqueKeysWithValues: PocketLanguage.allCases.map { language in
@@ -922,15 +938,23 @@ final class TTSViewModel: ObservableObject {
 
     /// Sums file sizes from HuggingFace's public tree API for a Kokoro-ANE
     /// variant's bundle (`FluidInference/kokoro-82m-coreml/ANE` for English,
-    /// `ANE-zh` for Mandarin) — the SDK's own progress callback reports a
-    /// fraction, not byte totals, so this is a best-effort, independent
-    /// lookup purely for the "total size" display. For Mandarin this
-    /// slightly overcounts (it includes FluidAudio's full 100-voice
-    /// `voices/` folder, but `mandarinVoices` only fetches 2 of those) —
-    /// acceptable for a progress display, not worth a second, per-file
+    /// `ANE-zh` for Mandarin, `ANE-ja` for Japanese) — the SDK's own
+    /// progress callback reports a fraction, not byte totals, so this is a
+    /// best-effort, independent lookup purely for the "total size"
+    /// display. For Mandarin this slightly overcounts (it includes
+    /// FluidAudio's full 100-voice `voices/` folder, but `mandarinVoices`
+    /// only fetches 2 of those); for Japanese it overcounts more
+    /// substantially (includes the ~114MB `assets/` G2P folder, which
+    /// fetches lazily on first synthesis, not as part of `ensureModels`)
+    /// — acceptable for a progress display, not worth a second, per-file
     /// HF lookup.
     private func fetchKokoroTotalBytes(variant: KokoroVariant) async -> Int64? {
-        let subdirectory = variant == .english ? "ANE" : "ANE-zh"
+        let subdirectory: String
+        switch variant {
+        case .english: subdirectory = "ANE"
+        case .mandarin: subdirectory = "ANE-zh"
+        case .japanese: subdirectory = "ANE-ja"
+        }
         return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
             url:
                 "https://huggingface.co/api/models/FluidInference/kokoro-82m-coreml/tree/main/\(subdirectory)?recursive=true",

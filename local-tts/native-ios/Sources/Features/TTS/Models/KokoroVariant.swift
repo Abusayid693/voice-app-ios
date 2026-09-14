@@ -6,12 +6,12 @@ import Foundation
 /// case names directly, matching how `PocketLanguage` already wraps
 /// `PocketTtsLanguage`.
 ///
-/// Japanese is deliberately excluded: `KokoroAneManager.phonemes(for:)`
-/// unconditionally throws for it today — no text G2P frontend exists (see
-/// FluidInference/FluidAudio#914). A pack for a variant that can't accept
-/// typed text isn't useful yet.
+/// Japanese requires FluidAudio pinned past v0.15.7 (see `project.yml`'s
+/// `revision:` pin) — `KokoroAneManager.phonemes(for:)` unconditionally
+/// threw for it before FluidInference/FluidAudio#915 (merged, not yet in a
+/// tagged release) added a real MeCab+Cutlet text frontend.
 enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
-    case english, mandarin
+    case english, mandarin, japanese
 
     var id: Self { self }
 
@@ -19,6 +19,7 @@ enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Senda
         switch self {
         case .english: return .english
         case .mandarin: return .mandarin
+        case .japanese: return .japanese
         }
     }
 
@@ -26,6 +27,7 @@ enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Senda
         switch self {
         case .english: return "English"
         case .mandarin: return "Mandarin"
+        case .japanese: return "Japanese"
         }
     }
 
@@ -33,6 +35,7 @@ enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Senda
         switch self {
         case .english: return "Kokoro voice pack"
         case .mandarin: return "Kokoro voice pack (Mandarin)"
+        case .japanese: return "Kokoro voice pack (Japanese)"
         }
     }
 
@@ -45,6 +48,14 @@ enum KokoroVariant: String, CaseIterable, Identifiable, Codable, Hashable, Senda
         // app already (see TTSViewModel.mandarinVoices), so only the core
         // chain + those 2 voices count toward this download figure.
         case .mandarin: return "10 Mandarin voices, ~242MB download"
+        // All 5 voices are FluidAudio's own official roster
+        // (KokoroAneConstants.japaneseVoices) and fetch during this
+        // download (~85MB: chain + all 5 voices). The Japanese G2P
+        // frontend's own assets (~114MB — MeCab dictionary + Cutlet word
+        // list) are separate and fetch lazily on the *first* Japanese
+        // synthesis, transparently inside the SDK — not part of this
+        // number, and not something this app controls or pre-fetches.
+        case .japanese: return "5 Japanese voices, ~85MB download (+~114MB on first use)"
         }
     }
 }

@@ -787,6 +787,9 @@ enum VoiceLocale {
         if voiceName.hasPrefix("zf_") || voiceName.hasPrefix("zm_") {
             return "🇨🇳"
         }
+        if voiceName.hasPrefix("jf_") || voiceName.hasPrefix("jm_") {
+            return "🇯🇵"
+        }
         return "🇺🇸"
     }
 }

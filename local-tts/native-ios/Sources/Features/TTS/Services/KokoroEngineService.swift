@@ -9,14 +9,14 @@ final class KokoroEngineService {
     private let manager: KokoroAneManager
     // Must match the directory `manager` itself was constructed with
     // (English: DependencyContainer's writable CustomKokoroModel copy;
-    // Mandarin: nil, since that manager has no bundled directory) —
-    // passing the wrong one here would make ensureModels() check a
-    // directory this manager never reads from, and could trigger a
-    // spurious network download even though a bundled pack is present.
+    // Mandarin/Japanese: nil, since those managers have no bundled
+    // directory) — passing the wrong one here would make ensureModels()
+    // check a directory this manager never reads from, and could trigger
+    // a spurious network download even though a bundled pack is present.
     private let directory: URL?
-    private let variant: KokoroAneVariant
+    private let variant: KokoroVariant
 
-    init(manager: KokoroAneManager, directory: URL?, variant: KokoroAneVariant) {
+    init(manager: KokoroAneManager, directory: URL?, variant: KokoroVariant) {
         self.manager = manager
         self.directory = directory
         self.variant = variant
@@ -26,27 +26,40 @@ final class KokoroEngineService {
     /// downloaded in a previous app launch, this returns almost instantly
     /// with no network activity at all, and `progressHandler` never fires.
     /// Returns the resolved repo directory — English already knows its own
-    /// (the bundled `directory`), but Mandarin doesn't until this actually
-    /// runs, and Settings' Storage page needs the *exact* directory (not
-    /// FluidAudio's whole shared cache dir, which Pocket TTS's languages
-    /// also share) to report Mandarin's own size without double-counting.
+    /// (the bundled `directory`), but Mandarin/Japanese don't until this
+    /// actually runs, and Settings' Storage page needs the *exact*
+    /// directory (not FluidAudio's whole shared cache dir, which Pocket
+    /// TTS's languages also share) to report each pack's own size without
+    /// double-counting.
     @discardableResult
     func ensureModels(progressHandler: ProgressHandler?) async throws -> URL {
         let repoDirectory = try await KokoroAneResourceDownloader.ensureModels(
-            variant: variant, directory: directory, progressHandler: progressHandler)
-        guard variant == .mandarin else { return repoDirectory }
+            variant: variant.sdkVariant, directory: directory, progressHandler: progressHandler)
+        // English's whole 28-voice roster is already bundled from the
+        // start (ADR 2) — no per-voice network fetch is ever needed or
+        // useful for it.
+        guard variant != .english else { return repoDirectory }
 
-        try copyBundledMandarinVoices(into: repoDirectory)
+        if variant == .mandarin {
+            try copyBundledMandarinVoices(into: repoDirectory)
+        }
 
-        // ensureModels above only guarantees the default voice (zf_001).
-        // zm_009 is the only other roster entry FluidAudio's own repo
-        // actually hosts (see TTSViewModel.mandarinVoices) — fetch it too
-        // so a "downloaded" pack means every listed voice is immediately
-        // usable, not one more one-off network fetch happening later. The
-        // other 8 names come from copyBundledMandarinVoices above, not
-        // the network — FluidAudio's repo doesn't have them.
-        _ = try await KokoroAneResourceDownloader.ensureVoicePack(
-            "zm_009", repoDirectory: repoDirectory, variant: .mandarin)
+        // The base ensureModels call above only guarantees the variant's
+        // own documented default voice. Eagerly fetch the rest of this
+        // app's roster (TTSViewModel.kokoroVoices(for:)) too, so a
+        // "downloaded" pack means every listed voice is immediately
+        // usable rather than one-off network fetches happening later, the
+        // first time each voice gets picked. `try?`, not `try await`: a
+        // name this can't fetch (Mandarin's 8 bundled voices, already
+        // copied in above — FluidAudio's repo doesn't host them under
+        // those names) or a transient network hiccup on one voice
+        // shouldn't fail the whole pack download over an already-optional
+        // extra.
+        let defaultVoice = variant.sdkVariant.defaultVoice
+        for name in TTSViewModel.kokoroVoices(for: variant) where name != defaultVoice {
+            _ = try? await KokoroAneResourceDownloader.ensureVoicePack(
+                name, repoDirectory: repoDirectory, variant: variant.sdkVariant)
+        }
         return repoDirectory
     }
 

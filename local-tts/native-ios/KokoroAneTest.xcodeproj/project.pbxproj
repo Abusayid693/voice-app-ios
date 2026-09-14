@@ -789,8 +789,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio";
 			requirement = {
-				kind = exactVersion;
-				version = 0.15.6;
+				kind = revision;
+				revision = 71242fa6df36ed956ee347690df4428a736eb761;
 			};
 		};
 		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {

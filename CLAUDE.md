@@ -119,6 +119,11 @@ assets/                             // source-of-truth exports (voice-covers/, k
 3. If it's a new top-level flow (gated, not pushed — like Onboarding), it's switched at the `AppCoordinator`/root level, not inside another flow's `NavigationStack`.
 4. Update the target file tree above.
 
+## Code style
+
+- **Keep code comments short.** One line explaining a non-obvious "why," not multi-paragraph essays. Skip it entirely if the code is self-explanatory.
+- **Keep commit messages short.** A one-line summary is usually enough; add a couple of plain bullet points only if the change genuinely needs them. No multi-paragraph rationale essays.
+
 ## Git & GitHub workflow
 
 - **Non-trivial work (a new feature, not a one-line fix) gets its own branch off `main`**, named for what it does (e.g. `voice-cloning-pocket-tts`), not committed to `main` directly.
