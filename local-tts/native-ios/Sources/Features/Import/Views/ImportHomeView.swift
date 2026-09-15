@@ -56,6 +56,9 @@ struct ImportHomeView: View {
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
     @StateObject private var openLibraryBooksViewModel = OpenLibraryBooksViewModel()
+    // Same reasoning as openLibraryBooksViewModel above — owned here, not
+    // TTSViewModel, and outlives re-renders for the life of this view.
+    @StateObject private var classicReadsViewModel = ClassicReadsViewModel()
     // Which voice's preview sheet is open, if any — pure navigation state
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
@@ -110,6 +113,7 @@ struct ImportHomeView: View {
                     trendingVoicesSection
                     createYourOwnVoiceRow
                     readAnythingSection
+                    ClassicReadsSection(viewModel: classicReadsViewModel)
                     newInRomanceSection
                     createYourOwnBookRow
                     projectsSection
