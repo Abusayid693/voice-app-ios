@@ -21,7 +21,7 @@ struct WriteTextView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 TextEditor(text: $viewModel.text)
-                    .font(.title3)
+                    .font(.appReading)
                     .foregroundStyle(Color.appPrimaryText)
                     .scrollContentBackground(.hidden)
                     .background(Color.appBackground)
@@ -67,16 +67,18 @@ struct WriteTextView: View {
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent("Status") {
-                Text(viewModel.status).foregroundStyle(Color.appSecondaryText)
+                Text(viewModel.status).font(.appBody).foregroundStyle(Color.appSecondaryText)
             }
+            .font(.appBody)
             .foregroundStyle(Color.appPrimaryText)
             if viewModel.isBusy, viewModel.initSeconds == nil {
                 ProgressView(value: packs.fraction)
             }
             if let streamChunkProgress = viewModel.streamChunkProgress {
                 LabeledContent("Chunk") {
-                    Text(streamChunkProgress).foregroundStyle(Color.appSecondaryText)
+                    Text(streamChunkProgress).font(.appBody).foregroundStyle(Color.appSecondaryText)
                 }
+                .font(.appBody)
                 .foregroundStyle(Color.appPrimaryText)
             }
         }
@@ -100,7 +102,7 @@ struct WriteTextView: View {
                         .frame(maxWidth: .infinity)
                 } else {
                     Text("Generate")
-                        .bold()
+                        .font(.appButtonLabel)
                         .frame(maxWidth: .infinity)
                 }
             }

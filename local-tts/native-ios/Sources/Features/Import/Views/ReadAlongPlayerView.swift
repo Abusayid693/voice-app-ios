@@ -76,7 +76,7 @@ struct ReadAlongPlayerView: View {
                         isUserScrolling = false
                         withAnimation { proxy.scrollTo(generation.currentChunkIndex, anchor: .center) }
                     }
-                    .font(.caption)
+                    .font(.appLabel)
                     .foregroundStyle(Color.appPrimaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -92,7 +92,7 @@ struct ReadAlongPlayerView: View {
     private func chunkText(generation: KokoroGeneration, index: Int) -> some View {
         let isCurrentChunk = index == generation.currentChunkIndex && generation.isPlaying
         return Text(generation.chunkTexts[index])
-            .font(.title3)
+            .font(.appReading)
             .foregroundStyle(isCurrentChunk ? Color.appPrimaryText : Color.appSecondaryText)
             // Without this, the Text only sizes to its own glyph width
             // inside the leading-aligned VStack, so the highlight rectangle

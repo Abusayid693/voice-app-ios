@@ -120,14 +120,13 @@ private struct VoicePreviewCard: View {
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Text(tile.displayName)
-                        .font(.title3)
-                        .bold()
+                        .font(.appTitle)
                         .foregroundStyle(Color.appPrimaryText)
                     Text(tile.countryFlag)
-                        .font(.title3)
+                        .font(.appTitle)
                 }
                 Text(tile.longDescription)
-                    .font(.subheadline)
+                    .font(.appBody)
                     .foregroundStyle(Color.appSecondaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -152,7 +151,7 @@ private struct VoicePreviewCard: View {
 
             if !hasPreview {
                 Text("Preview coming soon")
-                    .font(.caption2)
+                    .font(.appMeta)
                     .foregroundStyle(Color.appTertiaryText)
             }
 

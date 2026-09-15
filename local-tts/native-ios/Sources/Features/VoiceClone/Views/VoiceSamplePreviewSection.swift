@@ -43,7 +43,7 @@ struct VoiceSamplePreviewSection: View {
 
             if let cloneErrorMessage = viewModel.cloneErrorMessage {
                 Text(cloneErrorMessage)
-                    .font(.caption)
+                    .font(.appLabel)
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -60,7 +60,7 @@ struct VoiceSamplePreviewSection: View {
                 if viewModel.isCloning {
                     ProgressView().tint(Color.primaryButtonText).frame(maxWidth: .infinity)
                 } else {
-                    Text("Clone Voice").bold().frame(maxWidth: .infinity)
+                    Text("Clone Voice").frame(maxWidth: .infinity)
                 }
             }
             .buttonStyle(.primary)

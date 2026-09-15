@@ -19,6 +19,7 @@ struct SetupSheet: View {
                     .listRowBackground(Color.appSecondaryBackground)
                 } footer: {
                     Text("Download each voice pack to make its voices available when writing.")
+                        .font(.appBody)
                         .foregroundStyle(Color.appSecondaryText)
                 }
             }
@@ -45,8 +46,8 @@ struct SetupSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pack.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                    Text(pack.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                    Text(pack.title).font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
+                    Text(pack.subtitle).font(.appLabel).foregroundStyle(Color.appSecondaryText)
                 }
                 Spacer()
                 if isReady {
@@ -66,7 +67,7 @@ struct SetupSheet: View {
             if isDownloadingThis {
                 ProgressView(value: packs.fraction)
                 Text(packs.progressLabel)
-                    .font(.caption2)
+                    .font(.appMeta)
                     .foregroundStyle(Color.appSecondaryText)
             }
         }

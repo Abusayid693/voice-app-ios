@@ -10,7 +10,7 @@ struct TextEntrySheet: View {
     var body: some View {
         NavigationStack {
             TextEditor(text: $text)
-                .font(.title3)
+                .font(.appReading)
                 .padding(4)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

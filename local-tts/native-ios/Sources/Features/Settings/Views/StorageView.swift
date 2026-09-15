@@ -62,9 +62,10 @@ struct StorageView: View {
 
             Section {
                 HStack {
-                    Text("Total").bold().foregroundStyle(Color.appPrimaryText)
+                    Text("Total").font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
                     Spacer()
                     Text(DiskStorage.formattedSize(totalBytes))
+                        .font(.appBody)
                         .foregroundStyle(Color.appPrimaryText)
                 }
             }
@@ -78,9 +79,9 @@ struct StorageView: View {
 
     private func row(title: String, bytes: Int64) -> some View {
         HStack {
-            Text(title).foregroundStyle(Color.appPrimaryText)
+            Text(title).font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
             Spacer()
-            Text(DiskStorage.formattedSize(bytes)).foregroundStyle(Color.appSecondaryText)
+            Text(DiskStorage.formattedSize(bytes)).font(.appBody).foregroundStyle(Color.appSecondaryText)
         }
     }
 }

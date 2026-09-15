@@ -64,6 +64,7 @@ struct TTSHomeView: View {
                     } label: {
                         HStack {
                             Text(viewModel.text.isEmpty ? "Tap to enter text" : viewModel.text)
+                                .font(.appBody)
                                 .foregroundStyle(viewModel.text.isEmpty ? .secondary : .primary)
                                 .lineLimit(3)
                                 .multilineTextAlignment(.leading)
@@ -82,6 +83,7 @@ struct TTSHomeView: View {
                                     .frame(maxWidth: .infinity)
                             } else {
                                 Text("Generate")
+                                    .font(.appButtonLabel)
                                     .frame(maxWidth: .infinity)
                             }
                         }
@@ -100,6 +102,7 @@ struct TTSHomeView: View {
                                     .frame(maxWidth: .infinity)
                             } else {
                                 Text("Download & Speak")
+                                    .font(.appButtonLabel)
                                     .frame(maxWidth: .infinity)
                             }
                         }
@@ -113,7 +116,7 @@ struct TTSHomeView: View {
                     if packs.didDownload, viewModel.isBusy, viewModel.initSeconds == nil {
                         ProgressView(value: packs.fraction)
                         LabeledContent("Downloaded") {
-                            Text(packs.progressLabel)
+                            Text(packs.progressLabel).font(.appBody)
                         }
                         if let downloadFileProgress = packs.fileProgress {
                             LabeledContent("Files", value: downloadFileProgress)
@@ -122,12 +125,12 @@ struct TTSHomeView: View {
 
                     if let initSeconds = viewModel.initSeconds {
                         LabeledContent(viewModel.isWarmInit ? "Init (warm)" : "Init (cold, incl. download)") {
-                            Text(String(format: "%.2fs", initSeconds))
+                            Text(String(format: "%.2fs", initSeconds)).font(.appBody)
                         }
                     }
                     if let timeToFirstAudio = viewModel.timeToFirstAudio {
                         LabeledContent("Time to first audio") {
-                            Text(String(format: "%.2fs", timeToFirstAudio))
+                            Text(String(format: "%.2fs", timeToFirstAudio)).font(.appBody)
                         }
                     }
                     if let streamChunkProgress = viewModel.streamChunkProgress {
@@ -135,7 +138,7 @@ struct TTSHomeView: View {
                     }
                     if let synthSeconds = viewModel.synthSeconds {
                         LabeledContent("Synthesis") {
-                            Text(String(format: "%.2fs", synthSeconds))
+                            Text(String(format: "%.2fs", synthSeconds)).font(.appBody)
                         }
                     }
                 }

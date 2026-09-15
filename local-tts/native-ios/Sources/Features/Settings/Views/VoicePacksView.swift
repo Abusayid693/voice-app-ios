@@ -68,8 +68,8 @@ struct VoicePacksView: View {
     private func packRow(title: String, subtitle: String, isReady: Bool, sizeBytes: Int64?) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).foregroundStyle(Color.appPrimaryText)
-                Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                Text(title).font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
+                Text(subtitle).font(.appLabel).foregroundStyle(Color.appSecondaryText)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -77,11 +77,11 @@ struct VoicePacksView: View {
                     title: { Text(isReady ? "Downloaded" : "Not downloaded") },
                     icon: { LucideIcon(isReady ? .circleCheck : .circleArrowDown) }
                 )
-                .font(.caption)
+                .font(.appLabel)
                 .foregroundStyle(isReady ? Color.appPrimaryText : Color.appSecondaryText)
                 if let sizeBytes {
                     Text(DiskStorage.formattedSize(sizeBytes))
-                        .font(.caption2)
+                        .font(.appMeta)
                         .foregroundStyle(Color.appTertiaryText)
                 }
             }

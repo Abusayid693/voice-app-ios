@@ -13,7 +13,7 @@ struct CreateVoiceSheet: View {
     var body: some View {
         VStack(spacing: 16) {
             Text("Create Voice")
-                .font(.headline)
+                .font(.appSectionTitle)
                 .foregroundStyle(Color.appPrimaryText)
                 .padding(.top, 8)
 
@@ -46,8 +46,8 @@ struct CreateVoiceSheet: View {
                 LucideIcon(icon, size: 22, color: Color.appPrimaryText)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                    Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                    Text(title).font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
+                    Text(subtitle).font(.appLabel).foregroundStyle(Color.appSecondaryText)
                 }
                 Spacer()
                 LucideIcon(.chevronRight, color: Color.appTertiaryText)

@@ -27,7 +27,7 @@ struct OpenSourceCard: View {
                     HStack(alignment: .top, spacing: 10) {
                         LucideIcon(.check, size: 15, color: Color.appPrimaryText, strokeWidth: 3)
                         Text(point)
-                            .font(.subheadline)
+                            .font(.appBody)
                             .foregroundStyle(Color.appSecondaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.9)
@@ -84,13 +84,13 @@ struct OpenSourceCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("OPEN SOURCE")
-                    .font(.caption2.bold())
+                    .font(.appLabelStrong)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(.ultraThinMaterial, in: Capsule())
                 Text("Built in the open, for everyone")
-                    .font(.title3.bold())
+                    .font(.appTitle)
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -103,7 +103,7 @@ struct OpenSourceCard: View {
     private var contributeButton: some View {
         Link(destination: Self.githubURL) {
             Text("Contribute")
-                .font(.headline)
+                .font(.appButtonLabel)
                 .foregroundStyle(Color.appPrimaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

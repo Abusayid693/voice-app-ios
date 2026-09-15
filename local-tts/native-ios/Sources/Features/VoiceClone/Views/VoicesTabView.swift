@@ -70,6 +70,7 @@ struct VoicesTabView: View {
         VStack(spacing: 12) {
             LucideIcon(.mic, size: 48, color: Color.appSecondaryText)
             Text("No cloned voices yet")
+                .font(.appBody)
                 .foregroundStyle(Color.appSecondaryText)
             Button("Create your own voice") { isCreateVoicePresented = true }
                 .buttonStyle(.borderedProminent)
@@ -90,7 +91,7 @@ struct VoicesTabView: View {
                         VStack(spacing: 6) {
                             avatar(for: voice, size: 56)
                             Text(voice.name)
-                                .font(.caption)
+                                .font(.appLabel)
                                 .foregroundStyle(Color.appPrimaryText)
                                 .lineLimit(1)
                         }
@@ -110,7 +111,7 @@ struct VoicesTabView: View {
                                 LucideIcon(.plus, color: Color.appSecondaryText)
                             }
                         Text("New voice")
-                            .font(.caption)
+                            .font(.appLabel)
                             .foregroundStyle(Color.appSecondaryText)
                     }
                     .frame(width: 72)
@@ -128,9 +129,10 @@ struct VoicesTabView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(voice.name)
+                    .font(.appRowTitle)
                     .foregroundStyle(Color.appPrimaryText)
                 Text("\(voice.createdAt.formatted(date: .abbreviated, time: .omitted)) · \(voice.language.displayName)")
-                    .font(.caption)
+                    .font(.appLabel)
                     .foregroundStyle(Color.appSecondaryText)
             }
 

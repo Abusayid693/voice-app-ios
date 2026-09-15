@@ -74,9 +74,10 @@ struct LibraryTabView: View {
         VStack(spacing: 12) {
             LucideIcon(.library, size: 48, color: Color.appSecondaryText)
             Text("No generations yet")
+                .font(.appBody)
                 .foregroundStyle(Color.appSecondaryText)
             Text("Text you generate from Write Text will show up here.")
-                .font(.caption)
+                .font(.appLabel)
                 .foregroundStyle(Color.appTertiaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -98,12 +99,13 @@ struct LibraryTabView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(generation.text)
+                    .font(.appRowTitle)
                     .foregroundStyle(Color.appPrimaryText)
                     .lineLimit(2)
                 Text(
                     "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))"
                 )
-                    .font(.caption)
+                    .font(.appLabel)
                     .foregroundStyle(Color.appSecondaryText)
             }
 
