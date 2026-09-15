@@ -57,6 +57,9 @@ struct ImportHomeView: View {
     // as the Import tab stays alive, so "See all" resumes pagination
     // instead of refetching from page 1.
     @StateObject private var trendingBooksViewModel = TrendingBooksViewModel()
+    // Separate object, separate API — see OpenLibraryBooksViewModel's own
+    // doc comment for why this isn't folded into trendingBooksViewModel.
+    @StateObject private var openLibraryBooksViewModel = OpenLibraryBooksViewModel()
     // Which voice's preview sheet is open, if any — pure navigation state
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
@@ -112,6 +115,7 @@ struct ImportHomeView: View {
                     createYourOwnVoiceRow
                     readAnythingSection
                     whatsTrendingSection
+                    newInRomanceSection
                     createYourOwnBookRow
                     projectsSection
                 }
@@ -132,6 +136,7 @@ struct ImportHomeView: View {
                 }
             }
             .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
+            .task { await openLibraryBooksViewModel.loadIfNeeded() }
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {
                 case .instantClone:
@@ -329,6 +334,42 @@ struct ImportHomeView: View {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(curatedTrendingBooks) { book in
                         TrendingBookCard(book: book, coverSize: curatedCoverWidth, coverHeight: curatedCoverHeight)
+                    }
+                }
+            }
+        }
+    }
+
+    // Live OpenLibrary feed, unlike whatsTrendingSection's curated row
+    // above — no "See all" yet (see OpenLibraryBooksViewModel's doc
+    // comment); add one the same way AllTrendingBooksView does if this
+    // grows a full page.
+    private var newInRomanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New in romance").font(.headline).foregroundStyle(Color.appPrimaryText)
+
+            if openLibraryBooksViewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 24)
+            } else if let errorMessage = openLibraryBooksViewModel.loadErrorMessage {
+                VStack(spacing: 8) {
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.appSecondaryText)
+                    Button("Retry") {
+                        Task { await openLibraryBooksViewModel.retry() }
+                    }
+                    .font(.subheadline)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(openLibraryBooksViewModel.books) { book in
+                            OpenLibraryBookCard(book: book)
+                        }
                     }
                 }
             }
