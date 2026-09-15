@@ -2,10 +2,8 @@ import Foundation
 
 /// Static placeholder content for the Import screen's remaining demo
 /// section (Projects) — no backing data source yet, intentionally, per the
-/// current design pass. Trending voices (ImportHomeView.voiceTiles) is real
-/// data; What's trending's preview row is hand-curated (see
-/// ImportHomeView.curatedTrendingBooks) while its "See all" screen stays
-/// live via TrendingBooksViewModel/Gutendex.
+/// current design pass. Trending voices (ImportHomeView.voiceTiles) and
+/// New in romance (OpenLibraryBooksViewModel) are both real data.
 
 struct DemoProject: Identifiable {
     let id = UUID()

@@ -1,10 +1,8 @@
 import LucideSwift
 import SwiftUI
 
-/// One OpenLibrary book's cover + title + author — visually matches
-/// `TrendingBookCard` (same radius/type styles), but not the same type: a
-/// shared protocol/generic card wasn't worth it for one new row over one
-/// existing, stable file — revisit if a third book source shows up.
+/// One OpenLibrary book's cover + title + author, for Import's
+/// "New in romance" row.
 struct OpenLibraryBookCard: View {
     let book: OpenLibraryBook
     var coverSize: CGFloat = 110

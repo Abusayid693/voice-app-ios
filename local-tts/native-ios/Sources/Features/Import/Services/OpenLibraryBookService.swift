@@ -35,8 +35,8 @@ final class OpenLibraryBookService {
             URLQueryItem(name: "sort", value: "new"),
             URLQueryItem(name: "limit", value: "\(limit * Self.overFetchMultiplier)"),
         ]
-        // Same fail-fast reasoning as GutendexBookService: a "what's new" row
-        // that hangs for a minute reads as permanently stuck, not failed.
+        // A "what's new" row that hangs for a minute reads as permanently
+        // stuck, not failed — fail fast so the UI can show a retry instead.
         var request = URLRequest(url: components.url!)
         request.timeoutInterval = 15
         let (data, _) = try await URLSession.shared.data(for: request)
@@ -55,9 +55,7 @@ private struct OpenLibrarySearchResponse: Decodable {
 private struct OpenLibraryDoc: Decodable {
     let key: String
     let title: String
-    // Absent for some works (anonymous/uncredited); a plain array, not
-    // "Last, First" the way Gutendex's author names are, so no reordering
-    // is needed the way GutendexBookService.displayName does.
+    // Absent for some works (anonymous/uncredited).
     let authorName: [String]?
     let coverID: Int?
 

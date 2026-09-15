@@ -54,11 +54,7 @@ struct ImportHomeView: View {
     @ObservedObject var packs: VoicePackStore
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
-    // as the Import tab stays alive, so "See all" resumes pagination
-    // instead of refetching from page 1.
-    @StateObject private var trendingBooksViewModel = TrendingBooksViewModel()
-    // Separate object, separate API — see OpenLibraryBooksViewModel's own
-    // doc comment for why this isn't folded into trendingBooksViewModel.
+    // as the Import tab stays alive.
     @StateObject private var openLibraryBooksViewModel = OpenLibraryBooksViewModel()
     // Which voice's preview sheet is open, if any — pure navigation state
     // for this screen, not shared elsewhere, so it lives here rather than
@@ -114,7 +110,6 @@ struct ImportHomeView: View {
                     trendingVoicesSection
                     createYourOwnVoiceRow
                     readAnythingSection
-                    whatsTrendingSection
                     newInRomanceSection
                     createYourOwnBookRow
                     projectsSection
@@ -135,7 +130,6 @@ struct ImportHomeView: View {
                     settingsButton
                 }
             }
-            .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
             .task { await openLibraryBooksViewModel.loadIfNeeded() }
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {
@@ -313,37 +307,7 @@ struct ImportHomeView: View {
         }
     }
 
-    // Curated, hand-picked covers (issue: replace the live Gutendex preview
-    // row with 5 specific books) — "See all" still opens the live,
-    // paginated Gutendex feed unchanged, so this row is a curated
-    // highlight, not the app's only source of trending books.
-    private var whatsTrendingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("What's trending").font(.headline).foregroundStyle(Color.appPrimaryText)
-                Spacer()
-                NavigationLink {
-                    AllTrendingBooksView(viewModel: trendingBooksViewModel)
-                } label: {
-                    Text("See all")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.appSecondaryText)
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(curatedTrendingBooks) { book in
-                        TrendingBookCard(book: book, coverSize: curatedCoverWidth, coverHeight: curatedCoverHeight)
-                    }
-                }
-            }
-        }
-    }
-
-    // Live OpenLibrary feed, unlike whatsTrendingSection's curated row
-    // above — no "See all" yet (see OpenLibraryBooksViewModel's doc
-    // comment); add one the same way AllTrendingBooksView does if this
-    // grows a full page.
+    // No "See all" yet — see OpenLibraryBooksViewModel's doc comment.
     private var newInRomanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New in romance").font(.headline).foregroundStyle(Color.appPrimaryText)
@@ -462,38 +426,6 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
     }
 }
-
-/// Hand-curated covers for `whatsTrendingSection`'s preview row — real
-/// public-domain titles, custom-generated cover art (`assets/cover/`),
-/// bundled locally rather than fetched. `id`s are negative, real Gutendex
-/// ids are always positive, so there's no collision if a curated title ever
-/// also appears in the live "See all" feed.
-///
-/// All 5 source images share the same real 2:3 portrait aspect (checked
-/// directly: 1152x1728px) — sized here at that exact proportion so the
-/// whole cover shows uncropped, rather than `TrendingBookCard`'s usual
-/// square crop (which fits "See all"'s real, aspect-varying Gutendex
-/// covers, but would cut these off).
-private let curatedCoverWidth: CGFloat = 179
-private let curatedCoverHeight: CGFloat = curatedCoverWidth * 1728 / 1152
-
-private let curatedTrendingBooks: [TrendingBook] = [
-    TrendingBook(
-        id: -1, title: "Pride and Prejudice", authorName: "Jane Austen", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverPrideAndPrejudice"),
-    TrendingBook(
-        id: -2, title: "Sense and Sensibility", authorName: "Jane Austen", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverSenseAndSensibility"),
-    TrendingBook(
-        id: -3, title: "The Odyssey", authorName: "Homer", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverTheOdyssey"),
-    TrendingBook(
-        id: -4, title: "Moby-Dick", authorName: "Herman Melville", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverMobyDick"),
-    TrendingBook(
-        id: -5, title: "Frankenstein", authorName: "Mary Shelley", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverFrankenstein"),
-]
 
 /// Static content for `readAnythingSection` — just one card today; append
 /// more here as they're designed, `ReadAnythingCard`/the section's

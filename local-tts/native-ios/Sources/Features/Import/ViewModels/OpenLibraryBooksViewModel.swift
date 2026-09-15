@@ -1,8 +1,8 @@
 import Foundation
 
 /// Backs Import's "New in Romance" row — a single fetch, not paginated
-/// like `TrendingBooksViewModel` (there's no "See all" for this row yet;
-/// add pagination here the same way if one gets built).
+/// (there's no "See all" for this row yet; add pagination here if one
+/// gets built).
 @MainActor
 final class OpenLibraryBooksViewModel: ObservableObject {
     @Published private(set) var books: [OpenLibraryBook] = []
@@ -18,8 +18,8 @@ final class OpenLibraryBooksViewModel: ObservableObject {
         self.service = service
     }
 
-    /// Called from `.task` on first appearance — safe to call repeatedly,
-    /// same contract as `TrendingBooksViewModel.loadInitialPageIfNeeded`.
+    /// Called from `.task` on first appearance — safe to call repeatedly
+    /// (only actually fetches once, unless the first attempt failed).
     func loadIfNeeded() async {
         guard !hasLoadedOnce else { return }
         hasLoadedOnce = true

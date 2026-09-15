@@ -32,7 +32,7 @@ extension LinearGradient {
     /// placeholder shown while real artwork loads doesn't flicker to a
     /// different color on every redraw. Voice cover art uses `OrbCoverArt`
     /// instead (`DesignSystem/OrbCoverArt.swift`); this remains for
-    /// `TrendingBookCard`'s book covers, which have no orb equivalent.
+    /// `OpenLibraryBookCard`'s book covers, which have no orb equivalent.
     static func stablePlaceholder(seed: String) -> LinearGradient {
         let pairs: [[Color]] = [
             [.pink, .purple], [.blue, .teal], [.orange, .red],
