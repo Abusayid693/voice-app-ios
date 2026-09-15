@@ -242,7 +242,7 @@ struct ImportHomeView: View {
 
     private var trendingVoicesSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Trending voices").font(.appSectionTitle).foregroundStyle(Color.appPrimaryText)
+            Text("Trending voices").appText(.sectionTitle)
             // Cancels the parent VStack's .padding(.horizontal) (default,
             // 16pt) just for this scroll view's own clipping bounds, then
             // re-adds the same 16pt as content inset — so cards still start
@@ -278,10 +278,8 @@ struct ImportHomeView: View {
             HStack(spacing: 12) {
                 LucideIcon(.mic, style: .filled, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own voice").font(.appRowTitle)
-                        .foregroundStyle(Color.appPrimaryText)
-                    Text("Clone your voice in seconds").font(.appLabel)
-                        .foregroundStyle(Color.appSecondaryText)
+                    Text("Create your own voice").appText(.rowTitle)
+                    Text("Clone your voice in seconds").appText(.label)
                 }
                 Spacer()
             }
@@ -298,7 +296,7 @@ struct ImportHomeView: View {
     // 327), not derived from screen width.
     private var readAnythingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Read Anything").font(.appSectionTitle).foregroundStyle(Color.appPrimaryText)
+            Text("Read Anything").appText(.sectionTitle)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(readAnythingItems) { item in
@@ -314,7 +312,7 @@ struct ImportHomeView: View {
     // No "See all" yet — see OpenLibraryBooksViewModel's doc comment.
     private var newInRomanceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("New in romance").font(.appSectionTitle).foregroundStyle(Color.appPrimaryText)
+            Text("New in romance").appText(.sectionTitle)
 
             if openLibraryBooksViewModel.isLoading {
                 ProgressView()
@@ -323,12 +321,14 @@ struct ImportHomeView: View {
             } else if let errorMessage = openLibraryBooksViewModel.loadErrorMessage {
                 VStack(spacing: 8) {
                     Text(errorMessage)
-                        .font(.appBody)
-                        .foregroundStyle(Color.appSecondaryText)
+                        .appText(.body)
+                    // Font only — stays system accent-tinted so it still
+                    // reads as tappable, matching every other bare toolbar/
+                    // text button in this app (none carry an app color).
                     Button("Retry") {
                         Task { await openLibraryBooksViewModel.retry() }
                     }
-                    .font(.appBody)
+                    .font(AppTextStyle.body.font)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)
@@ -349,10 +349,8 @@ struct ImportHomeView: View {
             HStack(spacing: 12) {
                 LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own book").font(.appRowTitle)
-                        .foregroundStyle(Color.appPrimaryText)
-                    Text("Craft your own story in seconds").font(.appLabel)
-                        .foregroundStyle(Color.appSecondaryText)
+                    Text("Create your own book").appText(.rowTitle)
+                    Text("Craft your own story in seconds").appText(.label)
                 }
                 Spacer()
             }
@@ -369,7 +367,7 @@ struct ImportHomeView: View {
     // library is still empty.
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Projects").font(.appSectionTitle).foregroundStyle(Color.appPrimaryText)
+            Text("Projects").appText(.sectionTitle)
             if libraryViewModel.savedGenerations.isEmpty {
                 ForEach(DemoContent.projects) { project in
                     projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
@@ -404,10 +402,10 @@ struct ImportHomeView: View {
                 .fill(Color.appSecondaryBackground)
                 .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.appRowTitle).foregroundStyle(Color.appPrimaryText)
-                Text(subtitle).font(.appLabel).foregroundStyle(Color.appSecondaryText)
+                Text(title).appText(.rowTitle)
+                Text(subtitle).appText(.label)
                     .lineLimit(1)
-                Text(updatedLabel).font(.appMeta).foregroundStyle(Color.appTertiaryText)
+                Text(updatedLabel).appText(.labelDim)
             }
             Spacer()
             LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
@@ -419,8 +417,7 @@ struct ImportHomeView: View {
         Button(action: {}) {
             HStack(spacing: 12) {
                 LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
-                Text("Create your own project").font(.appRowTitle)
-                    .foregroundStyle(Color.appPrimaryText)
+                Text("Create your own project").appText(.rowTitle)
                 Spacer()
             }
             .padding()
@@ -479,8 +476,8 @@ private struct ReadAnythingCard: View {
                 }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).font(.appCardTitle).foregroundStyle(Color.appPrimaryText)
-                Text(item.description).font(.appLabel).foregroundStyle(Color.appTertiaryText)
+                Text(item.title).appText(.cardTitle)
+                Text(item.description).appText(.label)
                     .lineLimit(2)
             }
         }
@@ -498,8 +495,7 @@ private struct ImportActionCard: View {
             VStack(spacing: 10) {
                 LucideIcon(icon, size: 20, color: Color.appPrimaryText)
                 Text(title)
-                    .font(.appRowTitle)
-                    .foregroundStyle(Color.appPrimaryText)
+                    .appText(.rowTitle)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -552,9 +548,9 @@ private struct VoiceTileView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(tile.displayName).font(.appCardTitle).foregroundStyle(Color.appPrimaryText)
+                    Text(tile.displayName).appText(.cardTitle)
                         .lineLimit(1)
-                    Text(tile.descriptionText).font(.appLabel).foregroundStyle(Color.appTertiaryText)
+                    Text(tile.descriptionText).appText(.label)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }

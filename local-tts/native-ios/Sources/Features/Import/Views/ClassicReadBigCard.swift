@@ -33,12 +33,10 @@ struct ClassicReadBigCard: View {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(item.title)
-                        .font(.appCardTitle)
-                        .foregroundStyle(Color.appPrimaryText)
+                        .appText(.cardTitle)
                         .lineLimit(2)
                     Text(item.authorName)
-                        .font(.appBody)
-                        .foregroundStyle(Color.appSecondaryText)
+                        .appText(.body)
                         .lineLimit(1)
                 }
 
@@ -48,15 +46,10 @@ struct ClassicReadBigCard: View {
                     HStack(spacing: 6) {
                         LucideIcon(.clock, size: 14, color: Color.appTertiaryText)
                         Text("30 min")
-                            .font(.appLabel)
-                            .foregroundStyle(Color.appTertiaryText)
+                            .appText(.labelDim)
                     }
                     Text("Free Demo")
-                        .font(.appLabelStrong)
-                        .foregroundStyle(Color.primaryButtonText)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.primaryButtonBackground))
+                        .appHighlightLabel()
                 }
             }
             .frame(height: Self.cardHeight, alignment: .topLeading)

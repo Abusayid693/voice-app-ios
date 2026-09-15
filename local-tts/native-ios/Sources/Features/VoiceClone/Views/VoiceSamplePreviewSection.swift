@@ -20,13 +20,13 @@ struct VoiceSamplePreviewSection: View {
                         title: { Text(viewModel.isPreviewingRecording ? "Playing…" : "Play") },
                         icon: { LucideIcon(.play, style: .filled, size: 14) })
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.secondary)
                 .disabled(viewModel.isPreviewingRecording)
 
                 Button(viewModel.isImportedSample ? "Choose Different File" : "Re-record") {
                     viewModel.discardRecording()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.secondary)
             }
 
             TextField("Name this voice", text: $voiceName)
@@ -43,8 +43,7 @@ struct VoiceSamplePreviewSection: View {
 
             if let cloneErrorMessage = viewModel.cloneErrorMessage {
                 Text(cloneErrorMessage)
-                    .font(.appLabel)
-                    .foregroundStyle(.red)
+                    .appText(.labelError)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }

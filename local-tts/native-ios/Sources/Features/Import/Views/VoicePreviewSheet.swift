@@ -120,14 +120,14 @@ private struct VoicePreviewCard: View {
             VStack(spacing: 4) {
                 HStack(spacing: 6) {
                     Text(tile.displayName)
-                        .font(.appTitle)
-                        .foregroundStyle(Color.appPrimaryText)
+                        .appText(.title)
+                    // Deliberately uncolored — the emoji renders its own
+                    // full-color glyph regardless.
                     Text(tile.countryFlag)
-                        .font(.appTitle)
+                        .font(AppTextStyle.title.font)
                 }
                 Text(tile.longDescription)
-                    .font(.appBody)
-                    .foregroundStyle(Color.appSecondaryText)
+                    .appText(.body)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .padding(.horizontal, 24)
@@ -151,8 +151,7 @@ private struct VoicePreviewCard: View {
 
             if !hasPreview {
                 Text("Preview coming soon")
-                    .font(.appMeta)
-                    .foregroundStyle(Color.appTertiaryText)
+                    .appText(.meta)
             }
 
             Spacer(minLength: 0)

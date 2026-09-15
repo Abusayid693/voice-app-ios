@@ -12,8 +12,7 @@ struct KokoroGenerationListView: View {
     var body: some View {
         if viewModel.kokoroGenerations.isEmpty {
             Text("Tap Generate to create a track.")
-                .font(.appLabel)
-                .foregroundStyle(.secondary)
+                .appText(.label)
         } else {
             ForEach(viewModel.kokoroGenerations) { generation in
                 KokoroGenerationRow(
@@ -42,18 +41,15 @@ private struct KokoroGenerationRow: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(generation.text)
-                            .font(.appRowTitle)
-                            .foregroundStyle(.primary)
+                            .appText(.rowTitle)
                             .lineLimit(1)
                         if let error = generation.error {
                             Text("Error: \(error)")
-                                .font(.appMeta)
-                                .foregroundStyle(.red)
+                                .appText(.metaError)
                                 .lineLimit(2)
                         } else if !generation.isFullyGenerated {
                             Text("Generating…")
-                                .font(.appMeta)
-                                .foregroundStyle(.secondary)
+                                .appText(.meta)
                         }
                     }
 

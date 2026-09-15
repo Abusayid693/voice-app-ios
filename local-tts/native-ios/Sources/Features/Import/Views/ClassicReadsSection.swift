@@ -25,9 +25,8 @@ struct ClassicReadsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Classic reads").font(.appSectionTitle).foregroundStyle(Color.appPrimaryText)
-                Text("Free, public-domain classics").font(.appLabel)
-                    .foregroundStyle(Color.appSecondaryText)
+                Text("Classic reads").appText(.sectionTitle)
+                Text("Free, public-domain classics").appText(.label)
             }
             .padding(.horizontal, 16)
 

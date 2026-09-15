@@ -23,12 +23,10 @@ struct OpenLibraryBookCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             Text(book.title)
-                .font(.appLabelStrong)
-                .foregroundStyle(Color.appPrimaryText)
+                .appText(.labelStrong)
                 .lineLimit(1)
             Text(book.authorName)
-                .font(.appLabel)
-                .foregroundStyle(Color.appSecondaryText)
+                .appText(.label)
                 .lineLimit(1)
         }
         .frame(width: coverSize)

@@ -11,8 +11,7 @@ struct GenerationTextSheet: View {
         NavigationStack {
             ScrollView {
                 Text(generation.text)
-                    .font(.appReading)
-                    .foregroundStyle(Color.appPrimaryText)
+                    .appText(.reading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             }

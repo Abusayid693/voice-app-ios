@@ -21,8 +21,7 @@ struct UploadVoiceView: View {
                     .padding(.horizontal, 40)
             } else {
                 Text("Imported file")
-                    .font(.appTitle)
-                    .foregroundStyle(Color.appPrimaryText)
+                    .appText(.title)
 
                 VoiceSamplePreviewSection(viewModel: viewModel, onFinished: onFinished)
             }
