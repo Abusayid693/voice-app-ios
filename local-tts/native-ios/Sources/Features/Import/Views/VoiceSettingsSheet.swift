@@ -126,19 +126,18 @@ struct VoiceSettingsSheet: View {
     ) -> some View {
         Button(action: onSelect) {
             HStack {
-                Text(name)
+                Text(name).appText(isAvailable ? .rowTitle : .rowTitleMuted)
                 Spacer()
                 if isSelected {
                     LucideIcon(.check, size: 15, color: .blue)
                 } else if !isAvailable {
-                    Text("Not available").font(.caption).foregroundStyle(Color.appTertiaryText)
+                    Text("Not available").appText(.labelDim)
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isAvailable)
-        .foregroundStyle(isAvailable ? Color.appPrimaryText : Color.appSecondaryText)
     }
 }
 

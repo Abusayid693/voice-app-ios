@@ -8,8 +8,10 @@ import SwiftUI
 /// 17, so the same frosted look is built from `.ultraThinMaterial` + a
 /// subtle stroke border instead — visually equivalent, works back to 17.
 struct OpenSourceCard: View {
+    @Environment(\.openURL) private var openURL
+
     private static let githubURL = URL(string: "https://github.com/Abusayid693/voice-app-ios")!
-    private static let cardShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+    private static let cardShape = RoundedRectangle(cornerRadius: 0, style: .continuous)
 
     // Short and parallel on purpose — each needs to fit on one line
     // without wrapping (see the `.lineLimit(1)` below).
@@ -27,8 +29,7 @@ struct OpenSourceCard: View {
                     HStack(alignment: .top, spacing: 10) {
                         LucideIcon(.check, size: 15, color: Color.appPrimaryText, strokeWidth: 3)
                         Text(point)
-                            .font(.subheadline)
-                            .foregroundStyle(Color.appSecondaryText)
+                            .appText(.label)
                             .lineLimit(1)
                             .minimumScaleFactor(0.9)
                     }
@@ -37,10 +38,6 @@ struct OpenSourceCard: View {
                     .padding(.top, 4)
             }
             .padding(16)
-            // Opaque, and the exact same color the header's scrim fades
-            // into below — matching colors on both sides of that boundary
-            // is what actually removes the seam, not just an approximate
-            // gradient/material blend.
             .background(Color.appSecondaryBackground)
         }
         .background(.ultraThinMaterial, in: Self.cardShape)
@@ -84,14 +81,13 @@ struct OpenSourceCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("OPEN SOURCE")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                    .appHighlightLabel()
+                    // Smaller than the shared badge default (labelStrong,
+                    // 14pt) — this one badge only, via the next-smaller
+                    // token in the scale rather than a literal size.
+                    .font(AppTextStyle.meta.font)
                 Text("Built in the open, for everyone")
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
+                    .appText(.titleOnImage)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -100,16 +96,15 @@ struct OpenSourceCard: View {
         .frame(height: 160)
     }
 
+    // A real Button (not Link) so .buttonStyle(.primary) can attach —
+    // opens the URL via the environment action instead.
     private var contributeButton: some View {
-        Link(destination: Self.githubURL) {
+        Button {
+            openURL(Self.githubURL)
+        } label: {
             Text("Contribute")
-                .font(.headline)
-                .foregroundStyle(Color.appPrimaryText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25)))
         }
+        .buttonStyle(.primary)
     }
 }
 

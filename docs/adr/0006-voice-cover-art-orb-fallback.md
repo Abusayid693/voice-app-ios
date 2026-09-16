@@ -17,6 +17,6 @@ Real avatars were briefed via hand-written AI image prompts, keyed off each voic
 
 No Pocket TTS voice has a real named avatar (all 26 are LibriVox-style narrator names with no persona-generation work done) — they all render via `OrbCoverArt`. Only 16 of 28 Kokoro voices have one as of this writing; the rest show an orb too, until more avatars are generated (`assets/voice-covers/kokoro-avatar-prompts.md` has the prompts for the remaining ones).
 
-`LinearGradient.stablePlaceholder` is *not* dead code — `TrendingBookCard` (Gutendex book covers) still uses it; only voice cover art moved off it.
+`LinearGradient.stablePlaceholder` is *not* dead code — `OpenLibraryBookCard` (book covers) still uses it; only voice cover art moved off it.
 
 Orb source images have been swapped/added multiple times during design iteration — if `assets/orbs/` ever looks out of sync with `OrbCoverArt.assetNames`, resync by copying into fresh `VoiceOrbN.imageset` folders in the asset catalog and updating the array; same mechanical steps every time.

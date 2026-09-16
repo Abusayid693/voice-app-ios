@@ -54,9 +54,11 @@ struct ImportHomeView: View {
     @ObservedObject var packs: VoicePackStore
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
-    // as the Import tab stays alive, so "See all" resumes pagination
-    // instead of refetching from page 1.
-    @StateObject private var trendingBooksViewModel = TrendingBooksViewModel()
+    // as the Import tab stays alive.
+    @StateObject private var openLibraryBooksViewModel = OpenLibraryBooksViewModel()
+    // Same reasoning as openLibraryBooksViewModel above — owned here, not
+    // TTSViewModel, and outlives re-renders for the life of this view.
+    @StateObject private var classicReadsViewModel = ClassicReadsViewModel()
     // Which voice's preview sheet is open, if any — pure navigation state
     // for this screen, not shared elsewhere, so it lives here rather than
     // on TTSViewModel.
@@ -106,13 +108,25 @@ struct ImportHomeView: View {
     private var navigationContent: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                // 4 top-level groups (buttons, Trending voices, Read
+                // Anything, Projects) at AppSpacing.betweenGroups; within a
+                // multi-part group, siblings sit at the tighter
+                // AppSpacing.betweenSections instead.
+                VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
                     actionGrid
-                    trendingVoicesSection
-                    createYourOwnVoiceRow
-                    readAnythingSection
-                    whatsTrendingSection
-                    createYourOwnBookRow
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        trendingVoicesSection
+                        createYourOwnVoiceRow
+                    }
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        readAnythingSection
+                        ClassicReadsSection(viewModel: classicReadsViewModel)
+                        newInRomanceSection
+                        createYourOwnBookRow
+                    }
+
                     projectsSection
                 }
                 .padding(.horizontal)
@@ -131,7 +145,7 @@ struct ImportHomeView: View {
                     settingsButton
                 }
             }
-            .task { await trendingBooksViewModel.loadInitialPageIfNeeded() }
+            .task { await openLibraryBooksViewModel.loadIfNeeded() }
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {
                 case .instantClone:
@@ -238,18 +252,16 @@ struct ImportHomeView: View {
     }
 
     private var trendingVoicesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Trending voices").font(.headline).foregroundStyle(Color.appPrimaryText)
-            // Cancels the parent VStack's .padding(.horizontal) (default,
-            // 16pt) just for this scroll view's own clipping bounds, then
-            // re-adds the same 16pt as content inset — so cards still start
-            // flush with the rest of the screen, but scrolling isn't
-            // clipped early at that boundary; the last/first card can
-            // slide all the way to the true screen edge.
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
+            Text("Trending voices").appText(.sectionTitle)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
+                LazyHGrid(
+                    rows: [
+                        GridItem(.fixed(60), spacing: 14), GridItem(.fixed(60), spacing: 16),
+                    ], spacing: 0
+                ) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile, previewPlayer: previewPlayer) {
+                        PreviewVoiceCard(tile: tile, previewPlayer: previewPlayer) {
                             selectedVoiceTile = tile
                         }
                     }
@@ -258,8 +270,7 @@ struct ImportHomeView: View {
                 // snaps per column (both stacked tiles at that horizontal
                 // offset), not per individual tile.
                 .scrollTargetLayout()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 2)
             }
             .scrollTargetBehavior(.viewAligned)
             .padding(.horizontal, -16)
@@ -269,24 +280,12 @@ struct ImportHomeView: View {
     // Real, unlike createYourOwnBookRow below — opens the same CreateVoiceSheet
     // (Instant Clone / Upload file) as the Voices tab's own entry point.
     private var createYourOwnVoiceRow: some View {
-        Button {
+        CreateYourOwnRow(
+            icon: .mic, iconStyle: .filled, title: "Create your own voice",
+            subtitle: "Clone your voice in seconds"
+        ) {
             isCreateVoicePresented = true
-        } label: {
-            HStack(spacing: 12) {
-                LucideIcon(.mic, style: .filled, size: 28, color: Color.appPrimaryText)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own voice").font(.subheadline).bold()
-                        .foregroundStyle(Color.appPrimaryText)
-                    Text("Clone your voice in seconds").font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     // "Read Anything" — a horizontally scrolling row of promo cards, one
@@ -294,8 +293,8 @@ struct ImportHomeView: View {
     // are fixed per the supplied design (327x188 image, full card width
     // 327), not derived from screen width.
     private var readAnythingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Read Anything").font(.headline).foregroundStyle(Color.appPrimaryText)
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
+            Text("Read Anything").appText(.sectionTitle)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(readAnythingItems) { item in
@@ -308,50 +307,48 @@ struct ImportHomeView: View {
         }
     }
 
-    // Curated, hand-picked covers (issue: replace the live Gutendex preview
-    // row with 5 specific books) — "See all" still opens the live,
-    // paginated Gutendex feed unchanged, so this row is a curated
-    // highlight, not the app's only source of trending books.
-    private var whatsTrendingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("What's trending").font(.headline).foregroundStyle(Color.appPrimaryText)
-                Spacer()
-                NavigationLink {
-                    AllTrendingBooksView(viewModel: trendingBooksViewModel)
-                } label: {
-                    Text("See all")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.appSecondaryText)
-                }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(curatedTrendingBooks) { book in
-                        TrendingBookCard(book: book, coverSize: curatedCoverWidth, coverHeight: curatedCoverHeight)
+    // No "See all" yet — see OpenLibraryBooksViewModel's doc comment.
+    private var newInRomanceSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.innerSectionToContent) {
+            Text("New in romance").appText(.sectionTitle)
+
+            if openLibraryBooksViewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 24)
+            } else if let errorMessage = openLibraryBooksViewModel.loadErrorMessage {
+                VStack(spacing: 8) {
+                    Text(errorMessage)
+                        .appText(.body)
+                    // Font only — stays system accent-tinted so it still
+                    // reads as tappable, matching every other bare toolbar/
+                    // text button in this app (none carry an app color).
+                    Button("Retry") {
+                        Task { await openLibraryBooksViewModel.retry() }
                     }
+                    .font(AppTextStyle.body.font)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(openLibraryBooksViewModel.books) { book in
+                            OpenLibraryBookCard(book: book)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(.horizontal, -16)
             }
         }
     }
 
     private var createYourOwnBookRow: some View {
-        Button(action: {}) {
-            HStack(spacing: 12) {
-                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own book").font(.subheadline).bold()
-                        .foregroundStyle(Color.appPrimaryText)
-                    Text("Craft your own story in seconds").font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        CreateYourOwnRow(
+            icon: .circlePlus, title: "Create your own book",
+            subtitle: "Craft your own story in seconds"
+        ) {}
     }
 
     // Real generations (latest 5, newest first) once any exist; falls back
@@ -359,8 +356,8 @@ struct ImportHomeView: View {
     // (no action yet, matching createYourOwnBookRow's own no-op) while the
     // library is still empty.
     private var projectsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Projects").font(.headline).foregroundStyle(Color.appPrimaryText)
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
+            Text("Projects").appText(.sectionTitle)
             if libraryViewModel.savedGenerations.isEmpty {
                 ForEach(DemoContent.projects) { project in
                     projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
@@ -368,22 +365,24 @@ struct ImportHomeView: View {
                 createYourOwnProjectRow
             } else {
                 ForEach(libraryViewModel.savedGenerations.prefix(5)) { generation in
-                    projectRow(
-                        title: VoiceDisplayName.forCode(generation.voiceName),
-                        subtitle: generation.text,
-                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))"
-                    )
-                    // Kokoro only — plays the saved audio straight from
-                    // disk when available (LibraryPlayback), regenerating
-                    // only as a fallback; there's no Pocket player yet.
-                    .onTapGesture {
-                        guard generation.engine == .kokoroAne else { return }
-                        if let newID = LibraryPlayback.open(
-                            generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
-                        {
-                            readAlongGenerationID = newID
+                    GenerationRow(
+                        icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
+                        iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+                        title: generation.text,
+                        subtitle:
+                            "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+                        onTap: {
+                            // Kokoro only — plays the saved audio straight from
+                            // disk when available (LibraryPlayback), regenerating
+                            // only as a fallback; there's no Pocket player yet.
+                            guard generation.engine == .kokoroAne else { return }
+                            if let newID = LibraryPlayback.open(
+                                generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
+                            {
+                                readAlongGenerationID = newID
+                            }
                         }
-                    }
+                    )
                 }
             }
         }
@@ -395,10 +394,10 @@ struct ImportHomeView: View {
                 .fill(Color.appSecondaryBackground)
                 .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                Text(subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                Text(title).appText(.rowTitle)
+                Text(subtitle).appText(.label)
                     .lineLimit(1)
-                Text(updatedLabel).font(.caption2).foregroundStyle(Color.appTertiaryText)
+                Text(updatedLabel).appText(.labelDim)
             }
             Spacer()
             LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
@@ -410,8 +409,7 @@ struct ImportHomeView: View {
         Button(action: {}) {
             HStack(spacing: 12) {
                 LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
-                Text("Create your own project").font(.subheadline).bold()
-                    .foregroundStyle(Color.appPrimaryText)
+                Text("Create your own project").appText(.rowTitle)
                 Spacer()
             }
             .padding()
@@ -421,38 +419,6 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
     }
 }
-
-/// Hand-curated covers for `whatsTrendingSection`'s preview row — real
-/// public-domain titles, custom-generated cover art (`assets/cover/`),
-/// bundled locally rather than fetched. `id`s are negative, real Gutendex
-/// ids are always positive, so there's no collision if a curated title ever
-/// also appears in the live "See all" feed.
-///
-/// All 5 source images share the same real 2:3 portrait aspect (checked
-/// directly: 1152x1728px) — sized here at that exact proportion so the
-/// whole cover shows uncropped, rather than `TrendingBookCard`'s usual
-/// square crop (which fits "See all"'s real, aspect-varying Gutendex
-/// covers, but would cut these off).
-private let curatedCoverWidth: CGFloat = 179
-private let curatedCoverHeight: CGFloat = curatedCoverWidth * 1728 / 1152
-
-private let curatedTrendingBooks: [TrendingBook] = [
-    TrendingBook(
-        id: -1, title: "Pride and Prejudice", authorName: "Jane Austen", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverPrideAndPrejudice"),
-    TrendingBook(
-        id: -2, title: "Sense and Sensibility", authorName: "Jane Austen", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverSenseAndSensibility"),
-    TrendingBook(
-        id: -3, title: "The Odyssey", authorName: "Homer", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverTheOdyssey"),
-    TrendingBook(
-        id: -4, title: "Moby-Dick", authorName: "Herman Melville", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverMobyDick"),
-    TrendingBook(
-        id: -5, title: "Frankenstein", authorName: "Mary Shelley", coverURL: nil,
-        downloadCount: 0, localCoverAssetName: "BookCoverFrankenstein"),
-]
 
 /// Static content for `readAnythingSection` — just one card today; append
 /// more here as they're designed, `ReadAnythingCard`/the section's
@@ -493,7 +459,7 @@ private struct ReadAnythingCard: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 327, height: 188)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .leading) {
                     if item.showsPlayButton {
                         LucideIcon(.circlePlay, size: 36, color: Color(hex: 0xD5AB80))
@@ -502,8 +468,8 @@ private struct ReadAnythingCard: View {
                 }
 
             VStack(alignment: .leading, spacing: 4) {
-                CardTitle(text: item.title)
-                CardDesc(text: item.description)
+                Text(item.title).appText(.cardTitle)
+                Text(item.description).appText(.label)
                     .lineLimit(2)
             }
         }
@@ -521,9 +487,7 @@ private struct ImportActionCard: View {
             VStack(spacing: 10) {
                 LucideIcon(icon, size: 20, color: Color.appPrimaryText)
                 Text(title)
-                    .font(.subheadline)
-                    .bold()
-                    .foregroundStyle(Color.appPrimaryText)
+                    .appText(.rowTitle)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -561,48 +525,6 @@ struct VoiceTile: Identifiable {
 /// trailing play/pause indicator (reflects whether this voice's preview is
 /// the one currently playing, started from VoicePreviewSheet). The whole
 /// card is the tap target — tapping opens VoicePreviewSheet.
-private struct VoiceTileView: View {
-    let tile: VoiceTile
-    @ObservedObject var previewPlayer: VoicePreviewPlayer
-    let onTap: () -> Void
-
-    private var isPreviewing: Bool { previewPlayer.playingVoiceID == tile.name }
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 10) {
-                avatar
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 5) {
-                    CardTitle(text: tile.displayName)
-                        .lineLimit(1)
-                    CardDesc(text: tile.descriptionText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                Spacer(minLength: 8)
-
-                LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
-            }
-            .padding(.horizontal, 14)
-            .frame(width: 268, height: 84)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!tile.isAvailable)
-        .opacity(tile.isAvailable ? 1 : 0.6)
-    }
-
-    private var avatar: some View {
-        Image(VoiceCoverArt.assetName(for: tile.name))
-            .resizable()
-            .scaledToFill()
-    }
-}
-
 #Preview {
     let dependencies = DependencyContainer()
     let viewModel = TTSViewModel(dependencies: dependencies)

@@ -19,7 +19,7 @@ struct SetupSheet: View {
                     .listRowBackground(Color.appSecondaryBackground)
                 } footer: {
                     Text("Download each voice pack to make its voices available when writing.")
-                        .foregroundStyle(Color.appSecondaryText)
+                        .appText(.body)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -45,8 +45,8 @@ struct SetupSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(pack.title).font(.subheadline).bold().foregroundStyle(Color.appPrimaryText)
-                    Text(pack.subtitle).font(.caption).foregroundStyle(Color.appSecondaryText)
+                    Text(pack.title).appText(.rowTitle)
+                    Text(pack.subtitle).appText(.label)
                 }
                 Spacer()
                 if isReady {
@@ -55,7 +55,7 @@ struct SetupSheet: View {
                     ProgressView()
                 } else {
                     Button("Download") { startDownload(pack) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.secondary)
                         // Still disabled while a *different* pack downloads
                         // — the progress/status fields these downloads
                         // update are shared, not per-pack, so two at once
@@ -66,8 +66,7 @@ struct SetupSheet: View {
             if isDownloadingThis {
                 ProgressView(value: packs.fraction)
                 Text(packs.progressLabel)
-                    .font(.caption2)
-                    .foregroundStyle(Color.appSecondaryText)
+                    .appText(.meta)
             }
         }
         .padding(.vertical, 4)

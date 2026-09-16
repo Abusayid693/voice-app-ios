@@ -46,6 +46,10 @@ struct LibraryTabView: View {
                         }
                         .listRowBackground(Color.appSecondaryBackground)
                     }
+                    // Matches ImportHomeView's own gap under its nav
+                    // title (.padding(.top, 8) on its content) — List
+                    // has no equivalent top inset by default.
+                    .contentMargins(.top, 8, for: .scrollContent)
                     .scrollContentBackground(.hidden)
                 }
             }
@@ -74,10 +78,9 @@ struct LibraryTabView: View {
         VStack(spacing: 12) {
             LucideIcon(.library, size: 48, color: Color.appSecondaryText)
             Text("No generations yet")
-                .foregroundStyle(Color.appSecondaryText)
+                .appText(.body)
             Text("Text you generate from Write Text will show up here.")
-                .font(.caption)
-                .foregroundStyle(Color.appTertiaryText)
+                .appText(.labelDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -85,33 +88,14 @@ struct LibraryTabView: View {
     }
 
     private func row(for generation: SavedGeneration) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.appBackground)
-                .frame(width: 40, height: 40)
-                .overlay {
-                    LucideIcon(
-                        generation.engine == .kokoroAne ? .audioWaveform : .mic,
-                        style: generation.engine == .kokoroAne ? .stroked : .filled, size: 16,
-                        color: Color.appPrimaryText)
-                }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(generation.text)
-                    .foregroundStyle(Color.appPrimaryText)
-                    .lineLimit(2)
-                Text(
-                    "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))"
-                )
-                    .font(.caption)
-                    .foregroundStyle(Color.appSecondaryText)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { open(generation) }
+        GenerationRow(
+            icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
+            iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+            title: generation.text,
+            subtitle:
+                "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+            onTap: { open(generation) }
+        )
     }
 
     private func open(_ generation: SavedGeneration) {

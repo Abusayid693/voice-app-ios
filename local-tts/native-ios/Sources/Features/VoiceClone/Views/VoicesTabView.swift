@@ -34,6 +34,10 @@ struct VoicesTabView: View {
                         }
                         .listRowBackground(Color.appSecondaryBackground)
                     }
+                    // Matches ImportHomeView's own gap under its nav
+                    // title (.padding(.top, 8) on its content), and
+                    // LibraryTabView's List (same fix, same reason).
+                    .contentMargins(.top, 8, for: .scrollContent)
                     .scrollContentBackground(.hidden)
                 }
             }
@@ -70,9 +74,10 @@ struct VoicesTabView: View {
         VStack(spacing: 12) {
             LucideIcon(.mic, size: 48, color: Color.appSecondaryText)
             Text("No cloned voices yet")
-                .foregroundStyle(Color.appSecondaryText)
+                .appText(.body)
             Button("Create your own voice") { isCreateVoicePresented = true }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.primary)
+                .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -84,19 +89,9 @@ struct VoicesTabView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
                 ForEach(viewModel.clonedVoices) { voice in
-                    Button {
+                    SmallVoiceCard(avatarSeed: voice.id.uuidString, name: voice.name) {
                         viewModel.togglePreview(for: voice)
-                    } label: {
-                        VStack(spacing: 6) {
-                            avatar(for: voice, size: 56)
-                            Text(voice.name)
-                                .font(.caption)
-                                .foregroundStyle(Color.appPrimaryText)
-                                .lineLimit(1)
-                        }
-                        .frame(width: 72)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 Button {
@@ -110,8 +105,7 @@ struct VoicesTabView: View {
                                 LucideIcon(.plus, color: Color.appSecondaryText)
                             }
                         Text("New voice")
-                            .font(.caption)
-                            .foregroundStyle(Color.appSecondaryText)
+                            .appText(.label)
                     }
                     .frame(width: 72)
                 }
@@ -123,44 +117,14 @@ struct VoicesTabView: View {
     }
 
     private func row(for voice: ClonedVoice) -> some View {
-        HStack(spacing: 12) {
-            avatar(for: voice, size: 40)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(voice.name)
-                    .foregroundStyle(Color.appPrimaryText)
-                Text("\(voice.createdAt.formatted(date: .abbreviated, time: .omitted)) · \(voice.language.displayName)")
-                    .font(.caption)
-                    .foregroundStyle(Color.appSecondaryText)
-            }
-
-            Spacer()
-
-            Button {
-                viewModel.togglePreview(for: voice)
-            } label: {
-                if viewModel.previewingVoiceID == voice.id && viewModel.isPreviewLoading {
-                    ProgressView()
-                } else {
-                    LucideIcon(
-                        viewModel.previewingVoiceID == voice.id ? .circlePause : .circlePlay,
-                        size: 22, color: Color.appPrimaryText)
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.vertical, 4)
-    }
-
-    // Seeded by `voice.id` rather than `voice.name` — the name is
-    // user-editable (rename), and keying off it would make a voice's orb
-    // change after a rename; `id` is stable for the voice's whole lifetime.
-    private func avatar(for voice: ClonedVoice, size: CGFloat) -> some View {
-        Image(OrbCoverArt.assetName(for: voice.id.uuidString))
-            .resizable()
-            .scaledToFill()
-            .frame(width: size, height: size)
-            .clipShape(Circle())
+        VoiceCard(
+            avatarSeed: voice.id.uuidString,
+            name: voice.name,
+            subtitle: "\(voice.createdAt.formatted(date: .abbreviated, time: .omitted)) · \(voice.language.displayName)",
+            isPlaying: viewModel.previewingVoiceID == voice.id,
+            isLoading: viewModel.previewingVoiceID == voice.id && viewModel.isPreviewLoading,
+            onPlayToggle: { viewModel.togglePreview(for: voice) }
+        )
     }
 }
 

@@ -12,7 +12,7 @@ struct PlaceholderTabView: View {
                 LucideIcon(.hourglass, size: 34)
                     .foregroundStyle(.secondary)
                 Text("\(title) coming soon")
-                    .font(.headline)
+                    .font(AppTextStyle.sectionTitle.font)
                     .foregroundStyle(.secondary)
             }
             .navigationTitle(title)

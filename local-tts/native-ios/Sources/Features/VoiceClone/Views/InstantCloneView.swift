@@ -22,26 +22,23 @@ struct InstantCloneView: View {
                     value: viewModel.isRecording)
 
             Text(timerLabel)
-                .font(.title2.monospacedDigit())
-                .foregroundStyle(Color.appPrimaryText)
+                .monospacedDigit()
+                .appText(.title)
 
             if !viewModel.hasRecording {
                 VStack(spacing: 10) {
                     Text("Try reading this aloud")
-                        .font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
+                        .appText(.label)
                     Text(currentPassage)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.appPrimaryText)
+                        .appText(.title)
                         .multilineTextAlignment(.center)
                     Button {
                         passageIndex =
                             (passageIndex + 1) % VoiceCloneViewModel.suggestedReadingPassages.count
                     } label: {
                         Label(title: { Text("Try another") }, icon: { LucideIcon(.refreshCw, size: 14) })
-                            .font(.caption)
+                            .appText(.label)
                     }
-                    .foregroundStyle(Color.appSecondaryText)
                 }
                 .padding(.horizontal, 32)
             }

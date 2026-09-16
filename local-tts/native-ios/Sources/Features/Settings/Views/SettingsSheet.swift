@@ -54,7 +54,7 @@ struct SettingsSheet: View {
 
     private func row(title: String, icon: LucideIconName) -> some View {
         Label {
-            Text(title).foregroundStyle(Color.appPrimaryText)
+            Text(title).appText(.rowTitle)
         } icon: {
             LucideIcon(icon, color: Color.appPrimaryText)
         }

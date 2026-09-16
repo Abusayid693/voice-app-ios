@@ -9,12 +9,28 @@ extension Color {
     static let appPrimaryText = Color(hex: 0xEEEEEE)
     static let appSecondaryText = Color(hex: 0xB3B3B3)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
+    // Deliberately lighter/warmer than appTertiaryText — the finest
+    // metadata tier (timestamps, file sizes) reads as its own color, not
+    // just a dimmer tertiary.
+    static let appMetaText = Color(hex: 0xAB9E9A)
 
-    // Deliberately a light/inverted pair, distinct from the rest of this
-    // dark palette — for PrimaryButtonStyle's CTA, meant to pop against
-    // the dark background rather than blend into it.
-    static let primaryButtonBackground = Color(hex: 0xF6F6F6)
-    static let primaryButtonText = Color(hex: 0x000000)
+    // Filled CTA — light background, near-black label.
+    static let primaryButtonBackground = Color(hex: 0xEEEEEE)
+    static let primaryButtonText = Color(hex: 0x111111)
+    // Filled secondary CTA — a lighter, warm-grey fill than
+    // appSecondaryBackground, so it still reads as a distinct control.
+    static let secondaryButtonBackground = Color(hex: 0x393332)
+    static let secondaryButtonText = Color(hex: 0xF7F0EB)
+    // Ghost/liquid-glass CTA has no fill color of its own (see
+    // ButtonStyles.swift's .ghost — .ultraThinMaterial instead); only its
+    // label color lives here.
+    static let ghostButtonText = Color(hex: 0xFAF7F7)
+
+    // The "Free Demo"/"OPEN SOURCE" pill treatment — deliberately its own
+    // pair, not primaryButtonBackground/Text, so a highlight badge doesn't
+    // silently follow the CTA colors if those ever change again.
+    static let highlightBadgeBackground = Color(hex: 0xF6F6F6)
+    static let highlightBadgeText = Color(hex: 0x000000)
 
     init(hex: UInt32) {
         self.init(
@@ -32,7 +48,7 @@ extension LinearGradient {
     /// placeholder shown while real artwork loads doesn't flicker to a
     /// different color on every redraw. Voice cover art uses `OrbCoverArt`
     /// instead (`DesignSystem/OrbCoverArt.swift`); this remains for
-    /// `TrendingBookCard`'s book covers, which have no orb equivalent.
+    /// `OpenLibraryBookCard`'s book covers, which have no orb equivalent.
     static func stablePlaceholder(seed: String) -> LinearGradient {
         let pairs: [[Color]] = [
             [.pink, .purple], [.blue, .teal], [.orange, .red],

@@ -76,8 +76,12 @@ struct ReadAlongPlayerView: View {
                         isUserScrolling = false
                         withAnimation { proxy.scrollTo(generation.currentChunkIndex, anchor: .center) }
                     }
-                    .font(.caption)
-                    .foregroundStyle(Color.appPrimaryText)
+                    // Not .buttonStyle(.ghost) — that style is full-width by
+                    // design, and this is a small floating pill, not a CTA.
+                    // Same material/border look, just its own compact
+                    // padding/capsule.
+                    .font(AppTextStyle.label.font)
+                    .foregroundStyle(Color.ghostButtonText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(.ultraThinMaterial, in: Capsule())
@@ -92,8 +96,7 @@ struct ReadAlongPlayerView: View {
     private func chunkText(generation: KokoroGeneration, index: Int) -> some View {
         let isCurrentChunk = index == generation.currentChunkIndex && generation.isPlaying
         return Text(generation.chunkTexts[index])
-            .font(.title3)
-            .foregroundStyle(isCurrentChunk ? Color.appPrimaryText : Color.appSecondaryText)
+            .appText(isCurrentChunk ? .reading : .readingMuted)
             // Without this, the Text only sizes to its own glyph width
             // inside the leading-aligned VStack, so the highlight rectangle
             // below hugs the words instead of spanning the full row.

@@ -14,22 +14,21 @@ struct AboutView: View {
         List {
             Section {
                 HStack {
-                    Text("Version").foregroundStyle(Color.appPrimaryText)
+                    Text("Version").appText(.rowTitle)
                     Spacer()
-                    Text(versionLabel).foregroundStyle(Color.appSecondaryText)
+                    Text(versionLabel).appText(.body)
                 }
                 HStack {
-                    Text("Engines").foregroundStyle(Color.appPrimaryText)
+                    Text("Engines").appText(.rowTitle)
                     Spacer()
-                    Text("Kokoro-ANE, Pocket TTS").foregroundStyle(Color.appSecondaryText)
+                    Text("Kokoro-ANE, Pocket TTS").appText(.body)
                 }
             }
             .listRowBackground(Color.appSecondaryBackground)
 
             Section {
                 Text("On-device text-to-speech, powered by FluidAudio. No audio leaves your device.")
-                    .font(.caption)
-                    .foregroundStyle(Color.appSecondaryText)
+                    .appText(.label)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }
