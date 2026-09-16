@@ -131,6 +131,8 @@ Sources/
     GenerationRow.swift             // DONE — one saved generation's row (engine-icon avatar, text, trailing decorative play icon); shared by LibraryTabView and Import's Projects row, which previously duplicated it with slightly different fields
     PreviewVoiceCard.swift          // DONE — one voice's row in Import's Trending voices carousel (cover, name, tagline, play/pause indicator); was ImportHomeView's own private `VoiceTileView`
     CreateYourOwnRow.swift          // DONE — the "Create your own voice"/"Create your own book" entry-point row (icon, title, subtitle, tap to act); both were the exact same layout, differing only in icon/copy/action
+    SmallVoiceCard.swift            // DONE — compact avatar+name card for Voices tab's "Clone voices" horizontal strip
+    VoiceCard.swift                 // DONE — a voice's full-width row (Voices tab's "Your voices" list): avatar, name/subtitle, trailing play/pause/loading button. Both this and SmallVoiceCard take primitive fields (avatarSeed/name/…), not ClonedVoice directly, so DesignSystem doesn't reach into Features/VoiceClone/
   Core/
     Audio/
       AudioPlaybackDelegate.swift // DONE — AVAudioPlayerDelegate -> closure bridge, so an owner needn't be an NSObject; one shared copy for TTSViewModel's two players and VoicePreviewPlayer

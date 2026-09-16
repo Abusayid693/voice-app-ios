@@ -46,6 +46,10 @@ struct LibraryTabView: View {
                         }
                         .listRowBackground(Color.appSecondaryBackground)
                     }
+                    // Matches ImportHomeView's own gap under its nav
+                    // title (.padding(.top, 8) on its content) — List
+                    // has no equivalent top inset by default.
+                    .contentMargins(.top, 8, for: .scrollContent)
                     .scrollContentBackground(.hidden)
                 }
             }
