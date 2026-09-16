@@ -5,7 +5,8 @@ import SwiftUI
 /// "New in romance" row.
 struct OpenLibraryBookCard: View {
     let book: OpenLibraryBook
-    var coverSize: CGFloat = 110
+    var coverWidth: CGFloat = 117
+    var coverHeight: CGFloat = 163
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -19,8 +20,8 @@ struct OpenLibraryBookCard: View {
                         }
                 }
             }
-            .frame(width: coverSize, height: coverSize)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(width: coverWidth, height: coverHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             Text(book.title)
                 .appText(.labelStrong)
@@ -29,6 +30,6 @@ struct OpenLibraryBookCard: View {
                 .appText(.label)
                 .lineLimit(1)
         }
-        .frame(width: coverSize)
+        .frame(width: coverWidth)
     }
 }

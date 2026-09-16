@@ -23,12 +23,11 @@ struct ClassicReadsSection: View {
     private let cardSpacing: CGFloat = 16
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.innerSectionToContent) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Classic reads").appText(.sectionTitle)
                 Text("Free, public-domain classics").appText(.label)
             }
-            .padding(.horizontal, 16)
 
             // Cancels ImportHomeView's outer .padding(.horizontal) (same
             // trick readAnythingSection uses) so the ScrollView's own frame

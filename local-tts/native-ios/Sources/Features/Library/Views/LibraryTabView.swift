@@ -84,32 +84,14 @@ struct LibraryTabView: View {
     }
 
     private func row(for generation: SavedGeneration) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.appBackground)
-                .frame(width: 40, height: 40)
-                .overlay {
-                    LucideIcon(
-                        generation.engine == .kokoroAne ? .audioWaveform : .mic,
-                        style: generation.engine == .kokoroAne ? .stroked : .filled, size: 16,
-                        color: Color.appPrimaryText)
-                }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(generation.text)
-                    .appText(.rowTitle)
-                    .lineLimit(2)
-                Text(
-                    "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))"
-                )
-                    .appText(.label)
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { open(generation) }
+        GenerationRow(
+            icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
+            iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+            title: generation.text,
+            subtitle:
+                "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+            onTap: { open(generation) }
+        )
     }
 
     private func open(_ generation: SavedGeneration) {

@@ -7,7 +7,7 @@ import SwiftUI
 /// only for standalone bottom-of-screen CTAs); `.secondary` sizes to its
 /// content, since its real call sites (a "Download" row action, a compact
 /// "Play"/"Re-record" pair) sit inline next to other content, not alone.
-private let buttonLabelFont: Font = .system(size: 16, weight: .regular)
+private let buttonLabelFont: Font = .system(size: 16, weight: .medium)
 
 /// Filled black CTA — the app's main action (Generate, Clone Voice, …).
 struct PrimaryButtonStyle: ButtonStyle {
@@ -16,7 +16,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .font(buttonLabelFont)
             .foregroundStyle(Color.primaryButtonText)
             .frame(maxWidth: .infinity)
-            .padding()
+            .padding(14)
             .background(Color.primaryButtonBackground)
             .clipShape(Capsule())
             .opacity(configuration.isPressed ? 0.85 : 1)

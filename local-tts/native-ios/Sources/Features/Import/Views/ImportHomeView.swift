@@ -108,14 +108,25 @@ struct ImportHomeView: View {
     private var navigationContent: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                // 4 top-level groups (buttons, Trending voices, Read
+                // Anything, Projects) at AppSpacing.betweenGroups; within a
+                // multi-part group, siblings sit at the tighter
+                // AppSpacing.betweenSections instead.
+                VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
                     actionGrid
-                    trendingVoicesSection
-                    createYourOwnVoiceRow
-                    readAnythingSection
-                    ClassicReadsSection(viewModel: classicReadsViewModel)
-                    newInRomanceSection
-                    createYourOwnBookRow
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        trendingVoicesSection
+                        createYourOwnVoiceRow
+                    }
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        readAnythingSection
+                        ClassicReadsSection(viewModel: classicReadsViewModel)
+                        newInRomanceSection
+                        createYourOwnBookRow
+                    }
+
                     projectsSection
                 }
                 .padding(.horizontal)
@@ -241,18 +252,16 @@ struct ImportHomeView: View {
     }
 
     private var trendingVoicesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
             Text("Trending voices").appText(.sectionTitle)
-            // Cancels the parent VStack's .padding(.horizontal) (default,
-            // 16pt) just for this scroll view's own clipping bounds, then
-            // re-adds the same 16pt as content inset — so cards still start
-            // flush with the rest of the screen, but scrolling isn't
-            // clipped early at that boundary; the last/first card can
-            // slide all the way to the true screen edge.
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(rows: [GridItem(.fixed(84)), GridItem(.fixed(68))], spacing: 0) {
+                LazyHGrid(
+                    rows: [
+                        GridItem(.fixed(60), spacing: 14), GridItem(.fixed(60), spacing: 16),
+                    ], spacing: 0
+                ) {
                     ForEach(voiceTiles) { tile in
-                        VoiceTileView(tile: tile, previewPlayer: previewPlayer) {
+                        PreviewVoiceCard(tile: tile, previewPlayer: previewPlayer) {
                             selectedVoiceTile = tile
                         }
                     }
@@ -261,8 +270,7 @@ struct ImportHomeView: View {
                 // snaps per column (both stacked tiles at that horizontal
                 // offset), not per individual tile.
                 .scrollTargetLayout()
-                .padding(.horizontal, 16)
-                .padding(.vertical, 2)
+                .padding(.horizontal, 2)
             }
             .scrollTargetBehavior(.viewAligned)
             .padding(.horizontal, -16)
@@ -272,22 +280,12 @@ struct ImportHomeView: View {
     // Real, unlike createYourOwnBookRow below — opens the same CreateVoiceSheet
     // (Instant Clone / Upload file) as the Voices tab's own entry point.
     private var createYourOwnVoiceRow: some View {
-        Button {
+        CreateYourOwnRow(
+            icon: .mic, iconStyle: .filled, title: "Create your own voice",
+            subtitle: "Clone your voice in seconds"
+        ) {
             isCreateVoicePresented = true
-        } label: {
-            HStack(spacing: 12) {
-                LucideIcon(.mic, style: .filled, size: 28, color: Color.appPrimaryText)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own voice").appText(.rowTitle)
-                    Text("Clone your voice in seconds").appText(.label)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     // "Read Anything" — a horizontally scrolling row of promo cards, one
@@ -295,7 +293,7 @@ struct ImportHomeView: View {
     // are fixed per the supplied design (327x188 image, full card width
     // 327), not derived from screen width.
     private var readAnythingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
             Text("Read Anything").appText(.sectionTitle)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
@@ -311,7 +309,7 @@ struct ImportHomeView: View {
 
     // No "See all" yet — see OpenLibraryBooksViewModel's doc comment.
     private var newInRomanceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.innerSectionToContent) {
             Text("New in romance").appText(.sectionTitle)
 
             if openLibraryBooksViewModel.isLoading {
@@ -339,26 +337,18 @@ struct ImportHomeView: View {
                             OpenLibraryBookCard(book: book)
                         }
                     }
+                    .padding(.horizontal, 16)
                 }
+                .padding(.horizontal, -16)
             }
         }
     }
 
     private var createYourOwnBookRow: some View {
-        Button(action: {}) {
-            HStack(spacing: 12) {
-                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create your own book").appText(.rowTitle)
-                    Text("Craft your own story in seconds").appText(.label)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        CreateYourOwnRow(
+            icon: .circlePlus, title: "Create your own book",
+            subtitle: "Craft your own story in seconds"
+        ) {}
     }
 
     // Real generations (latest 5, newest first) once any exist; falls back
@@ -366,7 +356,7 @@ struct ImportHomeView: View {
     // (no action yet, matching createYourOwnBookRow's own no-op) while the
     // library is still empty.
     private var projectsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
             Text("Projects").appText(.sectionTitle)
             if libraryViewModel.savedGenerations.isEmpty {
                 ForEach(DemoContent.projects) { project in
@@ -375,22 +365,24 @@ struct ImportHomeView: View {
                 createYourOwnProjectRow
             } else {
                 ForEach(libraryViewModel.savedGenerations.prefix(5)) { generation in
-                    projectRow(
-                        title: VoiceDisplayName.forCode(generation.voiceName),
-                        subtitle: generation.text,
-                        updatedLabel: "Updated \(generation.createdAt.formatted(date: .abbreviated, time: .omitted))"
-                    )
-                    // Kokoro only — plays the saved audio straight from
-                    // disk when available (LibraryPlayback), regenerating
-                    // only as a fallback; there's no Pocket player yet.
-                    .onTapGesture {
-                        guard generation.engine == .kokoroAne else { return }
-                        if let newID = LibraryPlayback.open(
-                            generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
-                        {
-                            readAlongGenerationID = newID
+                    GenerationRow(
+                        icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
+                        iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+                        title: generation.text,
+                        subtitle:
+                            "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+                        onTap: {
+                            // Kokoro only — plays the saved audio straight from
+                            // disk when available (LibraryPlayback), regenerating
+                            // only as a fallback; there's no Pocket player yet.
+                            guard generation.engine == .kokoroAne else { return }
+                            if let newID = LibraryPlayback.open(
+                                generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
+                            {
+                                readAlongGenerationID = newID
+                            }
                         }
-                    }
+                    )
                 }
             }
         }
@@ -467,7 +459,7 @@ private struct ReadAnythingCard: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 327, height: 188)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .leading) {
                     if item.showsPlayButton {
                         LucideIcon(.circlePlay, size: 36, color: Color(hex: 0xD5AB80))
@@ -533,48 +525,6 @@ struct VoiceTile: Identifiable {
 /// trailing play/pause indicator (reflects whether this voice's preview is
 /// the one currently playing, started from VoicePreviewSheet). The whole
 /// card is the tap target — tapping opens VoicePreviewSheet.
-private struct VoiceTileView: View {
-    let tile: VoiceTile
-    @ObservedObject var previewPlayer: VoicePreviewPlayer
-    let onTap: () -> Void
-
-    private var isPreviewing: Bool { previewPlayer.playingVoiceID == tile.name }
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 10) {
-                avatar
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(tile.displayName).appText(.cardTitle)
-                        .lineLimit(1)
-                    Text(tile.descriptionText).appText(.label)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                Spacer(minLength: 8)
-
-                LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
-            }
-            .padding(.horizontal, 14)
-            .frame(width: 268, height: 84)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!tile.isAvailable)
-        .opacity(tile.isAvailable ? 1 : 0.6)
-    }
-
-    private var avatar: some View {
-        Image(VoiceCoverArt.assetName(for: tile.name))
-            .resizable()
-            .scaledToFill()
-    }
-}
-
 #Preview {
     let dependencies = DependencyContainer()
     let viewModel = TTSViewModel(dependencies: dependencies)
