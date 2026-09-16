@@ -92,7 +92,7 @@ struct ImportHomeView: View {
         ZStack(alignment: .topTrailing) {
             navigationContent
 
-            if !isFullyDownloaded && isScrolledToTop {
+            if isScrolledToTop {
                 setupPointer
                     // 40pt down clears the 44pt nav bar; 100pt in from the
                     // trailing edge lands under "Setup" rather than the cog.
