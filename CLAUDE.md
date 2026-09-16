@@ -47,7 +47,7 @@ Sources/
       Views/
         ImportHomeView.swift      // DONE — action grid + real Trending voices/New in romance + Setup + Create-your-own-voice entry points; also owns Read Anything's own static items (small, single-consumer, no separate Models/ file)
         SetupSheet.swift          // DONE — download Kokoro pack / Pocket TTS pack, independently
-        WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress
+        WriteTextView.swift       // DONE — full-screen write area, floating Generate + Settings, inline progress; also warms the Kokoro model on open (`prepareKokoroModelIfNeeded`) and hosts the "Initializing model…" notice on its NavigationStack rather than inside it, so the notice survives Kokoro's immediate push to the read-along screen
         VoiceSettingsSheet.swift  // DONE — Kokoro + Pocket + "My Voices" (cloned) picker, tagged available/not-available
         VoicePreviewSheet.swift   // DONE — half-sheet voice preview: horizontally scrolling carousel of whole sheet cards (one per voice, neighbours peeking), system sheet made invisible via .presentationBackground(.clear) so the card itself slides; snapping via .scrollTargetBehavior(.viewAligned)
         ReadAlongPlayerView.swift // DONE — chunk-highlighting read-along player for a Kokoro generation (issue #10), pushed from WriteTextView's Generate and from Library/Projects; its own read-only screen, not an overlay on the editor (see docs/adr/0004)
@@ -100,7 +100,7 @@ Sources/
         TextEntrySheet.swift      // DONE — still used by TTSHomeView's own flow (distinct from Import's WriteTextView)
         KokoroGenerationListView.swift // DONE — one row per Kokoro "Generate" tap, own play/pause + segmented bar; reused inside WriteTextView too
       ViewModels/
-        TTSViewModel.swift        // DONE — @MainActor ObservableObject, generation/playback/pack-download state + orchestration for all three engines; single instance shared by the Home and Import tabs
+        TTSViewModel.swift        // DONE — @MainActor ObservableObject, generation/playback/pack-download state + orchestration for all three engines; single instance shared by the Home and Import tabs. Also owns the cold-start notice state (issue #4): `isPreparingModel` while an engine runs its one-time ensureModels()+initialize(), tracked per variant/language (deliberately separate from `kokoroModelsReady`, which stopAllPlayback() clears on every voice change), plus `prepareKokoroModelIfNeeded()` — the generation worker awaits that warm-up task so the two never call initialize() concurrently
         VoicePreviewPlayer.swift  // DONE — bundled voice-preview clip playback (play/stop, progress, live level), split out of TTSViewModel so its ~15x/sec metering only re-renders the two views that show it
         VoicePackStore.swift      // DONE — which packs are on disk (+ UserDefaults persistence), where they live, and the one download in flight; reached as `viewModel.packs` and observed directly by the views that show pack state
       Services/
@@ -133,6 +133,7 @@ Sources/
     CreateYourOwnRow.swift          // DONE — the "Create your own voice"/"Create your own book" entry-point row (icon, title, subtitle, tap to act); both were the exact same layout, differing only in icon/copy/action
     SmallVoiceCard.swift            // DONE — compact avatar+name card for Voices tab's "Clone voices" horizontal strip
     VoiceCard.swift                 // DONE — a voice's full-width row (Voices tab's "Your voices" list): avatar, name/subtitle, trailing play/pause/loading button. Both this and SmallVoiceCard take primitive fields (avatarSeed/name/…), not ClonedVoice directly, so DesignSystem doesn't reach into Features/VoiceClone/
+    ModelPreparingNotice.swift      // DONE — the "Initializing model…" cold-start notice (issue #4), exposed as `.modelPreparingNotice(isPresented:onDismiss:)`. The app's only non-auto-dismissing floating message: it clears when preparation finishes or the user taps it, never on a timer. Apply to a whole NavigationStack, not inside one — Kokoro's Generate pushes the read-along screen before the slow load starts, so the notice has to outlive that push
   Core/
     Audio/
       AudioPlaybackDelegate.swift // DONE — AVAudioPlayerDelegate -> closure bridge, so an owner needn't be an NSObject; one shared copy for TTSViewModel's two players and VoicePreviewPlayer

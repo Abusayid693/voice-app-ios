@@ -78,6 +78,23 @@ final class TTSViewModel: ObservableObject {
     @Published var streamChunkProgress: String?
     @Published var isTextSheetPresented = false
 
+    // MARK: - Cold-start notice (issue #4)
+
+    /// True while an engine is doing its one-time `ensureModels()` +
+    /// `initialize()` for a model the user hasn't seen prepared yet this
+    /// session — drives WriteTextView's "Initializing model…" notice.
+    @Published private(set) var isPreparingModel = false
+
+    // Which models we've already shown that notice for, keyed by
+    // variant/language so English -> Mandarin (a genuinely different model,
+    // a real cold load) shows it again while switching voices *within* a
+    // variant doesn't. Deliberately separate from `kokoroModelsReady`
+    // below, which stopAllPlayback() clears on every voice change — that
+    // re-init is warm and fast, and shouldn't re-announce itself.
+    private var noticedKokoroVariants: Set<KokoroVariant> = []
+    private var noticedPocketLanguages: Set<PocketLanguage> = []
+    private var noticedSupertonic3 = false
+
     // MARK: - Import screen: voice-pack setup + new sheet flags
 
     /// Which packs are on disk, where, and any download in flight. Views that
@@ -105,6 +122,10 @@ final class TTSViewModel: ObservableObject {
     // generateKokoro's doc comment.
     private var kokoroCompletionHandlers: [KokoroGeneration.ID: ([Data]) -> Void] = [:]
     private var kokoroGenerationTask: Task<Void, Never>?
+    // Set while prepareKokoroModelIfNeeded() is warming the model ahead of
+    // a Generate tap; the generation worker awaits it so the two never run
+    // initialize() concurrently.
+    private var kokoroWarmUpTask: Task<Void, Never>?
     private var kokoroPlayer: AVAudioPlayer?
     private var kokoroPlayerDelegate: AudioPlaybackDelegate?
 
@@ -180,6 +201,47 @@ final class TTSViewModel: ObservableObject {
             runPocketTts()
         case .supertonic3:
             runSupertonicTts()
+        }
+    }
+
+    /// Hides the "Initializing model…" notice early. Preparation itself
+    /// keeps running — this only dismisses the message.
+    func dismissModelPreparingNotice() {
+        isPreparingModel = false
+    }
+
+    /// Starts Kokoro's one-time load as soon as Write Text opens, so the
+    /// model is usually warm by the time the user has finished typing and
+    /// taps Generate — rather than making them wait for it afterwards.
+    ///
+    /// Only warms the *selected* engine's model: Kokoro is the default, but
+    /// warming it for someone who's switched to Pocket/Supertonic-3 would
+    /// load the wrong one and pay the cost twice.
+    func prepareKokoroModelIfNeeded() {
+        guard engine == .kokoroAne, !kokoroModelsReady, kokoroWarmUpTask == nil else { return }
+
+        let variant = kokoroVariant
+        let service = kokoroService
+        isPreparingModel = !noticedKokoroVariants.contains(variant)
+
+        kokoroWarmUpTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.kokoroWarmUpTask = nil }
+            do {
+                let resolvedDirectory = try await service.ensureModels(progressHandler: nil)
+                packs.noteModelDirectory(resolvedDirectory, for: variant)
+                try await service.initialize()
+                // Only claim readiness if this is still the selected
+                // variant — the user may have switched mid-warm-up, in
+                // which case the newly-selected model genuinely isn't
+                // loaded and Generate must still do its own init.
+                if kokoroVariant == variant { kokoroModelsReady = true }
+                noticedKokoroVariants.insert(variant)
+            } catch {
+                // Best-effort: Generate runs the same calls itself and
+                // surfaces any real failure there, with its own error text.
+            }
+            isPreparingModel = false
         }
     }
 
@@ -408,11 +470,18 @@ final class TTSViewModel: ObservableObject {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
 
+                // If opening Write Text kicked off a warm-up, let it finish
+                // rather than running initialize() twice concurrently — by
+                // the time it returns, kokoroModelsReady is usually true and
+                // the block below is skipped entirely.
+                await kokoroWarmUpTask?.value
+
                 if !kokoroModelsReady {
                     isBusy = true
                     status = "Checking cache…"
                     let initStart = Date()
                     let variant = kokoroVariant
+                    isPreparingModel = !noticedKokoroVariants.contains(variant)
                     let resolvedDirectory = try await kokoroService.ensureModels(progressHandler: { progress in
                         Task { @MainActor in
                             self.status = self.packs.apply(
@@ -427,6 +496,8 @@ final class TTSViewModel: ObservableObject {
                     try await kokoroService.initialize()
                     initSeconds = Date().timeIntervalSince(initStart)
                     kokoroModelsReady = true
+                    noticedKokoroVariants.insert(variant)
+                    isPreparingModel = false
                     isBusy = false
                 }
 
@@ -476,11 +547,16 @@ final class TTSViewModel: ObservableObject {
                     }
                 }
                 status = "Idle"
+                isPreparingModel = false
             } catch is CancellationError {
                 // Cleared by a reset (e.g. switching engines) — nothing to report.
+                isPreparingModel = false
             } catch {
                 status = "Error: \(error.localizedDescription)"
                 isBusy = false
+                // The notice never auto-dismisses, so a failed init has to
+                // clear it explicitly or it hangs there forever.
+                isPreparingModel = false
             }
         }
     }
@@ -635,6 +711,7 @@ final class TTSViewModel: ObservableObject {
 
                 status = "Checking cache…"
                 let initStart = Date()
+                isPreparingModel = !noticedPocketLanguages.contains(language)
                 try await pocketService.ensureModels(progressHandler: { progress in
                     Task { @MainActor in
                         self.status = self.packs.apply(
@@ -647,6 +724,8 @@ final class TTSViewModel: ObservableObject {
                 status = "Loading models…"
                 try await pocketService.initialize()
                 initSeconds = Date().timeIntervalSince(initStart)
+                noticedPocketLanguages.insert(language)
+                isPreparingModel = false
 
                 status = "Synthesizing (streaming)…"
                 try pocketService.preparePlayback()
@@ -675,6 +754,9 @@ final class TTSViewModel: ObservableObject {
                 status = "Error: \(error.localizedDescription)"
             }
             isBusy = false
+            // See ensureKokoroGenerationRunning's catch — the notice has no
+            // auto-dismiss, so every exit path has to clear it.
+            isPreparingModel = false
         }
     }
 
@@ -697,6 +779,7 @@ final class TTSViewModel: ObservableObject {
 
                 status = "Checking cache…"
                 let initStart = Date()
+                isPreparingModel = !noticedSupertonic3
                 let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
                     [weak self] progress in
                     Task { @MainActor in
@@ -712,6 +795,8 @@ final class TTSViewModel: ObservableObject {
                 status = "Loading models…"
                 try await supertonicService.initialize()
                 initSeconds = Date().timeIntervalSince(initStart)
+                noticedSupertonic3 = true
+                isPreparingModel = false
 
                 status = "Synthesizing…"
                 let synthStart = Date()
@@ -736,6 +821,9 @@ final class TTSViewModel: ObservableObject {
                 status = "Error: \(error.localizedDescription)"
             }
             isBusy = false
+            // See ensureKokoroGenerationRunning's catch — the notice has no
+            // auto-dismiss, so every exit path has to clear it.
+            isPreparingModel = false
         }
     }
 }

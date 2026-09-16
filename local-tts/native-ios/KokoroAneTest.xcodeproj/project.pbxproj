@@ -64,6 +64,7 @@
 		A31090C8406142856F289B20 /* TextEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E463AF022C12D3968F17F19E /* TextEntrySheet.swift */; };
 		A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */; };
 		A7905DAC415E66EA5DA07BA2 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9302EAF5459A6CDDA5CCE8EB /* ButtonStyles.swift */; };
+		A8904E7303B6816E970F89F9 /* ModelPreparingNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF2153924F4CFABD8363417 /* ModelPreparingNotice.swift */; };
 		AA769E6B751D9894A65C6E4C /* DiskStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */; };
 		B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */; };
 		B3EDCBFDA125A597CC36EBB8 /* OpenLibraryBookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E725C92CB25C4424D6DFDE /* OpenLibraryBookService.swift */; };
@@ -150,6 +151,7 @@
 		BD462B27E4998BD0C84B966C /* KokoroGeneration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroGeneration.swift; sourceTree = "<group>"; };
 		BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
 		BEED11653277D7A616018B63 /* VoiceCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCoverArt.swift; sourceTree = "<group>"; };
+		BFF2153924F4CFABD8363417 /* ModelPreparingNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPreparingNotice.swift; sourceTree = "<group>"; };
 		C07EEB3027B4E022D555A931 /* Engine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Engine.swift; sourceTree = "<group>"; };
 		C8DE7BD70ACE70EDC00A3D47 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C992C537826E7A8C2B56DC50 /* VoiceSamplePreviewSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSamplePreviewSection.swift; sourceTree = "<group>"; };
@@ -385,6 +387,7 @@
 				251025C4FD0961EB5F194C37 /* Colors.swift */,
 				0A32DFC920567DC2DA5A0A41 /* CreateYourOwnRow.swift */,
 				EFD3F1ADF3670B6A4DCDC3E7 /* GenerationRow.swift */,
+				BFF2153924F4CFABD8363417 /* ModelPreparingNotice.swift */,
 				725C7E7034B4C34315AA827C /* OrbCoverArt.swift */,
 				A99FAE1E3F3B1F4FFF86CE2F /* PreviewVoiceCard.swift */,
 				917546E64FCA95CF20E60137 /* SmallVoiceCard.swift */,
@@ -636,6 +639,7 @@
 				8F37A2B35DAA630C862414CF /* LibraryPlayback.swift in Sources */,
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
+				A8904E7303B6816E970F89F9 /* ModelPreparingNotice.swift in Sources */,
 				6D10E8AB9EC462C028782174 /* OpenLibraryBook.swift in Sources */,
 				1857D89FC513A9C7B1117F52 /* OpenLibraryBookCard.swift in Sources */,
 				B3EDCBFDA125A597CC36EBB8 /* OpenLibraryBookService.swift in Sources */,

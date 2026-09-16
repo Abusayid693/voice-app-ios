@@ -44,6 +44,16 @@ struct WriteTextView: View {
                 ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
             }
         }
+        // Warm the model now rather than on the Generate tap — opening this
+        // screen is a clear signal the user is about to generate, so the
+        // load usually finishes while they're still typing.
+        .task { viewModel.prepareKokoroModelIfNeeded() }
+        // Outside the NavigationStack on purpose — Kokoro's Generate pushes
+        // the read-along screen immediately, before the cold-start load even
+        // begins, so the notice has to outlive that push.
+        .modelPreparingNotice(isPresented: viewModel.isPreparingModel) {
+            viewModel.dismissModelPreparingNotice()
+        }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
             VoiceSettingsSheet(
