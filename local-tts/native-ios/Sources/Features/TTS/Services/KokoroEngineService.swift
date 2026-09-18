@@ -93,8 +93,20 @@ final class KokoroEngineService {
         }
     }
 
-    func initialize() async throws {
-        try await manager.initialize()
+    /// - Parameter preloadVoice: loaded up front when given. Without it the
+    ///   manager defers the voice pack to the first `synthesize()` call
+    ///   (`KokoroAneManager.runChain` → `store.voicePack`), so the user pays
+    ///   for it on their first Generate instead of during preparation.
+    func initialize(preloadVoice: String? = nil) async throws {
+        try await manager.initialize(preloadVoices: preloadVoice.map { [$0] })
+    }
+
+    /// Runs one throwaway synthesis purely for its side effect: CoreML
+    /// defers ANE specialization to the first real `prediction()`, so
+    /// loading the models isn't enough to make the first Generate fast.
+    /// The audio is discarded and never played.
+    func warmUpInference(voice: String) async throws {
+        _ = try await manager.synthesize(text: "Hello", voice: voice)
     }
 
     func synthesize(text: String, voice: String) async throws -> Data {

@@ -221,6 +221,7 @@ final class TTSViewModel: ObservableObject {
         guard engine == .kokoroAne, !kokoroModelsReady, kokoroWarmUpTask == nil else { return }
 
         let variant = kokoroVariant
+        let voice = kokoroVoice
         let service = kokoroService
         isPreparingModel = !noticedKokoroVariants.contains(variant)
 
@@ -230,13 +231,19 @@ final class TTSViewModel: ObservableObject {
             do {
                 let resolvedDirectory = try await service.ensureModels(progressHandler: nil)
                 packs.noteModelDirectory(resolvedDirectory, for: variant)
-                try await service.initialize()
+                try await service.initialize(preloadVoice: voice)
                 // Only claim readiness if this is still the selected
                 // variant — the user may have switched mid-warm-up, in
                 // which case the newly-selected model genuinely isn't
                 // loaded and Generate must still do its own init.
                 if kokoroVariant == variant { kokoroModelsReady = true }
                 noticedKokoroVariants.insert(variant)
+                // Last, and deliberately after readiness is recorded:
+                // loading the models still leaves CoreML's first-inference
+                // ANE specialization unpaid, which is most of what made the
+                // first Generate slow. If this throws, the models are
+                // loaded regardless — Generate just pays the compile.
+                try await service.warmUpInference(voice: voice)
             } catch {
                 // Best-effort: Generate runs the same calls itself and
                 // surfaces any real failure there, with its own error text.
@@ -493,7 +500,9 @@ final class TTSViewModel: ObservableObject {
                     isWarmInit = !packs.didDownload
 
                     status = "Loading models…"
-                    try await kokoroService.initialize()
+                    // Preload this voice's pack rather than letting the
+                    // first synthesize() fetch it mid-generation.
+                    try await kokoroService.initialize(preloadVoice: kokoroVoice)
                     initSeconds = Date().timeIntervalSince(initStart)
                     kokoroModelsReady = true
                     noticedKokoroVariants.insert(variant)

@@ -9,10 +9,10 @@ extension Color {
     static let appPrimaryText = Color(hex: 0xEEEEEE)
     static let appSecondaryText = Color(hex: 0xB3B3B3)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
-    // Deliberately lighter/warmer than appTertiaryText — the finest
-    // metadata tier (timestamps, file sizes) reads as its own color, not
-    // just a dimmer tertiary.
-    static let appMetaText = Color(hex: 0xAB9E9A)
+    // Deliberately its own value, not derived from appTertiaryText — the
+    // finest metadata tier (timestamps, file sizes) reads as its own
+    // color, not just a dimmer tertiary.
+    static let appMetaText = Color(hex: 0x5F5F5F)
 
     // Filled CTA — light background, near-black label.
     static let primaryButtonBackground = Color(hex: 0xEEEEEE)

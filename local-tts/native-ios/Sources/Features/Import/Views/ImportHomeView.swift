@@ -36,6 +36,22 @@ private struct ScrolledToTopObserver: ViewModifier {
     }
 }
 
+/// The two pages of Home's top action row — "Listen to text" (get
+/// existing text into the app) vs. "Make audio" (create new voice/audio
+/// content).
+private enum HomeTab: Hashable, Identifiable, CaseIterable {
+    case listen, make
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .listen: return "Listen to text"
+        case .make: return "Make audio"
+        }
+    }
+}
+
 /// The app's default screen — a consumer-facing "Import" landing page
 /// (redesign target: paste/upload/scan/write actions, trending demo rows,
 /// a Setup entry point for the two voice packs). Only "Write text" is
@@ -74,6 +90,10 @@ struct ImportHomeView: View {
     // from the top, rather than have it float over unrelated content.
     // Driven by ScrolledToTopObserver above.
     @State private var isScrolledToTop = true
+    // Which page of the action tabs is showing — tapping a tab and
+    // swiping the TabView both write to this same binding, so either one
+    // keeps the other in sync.
+    @State private var selectedHomeTab: HomeTab = .listen
 
     private var isFullyDownloaded: Bool {
         packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
@@ -113,7 +133,7 @@ struct ImportHomeView: View {
                 // multi-part group, siblings sit at the tighter
                 // AppSpacing.betweenSections instead.
                 VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
-                    actionGrid
+                    actionTabsSection
 
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
                         trendingVoicesSection
@@ -214,7 +234,57 @@ struct ImportHomeView: View {
         }
     }
 
-    private var actionGrid: some View {
+    // Tab switcher + swipeable pages, both driving the same
+    // `selectedHomeTab` binding — tapping a tab and swiping the TabView
+    // are just two ways to write to it, so they can never disagree.
+    private var actionTabsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
+            homeTabSwitcher
+
+            TabView(selection: $selectedHomeTab) {
+                listenActionsGrid.tag(HomeTab.listen)
+                makeAudioActionsGrid.tag(HomeTab.make)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            // Matches the grid's own natural height (2 rows of
+            // ImportActionCard's 80pt content + 16pt padding on each
+            // side = 112pt per card, + 12pt row spacing) — TabView
+            // doesn't size to its pages' content on its own.
+            .frame(height: 236)
+            // Cancels the parent VStack's .padding(.horizontal) so the
+            // TabView's own drag area spans the true screen edge-to-edge
+            // (same trick trendingVoicesSection uses) — each grid re-adds
+            // the same 16pt as its own content inset, so the cards still
+            // sit exactly where they did before.
+            .padding(.horizontal, -16)
+        }
+    }
+
+    private var homeTabSwitcher: some View {
+        HStack(spacing: 8) {
+            ForEach(HomeTab.allCases) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedHomeTab = tab }
+                } label: {
+                    Text(tab.title)
+                        .appText(.rowTitle)
+                        .foregroundStyle(selectedHomeTab == tab ? Color.appPrimaryText : Color.appSecondaryText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(
+                            selectedHomeTab == tab ? Color.appSecondaryBackground : Color.clear,
+                            in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // "Listen to text" — get existing text into the app to have it read
+    // aloud. Only "Write text" is functional today; the rest are visual
+    // placeholders per the current design pass (same status as before
+    // this row grew tabs).
+    private var listenActionsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             ImportActionCard(title: "Paste a link", icon: .link, action: {})
             ImportActionCard(title: "Upload a file", icon: .file, action: {})
@@ -223,6 +293,19 @@ struct ImportHomeView: View {
                 viewModel.isWriteTextPresented = true
             }
         }
+        .padding(.horizontal, 16)
+    }
+
+    // "Make audio" — create new voice/audio content. All 4 are visual
+    // placeholders for now, same status as most of "Listen to text"'s row.
+    private var makeAudioActionsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ImportActionCard(title: "Clone voice", icon: .mic, action: {})
+            ImportActionCard(title: "Upload Book", icon: .bookUp, action: {})
+            ImportActionCard(title: "Create Podcast", icon: .radio, action: {})
+            ImportActionCard(title: "Change Voice", icon: .repeatIcon, action: {})
+        }
+        .padding(.horizontal, 16)
     }
 
     // Every real voice from both packs, not just a curated few — shown

@@ -34,6 +34,21 @@ struct WriteTextView: View {
             .background(Color.appBackground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Leading, not trailing — .navigationBarTrailing packs
+                // multiple items into one tight cluster, which squeezed
+                // this two-line control into/behind the close button
+                // instead of sitting cleanly beside it. This screen has no
+                // title and no back button (it's a fullScreenCover), so
+                // the leading side is otherwise empty. Kokoro's Generate
+                // navigates to the read-along screen before the cold-start
+                // load even finishes, so this simply isn't on screen during
+                // that phase for Kokoro — only relevant while WriteTextView
+                // itself is visible.
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if viewModel.isPreparingModel {
+                        ModelPreparingNotice(onDismiss: viewModel.dismissModelPreparingNotice)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.isWriteTextPresented = false }) {
                         LucideIcon(.x, color: Color.appPrimaryText)
@@ -48,12 +63,6 @@ struct WriteTextView: View {
         // screen is a clear signal the user is about to generate, so the
         // load usually finishes while they're still typing.
         .task { viewModel.prepareKokoroModelIfNeeded() }
-        // Outside the NavigationStack on purpose — Kokoro's Generate pushes
-        // the read-along screen immediately, before the cold-start load even
-        // begins, so the notice has to outlive that push.
-        .modelPreparingNotice(isPresented: viewModel.isPreparingModel) {
-            viewModel.dismissModelPreparingNotice()
-        }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
             VoiceSettingsSheet(
