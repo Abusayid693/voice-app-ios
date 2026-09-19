@@ -2,9 +2,13 @@ import FluidAudio
 import Foundation
 
 /// Wraps `KokoroAneManager`'s download/init/synthesize calls — the plain
-/// async-function surface `TTSViewModel` orchestrates against. No published
-/// state lives here; progress is reported back via the caller-supplied
-/// closure, matching FluidAudio's own `progressHandler` pattern.
+/// async-function surface `TTSViewModel` and `ChapterSynthesisService`
+/// orchestrate against. No published state lives here; progress is
+/// reported back via the caller-supplied closure, matching FluidAudio's
+/// own `progressHandler` pattern. `@MainActor` (its only construction site
+/// is `TTSViewModel`, already MainActor) so `ensureReady(voice:)` can dedupe
+/// concurrent callers with a plain stored `Task` instead of an actor/lock.
+@MainActor
 final class KokoroEngineService {
     private let manager: KokoroAneManager
     // Must match the directory `manager` itself was constructed with
@@ -111,5 +115,29 @@ final class KokoroEngineService {
 
     func synthesize(text: String, voice: String) async throws -> Data {
         try await manager.synthesize(text: text, voice: voice)
+    }
+
+    private var readyTask: Task<Void, Error>?
+    private var preloadedVoice: String?
+
+    /// Ensures models are downloaded, initialized, and this voice's pack is
+    /// loaded — deduped so two concurrent callers (e.g. `WriteTextView`'s
+    /// warm-up and a chapter Generate tapped moments later) never run
+    /// `ensureModels()`/`initialize()` twice at once. Safe to call
+    /// repeatedly; a second call for the same already-loaded voice returns
+    /// immediately once the in-flight task finishes.
+    func ensureReady(voice: String, progressHandler: ProgressHandler? = nil) async throws {
+        if let readyTask {
+            try await readyTask.value
+            if preloadedVoice == voice { return }
+        }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            try await self.ensureModels(progressHandler: progressHandler)
+            try await self.initialize(preloadVoice: voice)
+        }
+        readyTask = task
+        try await task.value
+        preloadedVoice = voice
     }
 }

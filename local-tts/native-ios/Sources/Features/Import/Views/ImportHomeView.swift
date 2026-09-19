@@ -68,6 +68,11 @@ struct ImportHomeView: View {
     // Observed: this screen's tile availability and the Setup pointer both
     // read pack readiness.
     @ObservedObject var packs: VoicePackStore
+    // Not observed — only ChaptersListView/ChapterPlayerView need to react
+    // to these (scrubber ticks, generate progress), this screen just
+    // forwards them on to whichever project the user opens.
+    let chapterPlayer: ChapterAudioPlayer
+    let generationStore: ChapterGenerationStore
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
@@ -82,9 +87,14 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
-    // Set when tapping a Kokoro entry in Projects — see playFromSavedGeneration's
-    // doc comment for why "opening" a saved entry means regenerating it fresh.
-    @State private var readAlongGenerationID: KokoroGeneration.ID?
+    // Set when tapping a Projects entry (any engine) — pushes ChaptersListView
+    // for that saved project.
+    @State private var openProjectID: UUID?
+    // Set by WriteTextView's onGenerated the moment Generate saves a new
+    // project, but not applied to openProjectID until the fullScreenCover's
+    // own onDismiss fires — setting both isWriteTextPresented = false and
+    // openProjectID in the same runloop can drop the subsequent push.
+    @State private var pendingProjectID: UUID?
     // Setup pointer only makes sense while its target is still visible at
     // the top of the screen — hide it the moment the user scrolls away
     // from the top, rather than have it float over unrelated content.
@@ -174,17 +184,33 @@ struct ImportHomeView: View {
                     UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
                 }
             }
-            .navigationDestination(item: $readAlongGenerationID) { generationID in
-                ReadAlongPlayerView(generationID: generationID, viewModel: viewModel)
+            .navigationDestination(item: $openProjectID) { projectID in
+                if let project = libraryViewModel.savedGenerations.first(where: { $0.id == projectID }) {
+                    ChaptersListView(
+                        project: project, chapterPlayer: chapterPlayer, generationStore: generationStore,
+                        viewModel: viewModel)
+                }
             }
         }
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel, packs: packs)
         }
-        .fullScreenCover(isPresented: $viewModel.isWriteTextPresented) {
+        .fullScreenCover(
+            isPresented: $viewModel.isWriteTextPresented,
+            onDismiss: {
+                if let pendingProjectID {
+                    openProjectID = pendingProjectID
+                    self.pendingProjectID = nil
+                }
+            }
+        ) {
             WriteTextView(
                 viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel, packs: packs)
+                libraryViewModel: libraryViewModel, packs: packs,
+                onGenerated: { projectID in
+                    pendingProjectID = projectID
+                    viewModel.isWriteTextPresented = false
+                })
         }
         .sheet(isPresented: $isCreateVoicePresented) {
             CreateVoiceSheet { route in
@@ -454,17 +480,7 @@ struct ImportHomeView: View {
                         title: generation.text,
                         subtitle:
                             "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
-                        onTap: {
-                            // Kokoro only — plays the saved audio straight from
-                            // disk when available (LibraryPlayback), regenerating
-                            // only as a fallback; there's no Pocket player yet.
-                            guard generation.engine == .kokoroAne else { return }
-                            if let newID = LibraryPlayback.open(
-                                generation, ttsViewModel: viewModel, libraryViewModel: libraryViewModel)
-                            {
-                                readAlongGenerationID = newID
-                            }
-                        }
+                        onTap: { openProjectID = generation.id }
                     )
                 }
             }
@@ -611,9 +627,12 @@ struct VoiceTile: Identifiable {
 #Preview {
     let dependencies = DependencyContainer()
     let viewModel = TTSViewModel(dependencies: dependencies)
-    ImportHomeView(
+    let synthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
+    return ImportHomeView(
         viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
         libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
-        packs: viewModel.packs)
+        packs: viewModel.packs,
+        chapterPlayer: ChapterAudioPlayer(synthesisService: synthesisService),
+        generationStore: ChapterGenerationStore(synthesisService: synthesisService))
 }

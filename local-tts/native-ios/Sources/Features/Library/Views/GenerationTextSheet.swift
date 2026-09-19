@@ -32,5 +32,5 @@ struct GenerationTextSheet: View {
     GenerationTextSheet(
         generation: SavedGeneration(
             id: UUID(), text: "Hello from FluidAudio!", engine: .kokoroAne, voiceName: "af_heart",
-            createdAt: Date()))
+            createdAt: Date(), chapters: ChapterSplitter.split("Hello from FluidAudio!")))
 }

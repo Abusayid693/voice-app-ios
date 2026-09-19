@@ -31,6 +31,22 @@ enum VoiceCatalog {
 
     static func voice(for code: String) -> Voice? { byCode[code] }
 
+    /// Which Kokoro variant a voice code belongs to, so a saved project's
+    /// voice can resolve to the right manager (`TTSViewModel.kokoroServices`)
+    /// without ever assigning `kokoroVoice`/`kokoroVariant` as a side effect
+    /// of opening it — see ChapterSynthesisService.
+    private static let variantByCode: [String: KokoroVariant] = {
+        var result: [String: KokoroVariant] = [:]
+        for variant in KokoroVariant.allCases {
+            for voice in voices(for: variant) {
+                result[voice.code] = variant
+            }
+        }
+        return result
+    }()
+
+    static func variant(forCode code: String) -> KokoroVariant? { variantByCode[code] }
+
     // MARK: - Kokoro-ANE (English, 28) — bundled, see ADR 2
 
     static let kokoroEnglish: [Voice] = [

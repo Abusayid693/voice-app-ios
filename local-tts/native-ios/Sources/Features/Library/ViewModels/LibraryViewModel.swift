@@ -10,48 +10,28 @@ final class LibraryViewModel: ObservableObject {
     @Published private(set) var savedGenerations: [SavedGeneration] = []
 
     private static let defaultsKey = "savedGenerations"
+    private static let didCleanUpLegacyChunkAudioKey = "didCleanUpLegacyChunkAudio"
 
     init() {
         savedGenerations = Self.load()
+        cleanUpLegacyChunkAudioIfNeeded()
     }
 
     /// Called from wherever a "Generate" action is triggered (currently
-    /// WriteTextView) — saves the text/voice used so it's not lost the
-    /// moment the in-memory generation state resets. Returns the new
-    /// entry's id (nil if text was empty) so the caller can later attach
-    /// audio to it once generation finishes.
+    /// WriteTextView) — saves the text, split into chapters, and the voice
+    /// used. No audio is synthesized here anymore: that only happens when
+    /// the user taps Generate on an individual chapter later (see
+    /// ChaptersListView/ChapterSynthesisService). Returns the new entry's
+    /// id (nil if text was empty).
     @discardableResult
     func save(text: String, engine: Engine, voiceName: String) -> UUID? {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        let entry = SavedGeneration(id: UUID(), text: text, engine: engine, voiceName: voiceName, createdAt: Date())
+        let entry = SavedGeneration(
+            id: UUID(), text: text, engine: engine, voiceName: voiceName, createdAt: Date(),
+            chapters: ChapterSplitter.split(text))
         savedGenerations.insert(entry, at: 0)
         Self.persist(savedGenerations)
         return entry.id
-    }
-
-    /// Writes a completed Kokoro generation's per-chunk audio to disk, one
-    /// file per chunk (see SavedGeneration.chunkAudioFileURL) — called once
-    /// every chunk has finished (TTSViewModel's generateKokoro
-    /// `onFullyGenerated` callback), never partway through.
-    func attachAudio(_ chunkAudio: [Data], to id: UUID) {
-        guard let generation = savedGenerations.first(where: { $0.id == id }) else { return }
-        try? FileManager.default.createDirectory(
-            at: generation.audioDirectory, withIntermediateDirectories: true)
-        for (index, data) in chunkAudio.enumerated() {
-            try? data.write(to: generation.chunkAudioFileURL(index: index))
-        }
-    }
-
-    /// Loads a saved entry's per-chunk audio back, in order — nil if none
-    /// was ever saved (Pocket entries, or a Kokoro entry whose generation
-    /// never finished). Stops at the first missing index, so a partial
-    /// write (e.g. app killed mid-write) doesn't return a gappy array.
-    func loadChunkAudio(for generation: SavedGeneration) -> [Data]? {
-        var chunks: [Data] = []
-        while let data = try? Data(contentsOf: generation.chunkAudioFileURL(index: chunks.count)) {
-            chunks.append(data)
-        }
-        return chunks.isEmpty ? nil : chunks
     }
 
     func delete(_ generation: SavedGeneration) {
@@ -70,5 +50,28 @@ final class LibraryViewModel: ObservableObject {
     private static func persist(_ items: [SavedGeneration]) {
         guard let data = try? JSONEncoder().encode(items) else { return }
         UserDefaults.standard.set(data, forKey: defaultsKey)
+    }
+
+    // One-shot migration: old entries saved flat `chunk_N.wav` files (one
+    // per synthesis chunk, not per chapter). Those are superseded by
+    // per-chapter merged `chapter_N.wav` files and are never read by the
+    // new chapters flow, so they're just dead storage now — delete them
+    // rather than migrate. Migrating would mean rebuilding a sidecar
+    // manifest via KokoroTextChunker.chunk(text), i.e. carrying forward on
+    // day one the exact fragility (re-deriving chunk boundaries and hoping
+    // they still match) this redesign exists to remove. Affected entries
+    // simply show as not-generated; re-Generate is one tap.
+    private func cleanUpLegacyChunkAudioIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.didCleanUpLegacyChunkAudioKey) else { return }
+        for generation in savedGenerations {
+            guard
+                let contents = try? FileManager.default.contentsOfDirectory(
+                    at: generation.audioDirectory, includingPropertiesForKeys: nil)
+            else { continue }
+            for file in contents where file.lastPathComponent.hasPrefix("chunk_") {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+        UserDefaults.standard.set(true, forKey: Self.didCleanUpLegacyChunkAudioKey)
     }
 }
