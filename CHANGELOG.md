@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/); version is read from `local-tts/native-ios/project.yml`'s `CFBundleShortVersionString`.
 
+## [Unreleased]
+
+### Changed
+- Generate no longer synthesizes audio directly — it saves the text split into chapters (≤2000 words each), and a new chapters list lets each chapter be streamed on demand (any engine) or, for Kokoro, generated and saved as one real file with a proper music-player screen (artwork, scrubber, real elapsed/duration) — see `docs/adr/0010-chapters-and-per-chapter-saved-audio.md` (supersedes ADR 4)
+- Library and Home's Projects row now open the same chapters list for every engine, not just Kokoro
+- "Initializing model…" cold-start notice while an engine warms up for the first time
+- Home's top action row is now two swipeable tabs ("Listen to text" / "Make audio")
+
+### Removed
+- The old Kokoro multi-track playlist system (`KokoroGeneration`, the chunk-scanning background worker, `ReadAlongPlayerView`, `KokoroGenerationListView`) and the retired `TTSHomeView`/`TextEntrySheet` debug screen, replaced by the chapters flow above
+
 ## [0.1.0] - 2026-09-12
 
 ### Added

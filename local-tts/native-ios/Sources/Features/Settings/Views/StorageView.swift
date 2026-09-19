@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// Settings > Storage — a real on-disk breakdown (see issue #9): both voice
-/// packs plus the user's own cloned voices, each computed from the actual
-/// directories they're written to (DiskStorage.directorySize), not an
-/// estimate.
+/// packs, the user's own cloned voices, and generated chapter audio
+/// (Features/Chapters), each computed from the actual directories they're
+/// written to (DiskStorage.directorySize), not an estimate.
 struct StorageView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
@@ -43,8 +43,17 @@ struct StorageView: View {
         DiskStorage.directorySize(at: ClonedVoice.directory)
     }
 
+    // Generated chapter audio (Features/Chapters) — merged WAVs saved
+    // under SavedGenerations/<project id>/, one per generated chapter.
+    // Absent from this breakdown until now (see docs/adr/0010's
+    // "Consequences" — flagged as a known gap when chapters shipped).
+    private var savedGenerationsBytes: Int64 {
+        DiskStorage.directorySize(at: SavedGeneration.baseDirectory)
+    }
+
     private var totalBytes: Int64 {
         kokoroBytes + kokoroMandarinBytes + pocketBytes + supertonic3Bytes + clonedVoicesBytes
+            + savedGenerationsBytes
     }
 
     var body: some View {
@@ -57,6 +66,7 @@ struct StorageView: View {
                 row(
                     title: "My voices (\(voiceCloneViewModel.clonedVoices.count))",
                     bytes: clonedVoicesBytes)
+                row(title: "Generated chapters", bytes: savedGenerationsBytes)
             }
             .listRowBackground(Color.appSecondaryBackground)
 

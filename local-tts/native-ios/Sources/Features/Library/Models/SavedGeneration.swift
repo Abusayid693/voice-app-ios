@@ -53,8 +53,10 @@ struct SavedGeneration: Identifiable, Codable, Equatable {
     /// whoever plays a saved chapter back — a single source of truth for
     /// where a project's chapter audio lives, same convention as
     /// `ClonedVoice.fileURL`. Purely computed from `id`, so no new Codable
-    /// field is needed for it.
-    private static let baseDirectory: URL = {
+    /// field is needed for it. Not `private` — Settings' StorageView reads
+    /// this directly to size all saved chapter audio, same as it does for
+    /// `ClonedVoice.directory`.
+    static let baseDirectory: URL = {
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = appSupport.appendingPathComponent("SavedGenerations", isDirectory: true)
