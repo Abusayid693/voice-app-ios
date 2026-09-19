@@ -27,6 +27,12 @@ struct AppEnvironment {
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
     let generationStore: ChapterGenerationStore
+    // Not "pass-through" like the others above — a live flag tab roots
+    // write to and RootTabView observes, so the floating "+" button can
+    // hide itself on pushed screens. See NavigationChromeVisibility's own
+    // doc comment for why it's not folded into the tab bar's own
+    // .toolbar(.hidden, for: .tabBar) handling.
+    let navigationChrome: NavigationChromeVisibility
 }
 
 extension AppEnvironment {
@@ -42,7 +48,8 @@ extension AppEnvironment {
             tts: tts, voiceClone: VoiceCloneViewModel(dependencies: dependencies),
             library: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
             chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis),
-            generationStore: ChapterGenerationStore(synthesisService: synthesis))
+            generationStore: ChapterGenerationStore(synthesisService: synthesis),
+            navigationChrome: NavigationChromeVisibility())
     }
 }
 

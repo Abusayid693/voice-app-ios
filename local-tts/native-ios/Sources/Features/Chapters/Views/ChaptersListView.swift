@@ -44,6 +44,11 @@ struct ChaptersListView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Chapters")
         .navigationBarTitleDisplayMode(.inline)
+        // Root tab bar is only for Home/Library/Tools/Voices themselves —
+        // hidden on every pushed screen. RootTabView's own floating "+"
+        // isn't part of the real tab bar, so it needs NavigationChromeVisibility
+        // instead (set by the tab root that pushed this, not here).
+        .toolbar(.hidden, for: .tabBar)
         .navigationDestination(item: $playerChapterRef) { ref in
             ChapterPlayerView(project: project, chapterRef: ref, chapterPlayer: chapterPlayer)
         }
@@ -70,8 +75,9 @@ struct ChaptersListView: View {
         let isBuffering = isKokoro && isActive && chapterPlayer.isBuffering
 
         return ChapterRow(
-            chapter: chapter, isKokoro: isKokoro, isGenerated: isGenerated, isActive: isActive,
-            isPlaying: isPlaying, isBuffering: isBuffering, generationState: generationStore.state(for: ref),
+            chapter: chapter, voiceName: project.voiceName, isKokoro: isKokoro, isGenerated: isGenerated,
+            isActive: isActive, isPlaying: isPlaying, isBuffering: isBuffering,
+            generationState: generationStore.state(for: ref),
             onPlayTapped: { play(chapter: chapter, ref: ref, isGenerated: isGenerated) },
             onGenerateTapped: {
                 generationStore.generate(

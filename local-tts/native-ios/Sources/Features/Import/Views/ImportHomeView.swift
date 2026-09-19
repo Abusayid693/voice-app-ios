@@ -187,6 +187,11 @@ struct ImportHomeView: View {
                         viewModel: viewModel)
                 }
             }
+            // The root tab bar/floating "+" button should only show at
+            // this screen's own root, not on anything pushed above it —
+            // see NavigationChromeVisibility. Two triggers, either one
+            // non-nil means something's pushed.
+            .tabRootChrome(app.navigationChrome, isPushed: openProjectID != nil || voiceCloneRoute != nil)
         }
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel, packs: packs)

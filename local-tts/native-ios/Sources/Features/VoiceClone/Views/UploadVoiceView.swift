@@ -32,6 +32,7 @@ struct UploadVoiceView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Upload File")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .fileImporter(
             isPresented: $isFileImporterPresented, allowedContentTypes: [.audio]
         ) { result in

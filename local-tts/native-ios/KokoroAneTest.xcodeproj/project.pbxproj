@@ -47,6 +47,7 @@
 		67801616FA55DBDEC073FE1E /* CreateVoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */; };
 		67A6730CC9678ADA29D6D727 /* Supertonic3EngineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93E831F0E313B5D438E899A4 /* Supertonic3EngineService.swift */; };
 		6AA586D1EF397B16E67E331D /* DemoContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 296EDA0C320DCA3BC8E415E0 /* DemoContent.swift */; };
+		6B3AB04404997DF611932628 /* NavigationChromeVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */; };
 		6D10E8AB9EC462C028782174 /* OpenLibraryBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40791877A0AE41037E5222B4 /* OpenLibraryBook.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
 		6F472653E642C80C019641E4 /* OrbSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18121D12A0F604DBEC00BBD /* OrbSpec.swift */; };
@@ -143,6 +144,7 @@
 		4061CD489CD60ADA8C80E1DC /* ChapterRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterRef.swift; sourceTree = "<group>"; };
 		40791877A0AE41037E5222B4 /* OpenLibraryBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibraryBook.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
+		4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationChromeVisibility.swift; sourceTree = "<group>"; };
 		4567A06F6893E77FF005B84F /* KokoroVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroVariant.swift; sourceTree = "<group>"; };
 		4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupertonicVoice.swift; sourceTree = "<group>"; };
 		52BACFBFFE9CED64254A3175 /* ChapterSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterSplitter.swift; sourceTree = "<group>"; };
@@ -373,6 +375,7 @@
 				E10840560E1EBEDA45E17412 /* AppEnvironment.swift */,
 				BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */,
 				3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */,
+				4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */,
 				E240B4E87751E192ECF07206 /* PlaceholderTabView.swift */,
 				30A3AE469CA3D6649CCD731F /* RootTabView.swift */,
 			);
@@ -756,6 +759,7 @@
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
 				A8904E7303B6816E970F89F9 /* ModelPreparingNotice.swift in Sources */,
 				E5E4F90206956CE7D69BDC3A /* Morph.swift in Sources */,
+				6B3AB04404997DF611932628 /* NavigationChromeVisibility.swift in Sources */,
 				6D10E8AB9EC462C028782174 /* OpenLibraryBook.swift in Sources */,
 				1857D89FC513A9C7B1117F52 /* OpenLibraryBookCard.swift in Sources */,
 				B3EDCBFDA125A597CC36EBB8 /* OpenLibraryBookService.swift in Sources */,

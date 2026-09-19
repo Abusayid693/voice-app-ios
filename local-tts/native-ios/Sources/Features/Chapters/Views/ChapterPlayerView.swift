@@ -1,13 +1,14 @@
 import LucideSwift
 import SwiftUI
 
-/// The music-player screen for a generated chapter: artwork/title/voice +
-/// a real draggable scrubber up top, the chapter's read-along text
-/// scrolling and highlighting underneath. Only reachable for a chapter
-/// that's actually been saved (`ChaptersListView` pushes here from
-/// `playSaved`, never from streaming) — real duration/elapsed/seek only
-/// exist once a chapter's chunks are merged into one file (see
-/// `ChapterAudioManifest`).
+/// The music-player screen for a generated chapter: the whole page is the
+/// read-along text, with a compact, translucent transport bar floating over
+/// its bottom (scrubber on top, avatar + −10s/play-pause/+10s below) —
+/// text keeps scrolling underneath it, it doesn't reserve its own space.
+/// Only reachable for a chapter that's actually been saved (`ChaptersListView`
+/// pushes here from `playSaved`, never from streaming) — real
+/// duration/elapsed/seek only exist once a chapter's chunks are merged into
+/// one file (see `ChapterAudioManifest`).
 ///
 /// The read-along portion — the 2-second user-scroll override, the "Jump
 /// to current" pill, and the chunk highlight treatment — is lifted
@@ -29,12 +30,14 @@ struct ChapterPlayerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        ZStack(alignment: .bottom) {
             readAlong
+            floatingPlayer
         }
         .background(Color.appBackground.ignoresSafeArea())
+        .navigationTitle(chapter?.title ?? "Chapter")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .preferredColorScheme(.dark)
         .onChange(of: chapterPlayer.elapsed) { _, newValue in
             guard !isScrubbing else { return }
@@ -42,44 +45,17 @@ struct ChapterPlayerView: View {
         }
     }
 
-    // MARK: - Now-playing header
+    // MARK: - Floating player
 
-    private var header: some View {
-        VStack(spacing: 16) {
-            artwork
-                .frame(width: 180, height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-            VStack(spacing: 4) {
-                Text(chapter?.title ?? "Chapter").appText(.title)
-                Text(VoiceDisplayName.forCode(project.voiceName)).appText(.body)
-            }
-
+    private var floatingPlayer: some View {
+        VStack(spacing: 14) {
             scrubber
-
-            Button(action: chapterPlayer.togglePlayPause) {
-                LucideIcon(
-                    chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 56,
-                    color: Color.appPrimaryText)
-            }
-            .buttonStyle(.plain)
+            transportRow
         }
-        .padding(.top, 24)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 16)
-        .background {
-            artwork
-                .blur(radius: 30)
-                .opacity(0.4)
-                .overlay(Color.appBackground.opacity(0.55))
-                .clipped()
-        }
-    }
-
-    private var artwork: some View {
-        Image(VoiceCoverArt.assetName(for: project.voiceName))
-            .resizable()
-            .scaledToFill()
+        .padding(16)
+        .background(Color.appSecondaryBackground.opacity(0.92), in: RoundedRectangle(cornerRadius: 20))
+        .padding(.horizontal)
+        .padding(.bottom, 8)
     }
 
     private var scrubber: some View {
@@ -106,6 +82,57 @@ struct ChapterPlayerView: View {
         }
     }
 
+    private var transportRow: some View {
+        HStack {
+            avatar
+
+            Spacer()
+
+            HStack(spacing: 28) {
+                skipButton(icon: .rotateCcw, label: "10") { chapterPlayer.skipBackward() }
+
+                Button(action: chapterPlayer.togglePlayPause) {
+                    LucideIcon(
+                        chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 44,
+                        color: Color.appPrimaryText)
+                }
+                .buttonStyle(.plain)
+
+                skipButton(icon: .rotateCw, label: "10") { chapterPlayer.skipForward() }
+            }
+
+            Spacer()
+
+            // Balances the avatar's width so the transport controls above
+            // stay visually centered in the bar rather than skewed toward
+            // the trailing edge.
+            Color.clear.frame(width: 44, height: 1)
+        }
+    }
+
+    private var avatar: some View {
+        Image(VoiceCoverArt.assetName(for: project.voiceName))
+            .resizable()
+            .scaledToFill()
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+    }
+
+    // A plain rotate-arrow icon reads as "skip back/forward" once paired
+    // with a duration; Lucide's vendored set has no dedicated "skip 10s"
+    // glyph (checked directly, not assumed), so the count is overlaid
+    // rather than invented as a new icon.
+    private func skipButton(icon: LucideIconName, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                LucideIcon(icon, size: 28, color: Color.appPrimaryText)
+                Text(label).appText(.meta)
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+    }
+
     private static func formatTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let total = Int(seconds)
@@ -129,6 +156,9 @@ struct ChapterPlayerView: View {
                     }
                 }
                 .padding()
+                // Clears the floating player so the last few lines of text
+                // aren't permanently hidden underneath it.
+                .padding(.bottom, 140)
             }
             .simultaneousGesture(
                 DragGesture().onChanged { _ in

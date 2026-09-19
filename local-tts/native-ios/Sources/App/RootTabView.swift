@@ -43,6 +43,11 @@ struct RootTabView: View {
     // non-observable container (see AppEnvironment), so it subscribes to
     // nothing.
     let app: AppEnvironment
+    // The one piece of `app` this shell genuinely reacts to (hides
+    // `addButton` on pushed screens) — taken as its own @ObservedObject,
+    // same as any other view that needs to observe something rather than
+    // just forward it. See NavigationChromeVisibility's doc comment.
+    @ObservedObject private var navigationChrome: NavigationChromeVisibility
     @State private var selectedTab: RootTab = .home
     @State private var isQuickActionsPresented = false
     // Set the instant "Write text" is chosen in QuickActionsSheet, but only
@@ -52,46 +57,70 @@ struct RootTabView: View {
     // transaction can silently drop one of them.
     @State private var pendingWriteText = false
 
+    init(app: AppEnvironment) {
+        self.app = app
+        self.navigationChrome = app.navigationChrome
+    }
+
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            TabView(selection: $selectedTab) {
-                ImportHomeView(
-                    viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs,
-                    app: app
-                )
-                .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
-                .tag(RootTab.home)
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                TabView(selection: $selectedTab) {
+                    ImportHomeView(
+                        viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs,
+                        app: app
+                    )
+                    .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
+                    .tag(RootTab.home)
 
-                LibraryTabView(viewModel: app.library, app: app)
-                    .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
-                    .tag(RootTab.library)
+                    LibraryTabView(viewModel: app.library, app: app)
+                        .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
+                        .tag(RootTab.library)
 
-                PlaceholderTabView(title: "Tools")
-                    .tabItem { Label(title: { Text("Tools") }, icon: { tabIcon(.wrench) }) }
-                    .tag(RootTab.tools)
+                    PlaceholderTabView(title: "Tools")
+                        .tabItem { Label(title: { Text("Tools") }, icon: { tabIcon(.wrench) }) }
+                        .tag(RootTab.tools)
 
-                VoicesTabView(viewModel: app.voiceClone)
-                    .tabItem { Label(title: { Text("Voices") }, icon: { tabIcon(.audioWaveform) }) }
-                    .tag(RootTab.voices)
+                    VoicesTabView(viewModel: app.voiceClone, app: app)
+                        .tabItem { Label(title: { Text("Voices") }, icon: { tabIcon(.audioWaveform) }) }
+                        .tag(RootTab.voices)
+                }
+
+                if navigationChrome.isAtTabRoot {
+                    addButton(safeAreaBottom: geometry.safeAreaInsets.bottom)
+                        .transition(.opacity)
+                }
             }
-
-            addButton
+            // Centralized here rather than wrapping every call site that
+            // writes navigationChrome.isAtTabRoot in withAnimation. `.default`
+            // rather than a hand-picked duration — a fixed guess (previously
+            // 0.35s) isn't actually tied to how long the real pop transition
+            // takes, so our fade could finish before/after the real tab bar's
+            // own `.toolbar(.hidden, for: .tabBar)` reveal, making the two
+            // visibly land at different times. `.default` is tuned to match
+            // typical system transition timing instead of a made-up number.
+            .animation(.default, value: navigationChrome.isAtTabRoot)
         }
     }
 
-    private var addButton: some View {
+    // A distinct circular button at the trailing end of the tab bar's own
+    // row, not floating above it and not a 5th tab item. `safeAreaBottom`
+    // is this device's real inset (GeometryReader, not a guessed
+    // constant) — the tab bar's own content height is a stable 49pt, so
+    // centering a 52pt button on that row from the true bottom edge is
+    // `safeAreaBottom + 49/2 - 52/2`, plus another 20pt so it clears the
+    // tab bar's own icons/labels instead of colliding with them.
+    private func addButton(safeAreaBottom: CGFloat) -> some View {
         Button {
             isQuickActionsPresented = true
         } label: {
             LucideIcon(.plus, size: 22, color: Color.primaryButtonText)
                 .frame(width: 52, height: 52)
-                .background(Circle().fill(Color.primaryButtonBackground))
+                .background(Circle().fill(.white))
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
         }
-        .padding(.trailing, 20)
-        // Clears the system tab bar (~49pt + safe-area inset) so the button
-        // floats just above it, not overlapping the tab labels.
-        .padding(.bottom, 75)
+        .padding(.trailing, 16)
+        .padding(.bottom, safeAreaBottom + 49 / 2 - 52 / 2 + 20)
         // Deferred to onDismiss, not set alongside isQuickActionsPresented
         // = false in onSelect — ImportHomeView's fullScreenCover lives on
         // a sibling tab still in the same window's presentation chain as

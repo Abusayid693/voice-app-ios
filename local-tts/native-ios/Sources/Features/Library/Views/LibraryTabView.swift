@@ -71,6 +71,9 @@ struct LibraryTabView: View {
                         generationStore: app.generationStore, viewModel: app.tts)
                 }
             }
+            // Root tab bar/floating "+" button only at this screen's own
+            // root — see NavigationChromeVisibility.
+            .tabRootChrome(app.navigationChrome, isPushed: openProjectID != nil)
         }
         .preferredColorScheme(.dark)
         .sheet(item: $viewingGeneration) { generation in
