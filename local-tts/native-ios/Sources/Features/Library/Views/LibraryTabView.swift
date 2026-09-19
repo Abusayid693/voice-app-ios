@@ -7,9 +7,10 @@ import SwiftUI
 /// read-only, regardless of engine).
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
-    @ObservedObject var ttsViewModel: TTSViewModel
-    let chapterPlayer: ChapterAudioPlayer
-    let generationStore: ChapterGenerationStore
+    // Only handed onward to ChaptersListView (which observes them itself),
+    // never read here — so they come from the non-observable container
+    // rather than as parameters. See AppEnvironment.
+    @Environment(\.app) private var app
     @State private var viewingGeneration: SavedGeneration?
     @State private var openProjectID: UUID?
     @State private var sortNewestFirst = true
@@ -66,8 +67,8 @@ struct LibraryTabView: View {
             .navigationDestination(item: $openProjectID) { projectID in
                 if let project = viewModel.savedGenerations.first(where: { $0.id == projectID }) {
                     ChaptersListView(
-                        project: project, chapterPlayer: chapterPlayer, generationStore: generationStore,
-                        viewModel: ttsViewModel)
+                        project: project, chapterPlayer: app.chapterPlayer,
+                        generationStore: app.generationStore, viewModel: app.tts)
                 }
             }
         }
@@ -107,11 +108,7 @@ struct LibraryTabView: View {
 }
 
 #Preview {
-    let dependencies = DependencyContainer()
-    let viewModel = TTSViewModel(dependencies: dependencies)
-    let synthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
-    return LibraryTabView(
-        viewModel: LibraryViewModel(), ttsViewModel: viewModel,
-        chapterPlayer: ChapterAudioPlayer(synthesisService: synthesisService),
-        generationStore: ChapterGenerationStore(synthesisService: synthesisService))
+    let app = AppEnvironment.preview()
+    return LibraryTabView(viewModel: app.library)
+        .environment(\.app, app)
 }

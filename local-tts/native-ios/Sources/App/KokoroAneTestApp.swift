@@ -22,12 +22,17 @@ struct KokoroAneTestApp: App {
         chapterPlayer = ChapterAudioPlayer(synthesisService: chapterSynthesisService)
     }
 
+    private var appEnvironment: AppEnvironment {
+        AppEnvironment(
+            tts: viewModel, voiceClone: voiceCloneViewModel, library: libraryViewModel,
+            previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
+            generationStore: chapterGenerationStore)
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootTabView(
-                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel, previewPlayer: previewPlayer,
-                chapterPlayer: chapterPlayer, generationStore: chapterGenerationStore)
+            RootTabView()
+                .environment(\.app, appEnvironment)
         }
     }
 }

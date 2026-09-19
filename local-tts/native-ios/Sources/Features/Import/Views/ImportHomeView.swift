@@ -59,20 +59,16 @@ private enum HomeTab: Hashable, Identifiable, CaseIterable {
 /// design pass.
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
-    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
-    // Passed down to the tiles and the preview sheet, which observe it
-    // themselves — this screen's own body doesn't read preview state, so
-    // observing it here would re-render the whole page on every meter tick.
-    let previewPlayer: VoicePreviewPlayer
     // Observed: this screen's tile availability and the Setup pointer both
     // read pack readiness.
     @ObservedObject var packs: VoicePackStore
-    // Not observed — only ChaptersListView/ChapterPlayerView need to react
-    // to these (scrubber ticks, generate progress), this screen just
-    // forwards them on to whichever project the user opens.
-    let chapterPlayer: ChapterAudioPlayer
-    let generationStore: ChapterGenerationStore
+    // Everything this screen only hands onward — the cloned-voice model,
+    // the preview player (its ~15x/sec metering would re-render this whole
+    // page), and the two chapter objects — comes from the non-observable
+    // container instead of being threaded through as parameters, so none of
+    // it subscribes this view to anything. See AppEnvironment.
+    @Environment(\.app) private var app
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
@@ -179,15 +175,15 @@ struct ImportHomeView: View {
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {
                 case .instantClone:
-                    InstantCloneView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                    InstantCloneView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
                 case .upload:
-                    UploadVoiceView(viewModel: voiceCloneViewModel) { voiceCloneRoute = nil }
+                    UploadVoiceView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
                 }
             }
             .navigationDestination(item: $openProjectID) { projectID in
                 if let project = libraryViewModel.savedGenerations.first(where: { $0.id == projectID }) {
                     ChaptersListView(
-                        project: project, chapterPlayer: chapterPlayer, generationStore: generationStore,
+                        project: project, chapterPlayer: app.chapterPlayer, generationStore: app.generationStore,
                         viewModel: viewModel)
                 }
             }
@@ -205,7 +201,7 @@ struct ImportHomeView: View {
             }
         ) {
             WriteTextView(
-                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
+                viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
                 libraryViewModel: libraryViewModel, packs: packs,
                 onGenerated: { projectID in
                     pendingProjectID = projectID
@@ -219,10 +215,10 @@ struct ImportHomeView: View {
             }
         }
         .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: previewPlayer)
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: app.previewPlayer)
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel)
+            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
         }
     }
 
@@ -370,7 +366,7 @@ struct ImportHomeView: View {
                     ], spacing: 0
                 ) {
                     ForEach(voiceTiles) { tile in
-                        PreviewVoiceCard(tile: tile, previewPlayer: previewPlayer) {
+                        PreviewVoiceCard(tile: tile, previewPlayer: app.previewPlayer) {
                             selectedVoiceTile = tile
                         }
                     }
@@ -625,14 +621,7 @@ struct VoiceTile: Identifiable {
 /// the one currently playing, started from VoicePreviewSheet). The whole
 /// card is the tap target — tapping opens VoicePreviewSheet.
 #Preview {
-    let dependencies = DependencyContainer()
-    let viewModel = TTSViewModel(dependencies: dependencies)
-    let synthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
-    return ImportHomeView(
-        viewModel: viewModel,
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
-        packs: viewModel.packs,
-        chapterPlayer: ChapterAudioPlayer(synthesisService: synthesisService),
-        generationStore: ChapterGenerationStore(synthesisService: synthesisService))
+    let app = AppEnvironment.preview()
+    return ImportHomeView(viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs)
+        .environment(\.app, app)
 }
