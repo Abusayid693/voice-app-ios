@@ -1,0 +1,35 @@
+# 10. Chapters, replacing the Kokoro multi-track playlist
+
+**Status:** Accepted
+**Date:** 2026-09-19
+
+## Context
+
+The previous design (an append-only `KokoroGeneration` track per Generate tap, one shared background worker scanning every track oldest-first for its next unsynthesized chunk) served a "each Generate tap is a new track in a playlist" model well, but broke down once the product moved to a different shape: split a long text into chapters up front, let the user stream any chapter on demand, and only pay for (and keep) a full synthesis when they explicitly ask to save one.
+
+Two concrete problems with reusing the old worker for that:
+
+- `nextPendingKokoroChunk()` scans every track in creation order — synthesizing chapter 3 on demand while chapter 1's chunks are still queued would sit behind all of chapter 1's remaining chunks, with only a spinner and no way to jump the queue.
+- The old "open a saved generation" path (`playFromSavedGeneration`) assigned `viewModel.kokoroVoice`/`text` as a side effect of opening a saved item, and `kokoroVoice`'s `didSet` wiped all in-flight state — reopening a project could stomp on whatever else was happening.
+
+Patching the worker to add per-chapter priority and stop it from destabilizing on voice changes would have meant a priority queue plus decoupling five `didSet` hooks. A purpose-built player scoped to one chapter at a time was less code and less risk than repairing those invariants.
+
+## Decision
+
+- **Chapters are a new layer above synthesis chunks.** `ChapterSplitter` packs paragraphs (falling back to sentences, then words) into ≤2000-word chapters; each chapter still gets chunked internally via the existing `KokoroTextChunker` (~350 characters, a stand-in for Kokoro-ANE's hard ≤510-phoneme cap per `synthesize()` call — confirmed directly against FluidAudio's own SDK: `KokoroAneManager`'s doc comment says "IPA input capped at 512 tokens — chunk longer prompts upstream," with no internal chunking of its own) for the actual `synthesize()` calls.
+- **Generate no longer synthesizes anything.** `WriteTextView`'s Generate button only saves the text, split into chapters (`LibraryViewModel.save`). Audio is only ever produced when a specific chapter's own Play (stream) or Generate (Kokoro-only, saved) is tapped.
+- **Streaming and saving are two different, non-overlapping code paths sharing one player object.** `ChapterAudioPlayer` owns exactly one `AVAudioPlayer` at a time — `playSaved(ref:)` loads a chapter's merged WAV for real scrubbing; `stream(ref:chapter:voice:)` synthesizes-and-plays one chunk at a time with nothing persisted. Switching what's active is always `stop()` then start the new one, the same shape `VoicePreviewPlayer.toggle` already used.
+- **One serial gate, not a priority queue.** `ChapterSynthesisService.runSerially` chains every synthesis request (streaming or Generate) into a FIFO queue. `KokoroAneManager` is itself an actor, so concurrent calls were already memory-safe; the queue exists purely so a Play tapped mid-Generate waits predictably (surfaced in the UI as "waiting") instead of the two interleaving unpredictably chunk-by-chunk.
+- **Generated audio is one merged WAV per chapter, not one file per chunk.** Every Kokoro chunk is a canonical 16-bit-mono WAV from FluidAudio's own `AudioWAV.data(..., normalize: false)` — `normalize: false` matters as much as the header shape here, since it means chunks share a level and won't pump at the seams when concatenated. `WavConcatenator` merges by walking the RIFF chunk list (not a hardcoded 44-byte offset) and patching the RIFF/data sizes. A sidecar `ChapterAudioManifest` records cumulative `chunkStarts`, so read-along highlighting and tap-to-seek are a single lookup rather than re-deriving chunk boundaries from the chunker the way the old `playPersistedAudio` did (and could silently desync from if the chunker ever changed).
+- **Synthesis stages to disk chunk-by-chunk before merging**, so a killed app or a cancelled Generate resumes from its last completed chunk on the next Generate tap rather than restarting.
+- **No migration for pre-chapters saved audio.** Old entries' flat `chunk_N.wav` files are deleted once (`LibraryViewModel`'s one-shot cleanup) rather than rebuilt into the new format — rebuilding would mean re-running the chunker to reconstruct chunk boundaries, i.e. reintroducing on day one the exact fragility this change removes. Affected chapters just show as not-generated; re-Generate is one tap.
+
+## Consequences
+
+The entire old playlist subsystem was deleted, not just deprecated: `KokoroGeneration`, `TTSViewModel`'s `generateKokoro`/`ensureKokoroGenerationRunning`/`playChunk`/`toggleKokoroPlayback` worker (~250 lines), `ReadAlongPlayerView`, `KokoroGenerationListView`, `TTSHomeView`, `TextEntrySheet`, and `LibraryPlayback` no longer exist. `ChunkState` (the `.waiting/.generated/.playing/.failed` segmented-bar coloring) also became unused once `ChapterRow` switched to a plain `ProgressView` for generate progress, and was deleted with it.
+
+A regression from an earlier version is worth guarding against reintroducing: tapping Play once used to both decide resume-vs-restart *and* trigger generation, gated only on whether a chunk list was non-empty — the flag never cleared after a run finished, so playing new text after finishing old text replayed the stale player instead of generating anything. Play and Generate on `ChapterRow` stay two separate, explicit buttons for the same reason; don't collapse them into one "smart" button that infers resume-vs-fresh from state.
+
+Read-along highlighting stays chunk-level, not word-level, carried over unchanged from the read-along player this replaced: real per-word timestamps were tried once (Kokoro's own text normalizer expands numbers/dates before phonemizing — "26" → "twenty six" — which broke word-count alignment often enough in real pasted text that it wasn't reliable). `ChapterPlayerView` highlights a whole chunk at a time, driven by `ChapterAudioManifest.chunkStarts`.
+
+**Not yet done, deliberately out of scope here:** generated chapter audio is uncompressed WAV (~37MB for a 2000-word/~13-minute chapter) — compression to AAC/m4a is a real follow-up, not attempted in this change. `Settings > Storage` doesn't yet account for `SavedGenerations/` audio, a pre-existing gap this work inherited rather than fixed. Nothing in the app handles `AVAudioSession` interruptions (a phone call, AirPods removed) — tolerable on a short clip, more conspicuous on a 13-minute chapter.

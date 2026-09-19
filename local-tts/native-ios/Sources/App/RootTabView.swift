@@ -33,10 +33,7 @@ private func tabIcon(_ name: LucideIconName, size: CGFloat = 24) -> Image {
 /// action rather than a routed screen. No action wired yet.
 ///
 /// Home now hosts the consumer-facing `ImportHomeView` (previously the
-/// separate "Import" tab) — the original engine/voice debug screen
-/// (`TTSHomeView`) has been retired from the tab bar; the file itself is
-/// left in place rather than deleted, in case it's still useful for direct
-/// engine testing later.
+/// separate "Import" tab).
 struct RootTabView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
@@ -45,6 +42,11 @@ struct RootTabView: View {
     // observe it, so its ~15x/second metering updates don't re-render the
     // whole tab shell.
     let previewPlayer: VoicePreviewPlayer
+    // Same reasoning — only ChaptersListView/ChapterPlayerView need to
+    // observe these (scrubber ticks ~4x/sec, generate progress), so this
+    // shell and Home just forward them.
+    let chapterPlayer: ChapterAudioPlayer
+    let generationStore: ChapterGenerationStore
     @State private var selectedTab: RootTab = .home
 
     var body: some View {
@@ -53,14 +55,17 @@ struct RootTabView: View {
                 ImportHomeView(
                     viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
                     libraryViewModel: libraryViewModel, previewPlayer: previewPlayer,
-                    packs: viewModel.packs
+                    packs: viewModel.packs, chapterPlayer: chapterPlayer, generationStore: generationStore
                 )
                 .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
                 .tag(RootTab.home)
 
-                LibraryTabView(viewModel: libraryViewModel, ttsViewModel: viewModel)
-                    .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
-                    .tag(RootTab.library)
+                LibraryTabView(
+                    viewModel: libraryViewModel, ttsViewModel: viewModel, chapterPlayer: chapterPlayer,
+                    generationStore: generationStore
+                )
+                .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
+                .tag(RootTab.library)
 
                 PlaceholderTabView(title: "Tools")
                     .tabItem { Label(title: { Text("Tools") }, icon: { tabIcon(.wrench) }) }
@@ -91,8 +96,12 @@ struct RootTabView: View {
 
 #Preview {
     let dependencies = DependencyContainer()
-    RootTabView(
-        viewModel: TTSViewModel(dependencies: dependencies),
+    let viewModel = TTSViewModel(dependencies: dependencies)
+    let synthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
+    return RootTabView(
+        viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer())
+        libraryViewModel: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
+        chapterPlayer: ChapterAudioPlayer(synthesisService: synthesisService),
+        generationStore: ChapterGenerationStore(synthesisService: synthesisService))
 }

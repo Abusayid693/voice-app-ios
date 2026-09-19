@@ -44,7 +44,9 @@ enum KokoroTextChunker {
         return chunks
     }
 
-    private static func splitIntoSentences(_ text: String) -> [String] {
+    // Not private: ChapterSplitter reuses this same sentence-boundary
+    // logic for packing paragraphs into chapters, rather than forking it.
+    static func splitIntoSentences(_ text: String) -> [String] {
         var sentences: [String] = []
         let ns = text as NSString
         ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: .bySentences) {

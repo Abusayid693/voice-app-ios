@@ -1,18 +1,17 @@
 import LucideSwift
 import SwiftUI
 
-/// The Library tab: every past "Generate" tap's original text + voice
-/// used. Tapping a Kokoro row opens the same ReadAlongPlayerView a live
-/// Generate uses, playing the persisted per-chunk audio where it exists and
-/// regenerating live where it doesn't — see LibraryPlayback, which owns that
-/// fallback. Pocket rows still just open the read-only text view, since
-/// there's no Pocket player screen yet. Swipe for Delete or the pen icon
-/// (view the original text, read-only, regardless of engine).
+/// The Library tab: every past "Generate" tap's original text, split into
+/// chapters. Tapping a row (any engine) opens `ChaptersListView` for that
+/// project. Swipe for Delete or the pen icon (view the original text,
+/// read-only, regardless of engine).
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
     @ObservedObject var ttsViewModel: TTSViewModel
+    let chapterPlayer: ChapterAudioPlayer
+    let generationStore: ChapterGenerationStore
     @State private var viewingGeneration: SavedGeneration?
-    @State private var readAlongGenerationID: KokoroGeneration.ID?
+    @State private var openProjectID: UUID?
     @State private var sortNewestFirst = true
 
     private var sortedGenerations: [SavedGeneration] {
@@ -64,8 +63,12 @@ struct LibraryTabView: View {
                     }
                 }
             }
-            .navigationDestination(item: $readAlongGenerationID) { generationID in
-                ReadAlongPlayerView(generationID: generationID, viewModel: ttsViewModel)
+            .navigationDestination(item: $openProjectID) { projectID in
+                if let project = viewModel.savedGenerations.first(where: { $0.id == projectID }) {
+                    ChaptersListView(
+                        project: project, chapterPlayer: chapterPlayer, generationStore: generationStore,
+                        viewModel: ttsViewModel)
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -99,23 +102,16 @@ struct LibraryTabView: View {
     }
 
     private func open(_ generation: SavedGeneration) {
-        switch generation.engine {
-        case .kokoroAne:
-            if let newID = LibraryPlayback.open(
-                generation, ttsViewModel: ttsViewModel, libraryViewModel: viewModel)
-            {
-                readAlongGenerationID = newID
-            }
-        case .pocketTts, .supertonic3:
-            // Neither has a player screen or saved audio yet (see
-            // SavedGeneration's doc comment) — keep the existing read-only
-            // text view as the tap action for both.
-            viewingGeneration = generation
-        }
+        openProjectID = generation.id
     }
 }
 
 #Preview {
     let dependencies = DependencyContainer()
-    LibraryTabView(viewModel: LibraryViewModel(), ttsViewModel: TTSViewModel(dependencies: dependencies))
+    let viewModel = TTSViewModel(dependencies: dependencies)
+    let synthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
+    return LibraryTabView(
+        viewModel: LibraryViewModel(), ttsViewModel: viewModel,
+        chapterPlayer: ChapterAudioPlayer(synthesisService: synthesisService),
+        generationStore: ChapterGenerationStore(synthesisService: synthesisService))
 }

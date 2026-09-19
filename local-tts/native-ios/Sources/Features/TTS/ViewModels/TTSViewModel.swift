@@ -18,48 +18,51 @@ final class TTSViewModel: ObservableObject {
     }
 
     @Published var engine: Engine = .kokoroAne
-    // Changing voice mid-session would otherwise mix voices across
-    // generations already in the list — clear everything so a voice
-    // switch always starts clean.
+    // Changing voice mid-session would otherwise leave stale playback
+    // running under the old voice. `kokoroModelsReady` is reset here too
+    // (not just in stopEnginePlayback, which other engines' didSets also
+    // call) — a new voice genuinely needs its own pack preloaded.
     @Published var kokoroVoice = "af_heart" {
         didSet {
             guard oldValue != kokoroVoice else { return }
-            stopAllPlayback()
+            stopEnginePlayback()
+            kokoroModelsReady = false
         }
     }
     // Which Kokoro variant to use — one `KokoroAneManager` per variant (the
     // SDK's chain/vocab differ per variant, same reasoning as
-    // `pocketLanguage`). Same stop-in-flight-generation guard.
+    // `pocketLanguage`). Same stop-in-flight-playback guard.
     @Published var kokoroVariant: KokoroVariant = .english {
         didSet {
             guard oldValue != kokoroVariant else { return }
-            stopAllPlayback()
+            stopEnginePlayback()
+            kokoroModelsReady = false
         }
     }
     @Published var pocketVoice = "alba"
     // Which Pocket TTS language pack to use — one `PocketTtsManager` per
     // language (the SDK fixes `language` at init), so changing this
     // switches which manager/service `runPocketTts()` routes to. Same
-    // stop-in-flight-generation guard as `kokoroVoice`'s didSet.
+    // stop-in-flight-playback guard as `kokoroVoice`'s didSet.
     @Published var pocketLanguage: PocketLanguage = .english {
         didSet {
             guard oldValue != pocketLanguage else { return }
-            stopAllPlayback()
+            stopEnginePlayback()
         }
     }
     // Independent of each other, unlike Kokoro's variant (= language) or
     // Pocket's language (= manager) — the same voice speaks any language,
-    // chosen separately. Same stop-in-flight-generation guard as the others.
+    // chosen separately. Same stop-in-flight-playback guard as the others.
     @Published var supertonicLanguage: SupertonicLanguage = .default {
         didSet {
             guard oldValue != supertonicLanguage else { return }
-            stopAllPlayback()
+            stopEnginePlayback()
         }
     }
     @Published var supertonicVoice: SupertonicVoice = .default {
         didSet {
             guard oldValue != supertonicVoice else { return }
-            stopAllPlayback()
+            stopEnginePlayback()
         }
     }
     // Set by VoiceSettingsSheet's "My Voices" section — when non-nil (and
@@ -76,7 +79,24 @@ final class TTSViewModel: ObservableObject {
 
     @Published var timeToFirstAudio: TimeInterval?
     @Published var streamChunkProgress: String?
-    @Published var isTextSheetPresented = false
+
+    // MARK: - Cold-start notice (issue #4)
+
+    /// True while an engine is doing its one-time `ensureModels()` +
+    /// `initialize()` for a model the user hasn't seen prepared yet this
+    /// session — drives WriteTextView's "Initializing model…" notice.
+    @Published private(set) var isPreparingModel = false
+
+    // Which models we've already shown that notice for, keyed by
+    // variant/language so English -> Mandarin (a genuinely different model,
+    // a real cold load) shows it again while switching voices *within* a
+    // variant doesn't. Deliberately separate from `kokoroModelsReady`
+    // below, which `kokoroVoice`/`kokoroVariant`'s own didSet clears on
+    // every change — that re-init is warm and fast, and shouldn't
+    // re-announce itself.
+    private var noticedKokoroVariants: Set<KokoroVariant> = []
+    private var noticedPocketLanguages: Set<PocketLanguage> = []
+    private var noticedSupertonic3 = false
 
     // MARK: - Import screen: voice-pack setup + new sheet flags
 
@@ -85,34 +105,24 @@ final class TTSViewModel: ObservableObject {
     /// ObservableObject changes don't reach a parent's objectWillChange.
     let packs: VoicePackStore
 
-    // Separate from isTextSheetPresented (the Home tab's own sheet flag) so
-    // the two tabs' modals don't fight over one bool.
     @Published var isSetupPresented = false
     @Published var isWriteTextPresented = false
     @Published var isVoiceSettingsPresented = false
 
-    // MARK: - Kokoro: one independent track per "Generate" tap
-
-    // Append-only, like a playlist — each Generate tap adds a new track
-    // rather than merging into an existing one, so past generations stay
-    // in the list, each with its own play button.
-    @Published var kokoroGenerations: [KokoroGeneration] = []
-    @Published var kokoroActiveGenerationID: KokoroGeneration.ID?
+    // MARK: - Kokoro
 
     private var kokoroModelsReady = false
-    private var kokoroPendingPlay: (generationID: KokoroGeneration.ID, chunkIndex: Int)?
-    // Fires once, when a given generation finishes every chunk — see
-    // generateKokoro's doc comment.
-    private var kokoroCompletionHandlers: [KokoroGeneration.ID: ([Data]) -> Void] = [:]
-    private var kokoroGenerationTask: Task<Void, Never>?
-    private var kokoroPlayer: AVAudioPlayer?
-    private var kokoroPlayerDelegate: AudioPlaybackDelegate?
+    // Set while prepareKokoroModelIfNeeded() is warming the model ahead of
+    // a per-chapter Generate; ChapterSynthesisService's own ensureReady
+    // dedup handles concurrent-init safety for chapters, but this still
+    // guards prepareKokoroModelIfNeeded against running twice itself.
+    private var kokoroWarmUpTask: Task<Void, Never>?
 
     // One service per variant, each wrapping that variant's own manager.
     // `kokoroService` below reads whichever one matches the current
-    // `kokoroVariant`, so every existing `kokoroService.xxx` call site
-    // keeps working unchanged.
-    private let kokoroServices: [KokoroVariant: KokoroEngineService]
+    // `kokoroVariant`. Exposed (not `private`) so ChapterSynthesisService
+    // can be constructed from the same instances — see KokoroAneTestApp.
+    let kokoroServices: [KokoroVariant: KokoroEngineService]
     private var kokoroService: KokoroEngineService { kokoroServices[kokoroVariant]! }
     // One service per language, each wrapping that language's own
     // manager but sharing the same audio engine/node (only one language
@@ -165,21 +175,66 @@ final class TTSViewModel: ObservableObject {
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
     }
 
-    /// Entry point for the full-screen text sheet's single "Listen" button
-    /// (PocketTTS has just one action; Kokoro's main screen splits Generate
-    /// and Play into separate controls — this chains them so "Listen" still
-    /// works as one tap: generate the current text as a new track, then
-    /// play it as soon as it's ready).
-    func runDownloadAndSpeak() {
+    /// Dispatches a chapter's text to whichever non-Kokoro engine is
+    /// selected — Kokoro chapters are handled entirely by
+    /// `ChapterAudioPlayer.stream`/`ChaptersListView`, which never calls
+    /// this (see that view's `play(chapter:ref:isGenerated:)`).
+    func speakChapter(text: String) {
         switch engine {
         case .kokoroAne:
-            if let newID = generateKokoro() {
-                play(generationID: newID)
-            }
+            break
         case .pocketTts:
-            runPocketTts()
+            runPocketTts(text: text)
         case .supertonic3:
-            runSupertonicTts()
+            runSupertonicTts(text: text)
+        }
+    }
+
+    /// Hides the "Initializing model…" notice early. Preparation itself
+    /// keeps running — this only dismisses the message.
+    func dismissModelPreparingNotice() {
+        isPreparingModel = false
+    }
+
+    /// Starts Kokoro's one-time load as soon as Write Text opens, so the
+    /// model is usually warm by the time the user has finished typing and
+    /// taps Generate — rather than making them wait for it afterwards.
+    ///
+    /// Only warms the *selected* engine's model: Kokoro is the default, but
+    /// warming it for someone who's switched to Pocket/Supertonic-3 would
+    /// load the wrong one and pay the cost twice.
+    func prepareKokoroModelIfNeeded() {
+        guard engine == .kokoroAne, !kokoroModelsReady, kokoroWarmUpTask == nil else { return }
+
+        let variant = kokoroVariant
+        let voice = kokoroVoice
+        let service = kokoroService
+        isPreparingModel = !noticedKokoroVariants.contains(variant)
+
+        kokoroWarmUpTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.kokoroWarmUpTask = nil }
+            do {
+                let resolvedDirectory = try await service.ensureModels(progressHandler: nil)
+                packs.noteModelDirectory(resolvedDirectory, for: variant)
+                try await service.initialize(preloadVoice: voice)
+                // Only claim readiness if this is still the selected
+                // variant — the user may have switched mid-warm-up, in
+                // which case the newly-selected model genuinely isn't
+                // loaded and Generate must still do its own init.
+                if kokoroVariant == variant { kokoroModelsReady = true }
+                noticedKokoroVariants.insert(variant)
+                // Last, and deliberately after readiness is recorded:
+                // loading the models still leaves CoreML's first-inference
+                // ANE specialization unpaid, which is most of what made the
+                // first Generate slow. If this throws, the models are
+                // loaded regardless — Generate just pays the compile.
+                try await service.warmUpInference(voice: voice)
+            } catch {
+                // Best-effort: Generate runs the same calls itself and
+                // surfaces any real failure there, with its own error text.
+            }
+            isPreparingModel = false
         }
     }
 
@@ -281,7 +336,7 @@ final class TTSViewModel: ObservableObject {
     }
 
     private func resetRunState() {
-        stopAllPlayback()
+        stopEnginePlayback()
         isBusy = true
         packs.resetProgress()
         initSeconds = nil
@@ -290,7 +345,11 @@ final class TTSViewModel: ObservableObject {
         streamChunkProgress = nil
     }
 
-    private func stopAllPlayback() {
+    // Stops Pocket/Supertonic-3 playback. Kokoro chapter playback (saved or
+    // streaming) lives entirely on `ChapterAudioPlayer` now, which callers
+    // stop directly (see ChaptersListView's coordination) — this has
+    // nothing Kokoro-specific left to clean up.
+    func stopEnginePlayback() {
         supertonicPlayer?.stop()
         supertonicPlayer = nil
         supertonicPlayerDelegate = nil
@@ -303,324 +362,19 @@ final class TTSViewModel: ObservableObject {
         // active, so stopping all of them is harmless and avoids the
         // ordering problem entirely.
         for service in pocketServices.values { service.stopPlayback() }
-
-        kokoroGenerationTask?.cancel()
-        kokoroGenerationTask = nil
-        kokoroPlayer?.stop()
-        kokoroPlayer = nil
-        kokoroPlayerDelegate = nil
-        kokoroGenerations = []
-        kokoroActiveGenerationID = nil
-        kokoroModelsReady = false
-        kokoroPendingPlay = nil
-        kokoroCompletionHandlers = [:]
     }
 
-    // MARK: - Kokoro: Generate (always creates a new, independent track)
-
-    /// Chunks the current text into a new `KokoroGeneration` (its own
-    /// track, like a new song in a playlist — never merged into an
-    /// existing one) and appends it to the list, then makes sure the
-    /// background worker is running to fill in its audio. Returns the new
-    /// track's id, or nil if the text was empty.
-    ///
-    /// `onFullyGenerated`, if given, fires exactly once — with every
-    /// chunk's audio, in order — the moment this specific track finishes
-    /// generating (not when the whole worker queue drains, since other
-    /// tracks may still be pending). Never fires if any chunk fails, since
-    /// an incomplete recording isn't worth persisting. Callers use this to
-    /// persist the audio for Library playback (see LibraryViewModel.attachAudio) —
-    /// TTSViewModel itself has no idea Library exists, it just reports
-    /// completion.
-    @discardableResult
-    func generateKokoro(onFullyGenerated: (([Data]) -> Void)? = nil) -> KokoroGeneration.ID? {
-        let chunks = KokoroTextChunker.chunk(text)
-        guard !chunks.isEmpty else { return nil }
-
-        let generation = KokoroGeneration(
-            text: text,
-            chunkTexts: chunks,
-            chunkAudio: Array(repeating: nil, count: chunks.count),
-            chunkStates: Array(repeating: .waiting, count: chunks.count))
-        kokoroGenerations.append(generation)
-        if let onFullyGenerated {
-            kokoroCompletionHandlers[generation.id] = onFullyGenerated
-        }
-
-        ensureKokoroGenerationRunning()
-        return generation.id
-    }
-
-    /// Re-synthesizes a saved Library entry and starts playing it — used
-    /// when no saved audio exists yet to replay instead (see
-    /// `playPersistedAudio` for the normal, no-regeneration path). Same
-    /// `onFullyGenerated` contract as `generateKokoro` — pass it to
-    /// backfill the saved audio so the next open plays straight from disk.
-    /// Kokoro only — callers should gate on `SavedGeneration.engine == .kokoroAne`.
-    @discardableResult
-    func playFromSavedGeneration(
-        text savedText: String, voice savedVoice: String, onFullyGenerated: (([Data]) -> Void)? = nil
-    ) -> KokoroGeneration.ID? {
-        text = savedText
-        if kokoroVoice != savedVoice {
-            kokoroVoice = savedVoice
-        }
-        guard let newID = generateKokoro(onFullyGenerated: onFullyGenerated) else { return nil }
-        toggleKokoroPlayback(for: newID)
-        return newID
-    }
-
-    /// Plays already-saved audio straight from disk — no synthesis at all.
-    /// Recomputes the same chunk boundaries `KokoroTextChunker` would have
-    /// produced originally (deterministic, given the same text) so the
-    /// reconstructed track's `chunkTexts` line up with the loaded
-    /// `chunkAudio`, and read-along highlighting behaves identically to a
-    /// live generation. Returns nil (caller should fall back to
-    /// `playFromSavedGeneration`) if the counts don't match — e.g. the
-    /// chunker's behavior changed since this was saved.
-    @discardableResult
-    func playPersistedAudio(text savedText: String, chunkAudio: [Data]) -> KokoroGeneration.ID? {
-        let chunks = KokoroTextChunker.chunk(savedText)
-        guard chunks.count == chunkAudio.count, !chunks.isEmpty else { return nil }
-
-        let generation = KokoroGeneration(
-            text: savedText,
-            chunkTexts: chunks,
-            chunkAudio: chunkAudio.map(Optional.init),
-            chunkStates: Array(repeating: .generated, count: chunks.count))
-        kokoroGenerations.append(generation)
-        toggleKokoroPlayback(for: generation.id)
-        return generation.id
-    }
-
-    /// One persistent worker, not one-per-Generate-tap: each iteration
-    /// finds the next not-yet-generated chunk across *all* tracks in
-    /// creation order and synthesizes it, so a Generate tap while this is
-    /// already running just adds more work to the same loop instead of
-    /// needing to be restarted.
-    private func ensureKokoroGenerationRunning() {
-        guard kokoroGenerationTask == nil else { return }
-
-        kokoroGenerationTask = Task { [weak self] in
-            guard let self else { return }
-            defer { self.kokoroGenerationTask = nil }
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback)
-                try AVAudioSession.sharedInstance().setActive(true)
-
-                if !kokoroModelsReady {
-                    isBusy = true
-                    status = "Checking cache…"
-                    let initStart = Date()
-                    let variant = kokoroVariant
-                    let resolvedDirectory = try await kokoroService.ensureModels(progressHandler: { progress in
-                        Task { @MainActor in
-                            self.status = self.packs.apply(
-                                progress, phaseWeight: 0.5,
-                                fetchTotal: { await VoicePackSizeService.kokoroTotalBytes(variant: variant) })
-                        }
-                    })
-                    packs.noteModelDirectory(resolvedDirectory, for: variant)
-                    isWarmInit = !packs.didDownload
-
-                    status = "Loading models…"
-                    try await kokoroService.initialize()
-                    initSeconds = Date().timeIntervalSince(initStart)
-                    kokoroModelsReady = true
-                    isBusy = false
-                }
-
-                status = "Synthesizing…"
-                while let next = nextPendingKokoroChunk() {
-                    try Task.checkCancellation()
-                    let (genIndex, chunkIndex) = next
-                    let chunkText = kokoroGenerations[genIndex].chunkTexts[chunkIndex]
-                    let generationID = kokoroGenerations[genIndex].id
-
-                    do {
-                        // Safe to read kokoroVoice live: a voice change
-                        // always cancels this task and clears every track
-                        // first (see kokoroVoice's didSet), so every chunk
-                        // still in flight here was queued under the
-                        // currently-selected voice.
-                        let data = try await kokoroService.synthesize(text: chunkText, voice: kokoroVoice)
-                        kokoroGenerations[genIndex].chunkAudio[chunkIndex] = data
-                        if kokoroGenerations[genIndex].chunkStates[chunkIndex] == .waiting {
-                            kokoroGenerations[genIndex].chunkStates[chunkIndex] = .generated
-                        }
-                        if let pending = kokoroPendingPlay, pending.generationID == generationID,
-                            pending.chunkIndex == chunkIndex
-                        {
-                            kokoroPendingPlay = nil
-                            playChunk(generationID: generationID, chunkIndex: chunkIndex)
-                        }
-                        notifyIfFullyGenerated(generationID: generationID, genIndex: genIndex)
-                    } catch is CancellationError {
-                        throw CancellationError()
-                    } catch {
-                        // Don't let one bad chunk hang its row forever
-                        // ("stuck on Generating…") or kill the whole
-                        // worker — mark just this chunk failed and move on
-                        // to the rest of the queue.
-                        kokoroGenerations[genIndex].chunkStates[chunkIndex] = .failed
-                        kokoroGenerations[genIndex].error = error.localizedDescription
-                        if kokoroPendingPlay?.generationID == generationID {
-                            kokoroPendingPlay = nil
-                            kokoroGenerations[genIndex].isBuffering = false
-                        }
-                        // A failed chunk still ends this generation's
-                        // waiting period — drop its completion handler
-                        // (without calling it) so it doesn't fire later
-                        // for an incomplete recording.
-                        notifyIfFullyGenerated(generationID: generationID, genIndex: genIndex)
-                    }
-                }
-                status = "Idle"
-            } catch is CancellationError {
-                // Cleared by a reset (e.g. switching engines) — nothing to report.
-            } catch {
-                status = "Error: \(error.localizedDescription)"
-                isBusy = false
-            }
-        }
-    }
-
-    /// First `.waiting` chunk across all tracks, in creation order.
-    private func nextPendingKokoroChunk() -> (generationIndex: Int, chunkIndex: Int)? {
-        for (genIndex, generation) in kokoroGenerations.enumerated() {
-            if let chunkIndex = generation.chunkStates.firstIndex(of: .waiting) {
-                return (genIndex, chunkIndex)
-            }
-        }
-        return nil
-    }
-
-    /// Fires (and removes) `generationID`'s completion handler, if any,
-    /// once every chunk has settled — but only on a clean run: any
-    /// `.failed` chunk means the recording is incomplete, so the handler
-    /// is dropped without being called (nothing worth persisting).
-    private func notifyIfFullyGenerated(generationID: KokoroGeneration.ID, genIndex: Int) {
-        guard kokoroGenerations[genIndex].isFullyGenerated,
-            let handler = kokoroCompletionHandlers.removeValue(forKey: generationID)
-        else { return }
-        guard !kokoroGenerations[genIndex].chunkStates.contains(.failed) else { return }
-        let chunkAudio = kokoroGenerations[genIndex].chunkAudio.compactMap { $0 }
-        guard chunkAudio.count == kokoroGenerations[genIndex].chunkAudio.count else { return }
-        handler(chunkAudio)
-    }
-
-    // MARK: - Kokoro: Play (each track is independent — only one plays at a time)
-
-    /// Tapping a track's own play/pause button. Switching to a different
-    /// track than the one currently active stops that one and starts this
-    /// one from its beginning — like picking a different song, not mixing
-    /// them.
-    func toggleKokoroPlayback(for generationID: KokoroGeneration.ID) {
-        guard let genIndex = kokoroGenerations.firstIndex(where: { $0.id == generationID }) else {
-            return
-        }
-        if kokoroActiveGenerationID == generationID {
-            if kokoroGenerations[genIndex].isBuffering {
-                return
-            } else if kokoroGenerations[genIndex].isPlaying {
-                kokoroPlayer?.pause()
-                kokoroGenerations[genIndex].isPlaying = false
-            } else if kokoroPlayer != nil {
-                kokoroPlayer?.play()
-                kokoroGenerations[genIndex].isPlaying = true
-            } else {
-                playChunk(generationID: generationID, chunkIndex: kokoroGenerations[genIndex].currentChunkIndex)
-            }
-        } else {
-            play(generationID: generationID)
-        }
-    }
-
-    private func play(generationID: KokoroGeneration.ID) {
-        guard let genIndex = kokoroGenerations.firstIndex(where: { $0.id == generationID }) else {
-            return
-        }
-        if let activeID = kokoroActiveGenerationID, activeID != generationID,
-            let activeIndex = kokoroGenerations.firstIndex(where: { $0.id == activeID })
-        {
-            kokoroPlayer?.stop()
-            kokoroPlayer = nil
-            kokoroPlayerDelegate = nil
-            kokoroGenerations[activeIndex].isPlaying = false
-            kokoroGenerations[activeIndex].isBuffering = false
-        }
-        kokoroActiveGenerationID = generationID
-        kokoroGenerations[genIndex].currentChunkIndex = 0
-        playChunk(generationID: generationID, chunkIndex: 0)
-    }
-
-    private func playChunk(generationID: KokoroGeneration.ID, chunkIndex: Int) {
-        guard let genIndex = kokoroGenerations.firstIndex(where: { $0.id == generationID }) else {
-            return
-        }
-        kokoroActiveGenerationID = generationID
-        kokoroGenerations[genIndex].currentChunkIndex = chunkIndex
-        // A failed chunk will never be generated by the worker (it only
-        // retries .waiting ones) — buffering forever here would hang the
-        // row's spinner permanently instead of reflecting the failure.
-        guard kokoroGenerations[genIndex].chunkStates[chunkIndex] != .failed else {
-            kokoroGenerations[genIndex].isBuffering = false
-            return
-        }
-        guard let data = kokoroGenerations[genIndex].chunkAudio[chunkIndex] else {
-            kokoroPendingPlay = (generationID, chunkIndex)
-            kokoroGenerations[genIndex].isBuffering = true
-            return
-        }
-        do {
-            let player = try AVAudioPlayer(data: data)
-            let delegate = AudioPlaybackDelegate { [weak self] in
-                Task { @MainActor in self?.advanceKokoroChunk(generationID: generationID) }
-            }
-            player.delegate = delegate
-            kokoroPlayerDelegate = delegate
-            kokoroPlayer = player
-
-            kokoroGenerations[genIndex].chunkStates[chunkIndex] = .playing
-            kokoroGenerations[genIndex].isBuffering = false
-            kokoroGenerations[genIndex].isPlaying = true
-            player.play()
-        } catch {
-            status = "Error: \(error.localizedDescription)"
-        }
-    }
-
-    private func advanceKokoroChunk(generationID: KokoroGeneration.ID) {
-        guard let genIndex = kokoroGenerations.firstIndex(where: { $0.id == generationID }) else {
-            return
-        }
-        let finishedIndex = kokoroGenerations[genIndex].currentChunkIndex
-        if kokoroGenerations[genIndex].chunkStates.indices.contains(finishedIndex) {
-            kokoroGenerations[genIndex].chunkStates[finishedIndex] = .generated
-        }
-        let nextIndex = finishedIndex + 1
-        guard nextIndex < kokoroGenerations[genIndex].chunkTexts.count else {
-            // End of this track — unlike the old shared-queue design, this
-            // does NOT auto-advance into a different generation; each one
-            // is independent, like separate songs, and simply stops.
-            kokoroGenerations[genIndex].isPlaying = false
-            kokoroGenerations[genIndex].isBuffering = false
-            kokoroGenerations[genIndex].currentChunkIndex = 0
-            kokoroPlayer = nil
-            kokoroPlayerDelegate = nil
-            return
-        }
-        playChunk(generationID: generationID, chunkIndex: nextIndex)
-    }
-
-    private func runPocketTts() {
+    // `text` param: a chapter's own text (speakChapter) — defaults to the
+    // ViewModel's own `text` for WriteTextView's earlier direct-speak call
+    // sites that predate the chapters flow.
+    private func runPocketTts(text overrideText: String? = nil) {
         resetRunState()
         let voice = pocketVoice
         let clonedVoice = selectedClonedVoice
-        let inputText = text
+        let inputText = overrideText ?? text
         // Snapshot which language's service this run uses at the moment
         // Generate is tapped — pocketLanguage changing mid-run already
-        // triggers stopAllPlayback() via its own didSet, but pinning the
+        // triggers stopEnginePlayback() via its own didSet, but pinning the
         // local reference too keeps this whole closure self-consistent
         // regardless of timing (a cloned voice's own language is set on
         // `pocketLanguage` at selection time in VoiceSettingsSheet, so this
@@ -635,6 +389,7 @@ final class TTSViewModel: ObservableObject {
 
                 status = "Checking cache…"
                 let initStart = Date()
+                isPreparingModel = !noticedPocketLanguages.contains(language)
                 try await pocketService.ensureModels(progressHandler: { progress in
                     Task { @MainActor in
                         self.status = self.packs.apply(
@@ -647,6 +402,8 @@ final class TTSViewModel: ObservableObject {
                 status = "Loading models…"
                 try await pocketService.initialize()
                 initSeconds = Date().timeIntervalSince(initStart)
+                noticedPocketLanguages.insert(language)
+                isPreparingModel = false
 
                 status = "Synthesizing (streaming)…"
                 try pocketService.preparePlayback()
@@ -675,6 +432,9 @@ final class TTSViewModel: ObservableObject {
                 status = "Error: \(error.localizedDescription)"
             }
             isBusy = false
+            // The notice has no
+            // auto-dismiss, so every exit path has to clear it.
+            isPreparingModel = false
         }
     }
 
@@ -684,9 +444,9 @@ final class TTSViewModel: ObservableObject {
     /// text isn't pre-chunked here — the SDK chunks internally and the app
     /// has no visibility into where, so there's no per-chunk read-along for
     /// this engine; it plays back as one track, same UX tier as Pocket.
-    private func runSupertonicTts() {
+    private func runSupertonicTts(text overrideText: String? = nil) {
         resetRunState()
-        let inputText = text
+        let inputText = overrideText ?? text
         let language = supertonicLanguage
         let voice = supertonicVoice
 
@@ -697,6 +457,7 @@ final class TTSViewModel: ObservableObject {
 
                 status = "Checking cache…"
                 let initStart = Date()
+                isPreparingModel = !noticedSupertonic3
                 let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
                     [weak self] progress in
                     Task { @MainActor in
@@ -712,6 +473,8 @@ final class TTSViewModel: ObservableObject {
                 status = "Loading models…"
                 try await supertonicService.initialize()
                 initSeconds = Date().timeIntervalSince(initStart)
+                noticedSupertonic3 = true
+                isPreparingModel = false
 
                 status = "Synthesizing…"
                 let synthStart = Date()
@@ -736,6 +499,9 @@ final class TTSViewModel: ObservableObject {
                 status = "Error: \(error.localizedDescription)"
             }
             isBusy = false
+            // The notice has no
+            // auto-dismiss, so every exit path has to clear it.
+            isPreparingModel = false
         }
     }
 }

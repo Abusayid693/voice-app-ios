@@ -69,6 +69,10 @@ targets:
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # Lets Kokoro playback keep running (and the process stay
+        # unsuspended) once the screen locks or the app backgrounds — see
+        # NowPlayingService.swift and TTSViewModel's Kokoro playback methods.
+        UIBackgroundModes: [audio]
         # Voice cloning (Features/VoiceClone) records a short in-app sample
         # via AVAudioRecorder — required or the app crashes on first mic use.
         NSMicrophoneUsageDescription: Used to record a short sample of your voice to create a cloned voice.
