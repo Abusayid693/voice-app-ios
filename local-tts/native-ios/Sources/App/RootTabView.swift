@@ -30,28 +30,39 @@ private func tabIcon(_ name: LucideIconName, size: CGFloat = 24) -> Image {
 
 /// App shell: 4 tabs (Home/Library/Tools/Voices) plus a floating "+" action
 /// button, deliberately not a 5th tab — a separate, always-visible quick
-/// action rather than a routed screen. No action wired yet.
+/// action rather than a routed screen. Tapping it opens `QuickActionsSheet`
+/// (the same 8 actions as Home's action grids); only "Write text" does
+/// anything, by reusing Home's existing `isWriteTextPresented` pipeline
+/// rather than building a second one — see `addButton`'s doc comment.
 ///
 /// Home now hosts the consumer-facing `ImportHomeView` (previously the
 /// separate "Import" tab).
 struct RootTabView: View {
     // This shell reads nothing off any of these itself — it only hands each
-    // tab root the objects that root actually observes, so it takes them
-    // from the environment (a plain, non-observable container — see
-    // AppEnvironment) and subscribes to nothing.
-    @Environment(\.app) private var app
+    // tab root the objects that root actually observes. A plain `let` of a
+    // non-observable container (see AppEnvironment), so it subscribes to
+    // nothing.
+    let app: AppEnvironment
     @State private var selectedTab: RootTab = .home
+    @State private var isQuickActionsPresented = false
+    // Set the instant "Write text" is chosen in QuickActionsSheet, but only
+    // acted on once this sheet's own onDismiss fires (see addButton) —
+    // mirrors ImportHomeView's own pendingProjectID, which exists for the
+    // same reason: two presentation-affecting writes in one SwiftUI
+    // transaction can silently drop one of them.
+    @State private var pendingWriteText = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             TabView(selection: $selectedTab) {
                 ImportHomeView(
-                    viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs
+                    viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs,
+                    app: app
                 )
                 .tabItem { Label(title: { Text("Home") }, icon: { tabIcon(.house) }) }
                 .tag(RootTab.home)
 
-                LibraryTabView(viewModel: app.library)
+                LibraryTabView(viewModel: app.library, app: app)
                     .tabItem { Label(title: { Text("Library") }, icon: { tabIcon(.library) }) }
                     .tag(RootTab.library)
 
@@ -69,7 +80,9 @@ struct RootTabView: View {
     }
 
     private var addButton: some View {
-        Button(action: {}) {
+        Button {
+            isQuickActionsPresented = true
+        } label: {
             LucideIcon(.plus, size: 22, color: Color.primaryButtonText)
                 .frame(width: 52, height: 52)
                 .background(Circle().fill(Color.primaryButtonBackground))
@@ -79,10 +92,34 @@ struct RootTabView: View {
         // Clears the system tab bar (~49pt + safe-area inset) so the button
         // floats just above it, not overlapping the tab labels.
         .padding(.bottom, 75)
+        // Deferred to onDismiss, not set alongside isQuickActionsPresented
+        // = false in onSelect — ImportHomeView's fullScreenCover lives on
+        // a sibling tab still in the same window's presentation chain as
+        // this sheet, so presenting it before this sheet's own dismissal
+        // transaction finishes risks the same silently-dropped-write
+        // problem ImportHomeView's pendingProjectID already exists to
+        // avoid. selectedTab is a plain @State write (not a presentation),
+        // so it's safe to bundle in here alongside isWriteTextPresented.
+        .sheet(
+            isPresented: $isQuickActionsPresented,
+            onDismiss: {
+                if pendingWriteText {
+                    pendingWriteText = false
+                    selectedTab = .home
+                    app.tts.isWriteTextPresented = true
+                }
+            }
+        ) {
+            QuickActionsSheet { action in
+                if action == .writeText {
+                    pendingWriteText = true
+                }
+                isQuickActionsPresented = false
+            }
+        }
     }
 }
 
 #Preview {
-    RootTabView()
-        .environment(\.app, .preview())
+    RootTabView(app: .preview())
 }

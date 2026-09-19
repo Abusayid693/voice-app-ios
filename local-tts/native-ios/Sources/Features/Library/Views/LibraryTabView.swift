@@ -8,9 +8,9 @@ import SwiftUI
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
     // Only handed onward to ChaptersListView (which observes them itself),
-    // never read here — so they come from the non-observable container
-    // rather than as parameters. See AppEnvironment.
-    @Environment(\.app) private var app
+    // never read here — so they arrive in one non-observable container
+    // rather than as three separate parameters. See AppEnvironment.
+    let app: AppEnvironment
     @State private var viewingGeneration: SavedGeneration?
     @State private var openProjectID: UUID?
     @State private var sortNewestFirst = true
@@ -109,6 +109,5 @@ struct LibraryTabView: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return LibraryTabView(viewModel: app.library)
-        .environment(\.app, app)
+    return LibraryTabView(viewModel: app.library, app: app)
 }

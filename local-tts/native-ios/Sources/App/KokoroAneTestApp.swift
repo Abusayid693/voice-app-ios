@@ -31,8 +31,7 @@ struct KokoroAneTestApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
-                .environment(\.app, appEnvironment)
+            RootTabView(app: appEnvironment)
         }
     }
 }

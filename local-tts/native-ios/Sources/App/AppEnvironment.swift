@@ -2,20 +2,24 @@ import SwiftUI
 
 /// The app's long-lived observable objects, bundled so intermediate views
 /// stop forwarding ones they never read (`RootTabView` used to take six
-/// parameters purely to hand them to its tab roots).
+/// parameters purely to hand them to its tab roots; now it takes this one).
 ///
-/// Deliberately a plain `struct`, **not** an `ObservableObject`, and
-/// delivered via `@Environment(\.app)` rather than `@EnvironmentObject`:
-/// reading it subscribes a view to nothing at all. That matters here — this
-/// app's re-render discipline (see CLAUDE.md: "object granularity *is*
+/// Deliberately a plain `struct`, **not** an `ObservableObject`: holding it
+/// as a plain `let` subscribes a view to nothing at all. That matters here —
+/// this app's re-render discipline (see CLAUDE.md: "object granularity *is*
 /// re-render granularity") depends on a view observing only the objects it
-/// actually reads, and `@EnvironmentObject` has no equivalent of the plain
-/// `let` escape hatch that discipline relies on.
+/// actually reads. A view that needs to *observe* an object still takes that
+/// one object as an explicit `@ObservedObject` parameter from its parent, so
+/// the subscription stays narrow and visible; this container only removes
+/// the pass-through burden for objects a view merely hands onward.
 ///
-/// So: a view that needs to *observe* an object still takes that one object
-/// as an explicit `@ObservedObject` parameter from its parent — the
-/// subscription stays narrow and visible. This container only removes the
-/// pass-through burden for objects a view merely hands onward.
+/// Passed explicitly as a `let` rather than through `@Environment` with a
+/// custom `EnvironmentKey`. That was tried first and crashed on-device:
+/// `EnvironmentKey` requires a `defaultValue`, every object in here needs a
+/// real `DependencyContainer` (so there's no cheap safe default to give),
+/// and a `fatalError` default gets evaluated by SwiftUI in more situations
+/// than just "nobody injected this". A required dependency isn't what
+/// `EnvironmentKey` is for — an explicit parameter can't fail.
 struct AppEnvironment {
     let tts: TTSViewModel
     let voiceClone: VoiceCloneViewModel
@@ -27,8 +31,8 @@ struct AppEnvironment {
 
 extension AppEnvironment {
     /// A throwaway object graph for `#Preview` only — previews render a
-    /// real view hierarchy, so they need the same objects injected that
-    /// `KokoroAneTestApp` injects at launch.
+    /// real view hierarchy, so they need the same objects passed in that
+    /// `KokoroAneTestApp` passes at launch.
     @MainActor
     static func preview() -> AppEnvironment {
         let dependencies = DependencyContainer()
@@ -42,18 +46,3 @@ extension AppEnvironment {
     }
 }
 
-private struct AppEnvironmentKey: EnvironmentKey {
-    // No meaningful default — every object in here needs a real
-    // DependencyContainer. Injected once in KokoroAneTestApp; a crash here
-    // means a view hierarchy (or a #Preview) was built without it.
-    static var defaultValue: AppEnvironment {
-        fatalError("AppEnvironment was never injected — call .environment(\\.app, …) at the root")
-    }
-}
-
-extension EnvironmentValues {
-    var app: AppEnvironment {
-        get { self[AppEnvironmentKey.self] }
-        set { self[AppEnvironmentKey.self] = newValue }
-    }
-}

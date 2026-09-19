@@ -65,10 +65,10 @@ struct ImportHomeView: View {
     @ObservedObject var packs: VoicePackStore
     // Everything this screen only hands onward — the cloned-voice model,
     // the preview player (its ~15x/sec metering would re-render this whole
-    // page), and the two chapter objects — comes from the non-observable
-    // container instead of being threaded through as parameters, so none of
-    // it subscribes this view to anything. See AppEnvironment.
-    @Environment(\.app) private var app
+    // page), and the two chapter objects — arrives in one non-observable
+    // container rather than as four separate parameters, so none of it
+    // subscribes this view to anything. See AppEnvironment.
+    let app: AppEnvironment
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
@@ -622,6 +622,6 @@ struct VoiceTile: Identifiable {
 /// card is the tap target — tapping opens VoicePreviewSheet.
 #Preview {
     let app = AppEnvironment.preview()
-    return ImportHomeView(viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs)
-        .environment(\.app, app)
+    return ImportHomeView(
+        viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs, app: app)
 }
