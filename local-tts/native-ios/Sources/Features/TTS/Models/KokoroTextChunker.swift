@@ -17,46 +17,55 @@ enum KokoroTextChunker {
         guard !trimmed.isEmpty else { return [] }
 
         var chunks: [String] = []
-        var current = ""
+        var current: Range<String.Index>?
 
         func flush() {
-            let value = current.trimmingCharacters(in: .whitespaces)
+            guard let range = current else { return }
+            let value = String(trimmed[range]).trimmingCharacters(in: .whitespaces)
             if !value.isEmpty { chunks.append(value) }
-            current = ""
+            current = nil
         }
 
-        for sentence in splitIntoSentences(trimmed) {
-            if sentence.count > maxChunkLength {
+        for sentenceRange in sentenceRanges(in: trimmed) {
+            let sentenceLength = trimmed.distance(from: sentenceRange.lowerBound, to: sentenceRange.upperBound)
+            if sentenceLength > maxChunkLength {
                 flush()
-                chunks.append(contentsOf: splitByWords(sentence))
+                chunks.append(contentsOf: splitByWords(String(trimmed[sentenceRange])))
                 continue
             }
-            if current.isEmpty {
-                current = sentence
-            } else if current.count + 1 + sentence.count <= maxChunkLength {
-                current += " " + sentence
+            if let existing = current {
+                let extended = existing.lowerBound..<sentenceRange.upperBound
+                let extendedLength = trimmed.distance(from: extended.lowerBound, to: extended.upperBound)
+                if extendedLength <= maxChunkLength {
+                    current = extended
+                } else {
+                    flush()
+                    current = sentenceRange
+                }
             } else {
-                flush()
-                current = sentence
+                current = sentenceRange
             }
         }
         flush()
         return chunks
     }
 
-    // Not private: ChapterSplitter reuses this same sentence-boundary
-    // logic for packing paragraphs into chapters, rather than forking it.
-    static func splitIntoSentences(_ text: String) -> [String] {
-        var sentences: [String] = []
-        let ns = text as NSString
-        ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: .bySentences) {
-            substring, _, _, _ in
-            if let substring {
-                let trimmed = substring.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { sentences.append(trimmed) }
+    // Not private: ChapterSplitter reuses this same sentence-boundary logic
+    // for packing paragraphs into chapters. Returns ranges (not trimmed
+    // strings) so callers can pack sentences by extending a span over the
+    // original text — the whitespace/newlines between sentences ride along
+    // in the span verbatim instead of needing to be reconstructed with a
+    // guessed separator.
+    static func sentenceRanges(in text: String) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .bySentences) {
+            substring, range, _, _ in
+            guard let substring, !substring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
             }
+            ranges.append(range)
         }
-        return sentences.isEmpty ? [text] : sentences
+        return ranges.isEmpty ? [text.startIndex..<text.endIndex] : ranges
     }
 
     private static func splitByWords(_ text: String) -> [String] {

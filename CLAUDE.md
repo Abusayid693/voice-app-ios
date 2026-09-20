@@ -79,7 +79,7 @@ Sources/
     Chapters/                      // DONE — splits a saved project's text into chapters (max ~2000 words), each with independent Play (stream) and, Kokoro-only, Generate (synthesize + save one merged WAV)
       Models/
         Chapter.swift              // DONE — { index, title, text } + a computed preview string
-        ChapterSplitter.swift      // DONE — packs paragraphs (falling back to sentences, then words) into ≤2000-word chapters; reuses `KokoroTextChunker.splitIntoSentences`
+        ChapterSplitter.swift      // DONE — packs paragraphs (falling back to sentences, then words) into ≤2000-word chapters; reuses `KokoroTextChunker.sentenceRanges`. Paragraph/sentence packing extends a `Range<String.Index>` over the original text rather than joining trimmed strings, so internal newlines survive verbatim (issue: Write text's blank lines were rendering collapsed in the read-along)
         ChapterRef.swift           // DONE — { projectID, chapterIndex }, the key shared by ChapterGenerationStore/ChapterAudioPlayer/ChapterAudioStore
         ChapterAudioManifest.swift // DONE — sidecar JSON saved next to a generated chapter's merged WAV: chunk texts + cumulative `chunkStarts`, so read-along highlighting and tap-to-seek are a single lookup, not a re-run of the chunker
       Services/
@@ -131,7 +131,7 @@ Sources/
         PocketLanguage.swift       // DONE — app-level wrapper over the SDK's PocketTtsLanguage (english/german/italian/portuguese/spanish, ~527MB each; see docs/adr/0011)
         SupertonicVoice.swift      // DONE — app-level wrapper over the SDK's Supertonic3Voice: 10 fixed speaker-style presets (F1-F5/M1-M5), no language of their own — unlike KokoroVariant/PocketLanguage, voice and language are independent axes here (issue #27)
         SupertonicLanguage.swift   // DONE — a data table (not an enum-with-switch like the two above — 31 cases + "na" would make a much worse file at that scale), mirroring VoiceCatalog's own approach at similar size
-        KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap; `splitIntoSentences` isn't private — `Features/Chapters/Models/ChapterSplitter.swift` reuses the same sentence-boundary logic for packing chapters
+        KokoroTextChunker.swift    // DONE — sentence/word-boundary chunker working around the 510-phoneme cap; `sentenceRanges` (not `splitIntoSentences` — returns `[Range<String.Index>]`, not trimmed strings) isn't private, `Features/Chapters/Models/ChapterSplitter.swift` reuses the same sentence-boundary logic for packing chapters. `chunk(_:)` packs by extending a range over the original text rather than joining trimmed sentence strings with a guessed separator, so whitespace/newlines between sentences ride along verbatim instead of being collapsed to a single space
   DesignSystem/
     Colors.swift                  // DONE — fixed dark palette for the Import/VoiceClone screens; also the button/badge color pairs ButtonStyles.swift and Typography.swift's highlight label read from
     BlobShape.swift                // DONE — organic sine-harmonic blob Shape (amplitude/phase animatable), drives VoicePreviewSheet's audio-reactive deformation
