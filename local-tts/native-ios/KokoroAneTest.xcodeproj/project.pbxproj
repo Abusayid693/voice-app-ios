@@ -74,6 +74,7 @@
 		94E9CB2D8332E37CE0AB236A /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78F11F32483887CED73D022F /* Spacing.swift */; };
 		9B54A51873AC0F03B8DEE96E /* ThinkingOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC67F8DD1499FD208A8BCB8 /* ThinkingOrb.swift */; };
 		9DC27809C2C2115ABC59105B /* SmallVoiceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917546E64FCA95CF20E60137 /* SmallVoiceCard.swift */; };
+		9E408C97CB25D574413B12F7 /* WordTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBA1F9F87BCA6AE81651C5C3 /* WordTiming.swift */; };
 		A2439C5FE657461B63A1D7F4 /* ChapterAudioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91358C77C0F631B12F8DD726 /* ChapterAudioStore.swift */; };
 		A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */; };
 		A7905DAC415E66EA5DA07BA2 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9302EAF5459A6CDDA5CCE8EB /* ButtonStyles.swift */; };
@@ -123,7 +124,7 @@
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		0F6E28A4B26F86F7C45667AE /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackDelegate.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -163,7 +164,7 @@
 		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
-		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		83247F6E3B113FE5D6C0D79C /* CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTabBar.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
 		85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerView.swift; sourceTree = "<group>"; };
@@ -184,6 +185,7 @@
 		A9E725C92CB25C4424D6DFDE /* OpenLibraryBookService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLibraryBookService.swift; sourceTree = "<group>"; };
 		AD37E25F7F1C1EA70217E7B9 /* GenerationTextSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTextSheet.swift; sourceTree = "<group>"; };
 		B867230D16DEBBC7DF368909 /* ClassicReadsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassicReadsSection.swift; sourceTree = "<group>"; };
+		BBA1F9F87BCA6AE81651C5C3 /* WordTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordTiming.swift; sourceTree = "<group>"; };
 		BDC7C5E67192EC9C70CCB1C5 /* QuickActionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionsSheet.swift; sourceTree = "<group>"; };
 		BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
 		BEED11653277D7A616018B63 /* VoiceCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCoverArt.swift; sourceTree = "<group>"; };
@@ -395,6 +397,7 @@
 				F322A2F32D63035FA9810A3C /* ChapterAudioManifest.swift */,
 				4061CD489CD60ADA8C80E1DC /* ChapterRef.swift */,
 				52BACFBFFE9CED64254A3175 /* ChapterSplitter.swift */,
+				BBA1F9F87BCA6AE81651C5C3 /* WordTiming.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -675,6 +678,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
+						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -818,6 +822,7 @@
 				19D8C1A9FDD2C430A18F8359 /* VoicesTabView.swift in Sources */,
 				4016C37E42E714844E7B16CB /* WavConcatenator.swift in Sources */,
 				B51968532673117E229B85EE /* Web.swift in Sources */,
+				9E408C97CB25D574413B12F7 /* WordTiming.swift in Sources */,
 				7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -831,7 +836,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -906,7 +911,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

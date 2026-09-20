@@ -49,6 +49,13 @@ enum ChapterSplitter {
         }
     }
 
+    // A line ending in sentence-terminal punctuation reads as a complete
+    // thought — text formatted one-sentence-per-line (no blank lines
+    // between paragraphs) relies on exactly this to mean "new paragraph."
+    // A line that doesn't end this way is a mid-sentence wrap instead, and
+    // stays a soft line break within the same paragraph.
+    private static let sentenceTerminators: Set<Character> = [".", "!", "?"]
+
     private static func splitIntoParagraphs(_ text: String) -> [String] {
         let paragraphs =
             text
@@ -58,6 +65,10 @@ enum ChapterSplitter {
                 if trimmedLine.isEmpty {
                     result.append("")
                 } else if result.isEmpty || result[result.count - 1].isEmpty {
+                    result.append(trimmedLine)
+                } else if let last = result[result.count - 1].last, sentenceTerminators.contains(last) {
+                    // Previous line ended a sentence — treat this break as
+                    // a new paragraph, same as a blank line would.
                     result.append(trimmedLine)
                 } else {
                     // "\n", not " " — a single Return inside a paragraph is

@@ -10,11 +10,13 @@ import SwiftUI
 /// duration/elapsed/seek only exist once a chapter's chunks are merged into
 /// one file (see `ChapterAudioManifest`).
 ///
-/// The read-along portion — the 2-second user-scroll override, the "Jump
-/// to current" pill, and the chunk highlight treatment — is lifted
-/// verbatim from the retired `ReadAlongPlayerView` (see
-/// docs/adr/0005-chunk-level-read-along-highlighting.md for why
-/// highlighting is chunk-level, not word-level).
+/// The read-along portion — the 2-second user-scroll override and the
+/// "Jump to current" pill — is lifted verbatim from the retired
+/// `ReadAlongPlayerView`. Highlighting is word-level for English Kokoro
+/// chunks (see `WordTimingDeriver`) — every chunk's own
+/// `ChapterAudioManifest.wordTimings` entry drives this; an empty entry
+/// (non-English voice, or a manifest saved before this feature existed)
+/// falls back to highlighting the whole chunk, same as before.
 struct ChapterPlayerView: View {
     let project: SavedGeneration
     let chapterRef: ChapterRef
@@ -194,12 +196,45 @@ struct ChapterPlayerView: View {
 
     private func chunkText(index: Int) -> some View {
         let isCurrentChunk = index == chapterPlayer.currentChunkIndex && chapterPlayer.isPlaying
-        return Text(chapterPlayer.chunkTexts[index])
-            .appText(isCurrentChunk ? .reading : .readingMuted)
+        let hasWordTimings = !chapterPlayer.wordTimings(forChunk: index).isEmpty
+        return Group {
+            if isCurrentChunk, hasWordTimings {
+                // 0.08s (~12 Hz): fine enough that a word swap doesn't
+                // read as a stutter, without publishing at that rate on
+                // ChapterAudioPlayer itself — see currentPlaybackTime.
+                TimelineView(.periodic(from: .now, by: 0.08)) { _ in
+                    wordHighlightedText(index: index)
+                }
+            } else {
+                Text(chapterPlayer.chunkTexts[index])
+                    .appText(isCurrentChunk ? .reading : .readingMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(6)
+        .background(
+            isCurrentChunk ? Color.appSecondaryBackground : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    // Concatenates this chunk's words into one Text, coloring only the
+    // word currently playing — WordTimingDeriver's exact per-word timings,
+    // no fallback. `.reading`/`.readingMuted` share one font (only their
+    // color differs — Typography.swift), so one `.font()` on the composed
+    // Text plus a per-word `.foregroundStyle` reproduces that pairing.
+    private func wordHighlightedText(index: Int) -> some View {
+        let timings = chapterPlayer.wordTimings(forChunk: index)
+        let currentWord = chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime)
+        let composed = timings.indices.reduce(Text("")) { partial, i in
+            let piece = Text(timings[i].word)
+                .foregroundStyle(i == currentWord ? Color.appPrimaryText : Color.appSecondaryText)
+            // The word's own preceding whitespace — " " between ordinary
+            // words, "\n"/"\n\n" across a line or paragraph break — not a
+            // hardcoded space, or breaks collapse while this chunk plays.
+            return i == 0 ? piece : partial + Text(timings[i].precedingSeparator) + piece
+        }
+        return composed
+            .font(AppTextStyle.reading.font)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(6)
-            .background(
-                isCurrentChunk ? Color.appSecondaryBackground : Color.clear,
-                in: RoundedRectangle(cornerRadius: 8))
     }
 }

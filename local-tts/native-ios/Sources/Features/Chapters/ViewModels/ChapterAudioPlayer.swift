@@ -88,6 +88,31 @@ final class ChapterAudioPlayer: ObservableObject {
         return manifest.chunkStarts[index]
     }
 
+    /// Raw playback position, deliberately NOT `@Published` — for
+    /// word-highlighting driven by a `TimelineView` polling ~10-15x/sec in
+    /// `ChapterPlayerView`, which needs finer granularity than the 4 Hz
+    /// ticker without publishing that often (every view observing this
+    /// object would otherwise re-render at that rate — see CLAUDE.md's
+    /// re-render rule, the same one that split VoicePreviewPlayer out of
+    /// TTSViewModel).
+    var currentPlaybackTime: TimeInterval {
+        player?.currentTime ?? elapsed
+    }
+
+    /// This chunk's word timings — empty if none exist (falls back to
+    /// highlighting the whole chunk, as before word-level highlighting).
+    func wordTimings(forChunk index: Int) -> [WordTiming] {
+        guard let manifest, manifest.wordTimings.indices.contains(index) else { return [] }
+        return manifest.wordTimings[index]
+    }
+
+    /// The word index within `currentChunkIndex` at `elapsed` — nil during
+    /// streaming (no manifest) or for a chunk with no word timings.
+    func currentWordIndex(atElapsed elapsed: TimeInterval) -> Int? {
+        guard mode == .saved, let manifest else { return nil }
+        return manifest.wordIndex(inChunk: currentChunkIndex, atElapsed: elapsed)
+    }
+
     func seek(to time: TimeInterval) {
         guard mode == .saved, let player else { return }
         let clamped = max(0, min(time, duration))
