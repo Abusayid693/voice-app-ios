@@ -56,14 +56,28 @@ struct WriteTextView: View {
         }
     }
 
+    // The currently selected voice, whichever engine it belongs to — same
+    // resolution `generate()` already uses for Pocket's cloned-vs-named
+    // voice, so the avatar always matches what Generate will actually use.
+    private var currentVoiceAssetName: String {
+        switch viewModel.engine {
+        case .kokoroAne: return VoiceCoverArt.assetName(for: viewModel.kokoroVoice)
+        case .pocketTts:
+            return VoiceCoverArt.assetName(for: viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice)
+        case .supertonic3: return VoiceCoverArt.assetName(for: viewModel.supertonicVoice.rawValue)
+        }
+    }
+
     private var bottomBar: some View {
         HStack(spacing: 12) {
             Button {
                 viewModel.isVoiceSettingsPresented = true
             } label: {
-                LucideIcon(.cog, size: 20, color: Color.appPrimaryText)
+                Image(currentVoiceAssetName)
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(Color.appSecondaryBackground))
+                    .clipShape(Circle())
             }
 
             Button(action: generate) {

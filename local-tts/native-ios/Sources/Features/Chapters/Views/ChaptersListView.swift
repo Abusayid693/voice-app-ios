@@ -70,8 +70,9 @@ struct ChaptersListView: View {
         let isBuffering = isKokoro && isActive && chapterPlayer.isBuffering
 
         return ChapterRow(
-            chapter: chapter, isKokoro: isKokoro, isGenerated: isGenerated, isActive: isActive,
-            isPlaying: isPlaying, isBuffering: isBuffering, generationState: generationStore.state(for: ref),
+            chapter: chapter, voiceName: project.voiceName, isKokoro: isKokoro, isGenerated: isGenerated,
+            isActive: isActive, isPlaying: isPlaying, isBuffering: isBuffering,
+            generationState: generationStore.state(for: ref),
             onPlayTapped: { play(chapter: chapter, ref: ref, isGenerated: isGenerated) },
             onGenerateTapped: {
                 generationStore.generate(

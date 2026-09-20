@@ -13,6 +13,7 @@ struct KokoroAneTestApp: App {
     private let chapterSynthesisService: ChapterSynthesisService
     private let chapterGenerationStore: ChapterGenerationStore
     private let chapterPlayer: ChapterAudioPlayer
+    private let navigationChrome = NavigationChromeVisibility()
 
     init() {
         viewModel = TTSViewModel(dependencies: dependencies)
@@ -22,12 +23,16 @@ struct KokoroAneTestApp: App {
         chapterPlayer = ChapterAudioPlayer(synthesisService: chapterSynthesisService)
     }
 
+    private var appEnvironment: AppEnvironment {
+        AppEnvironment(
+            tts: viewModel, voiceClone: voiceCloneViewModel, library: libraryViewModel,
+            previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
+            generationStore: chapterGenerationStore, navigationChrome: navigationChrome)
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootTabView(
-                viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                libraryViewModel: libraryViewModel, previewPlayer: previewPlayer,
-                chapterPlayer: chapterPlayer, generationStore: chapterGenerationStore)
+            RootTabView(app: appEnvironment)
         }
     }
 }

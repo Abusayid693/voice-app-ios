@@ -105,6 +105,16 @@ final class ChapterAudioPlayer: ObservableObject {
         seek(to: time)
     }
 
+    // seek(to:) already clamps to [0, duration], so skipping past either
+    // end just lands on the boundary rather than erroring.
+    func skipBackward(by seconds: TimeInterval = 10) {
+        seek(to: elapsed - seconds)
+    }
+
+    func skipForward(by seconds: TimeInterval = 10) {
+        seek(to: elapsed + seconds)
+    }
+
     // MARK: - Streaming playback (synthesize-and-play, nothing saved)
 
     func stream(_ ref: ChapterRef, chapter: Chapter, voice: String) {

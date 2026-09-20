@@ -6,6 +6,9 @@ import SwiftUI
 /// VoiceSettingsSheet's "My Voices" section, not here.
 struct VoicesTabView: View {
     @ObservedObject var viewModel: VoiceCloneViewModel
+    // Only used to update navigationChrome when this tab pushes a screen —
+    // see NavigationChromeVisibility.
+    let app: AppEnvironment
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
 
@@ -60,6 +63,9 @@ struct VoicesTabView: View {
                     UploadVoiceView(viewModel: viewModel) { voiceCloneRoute = nil }
                 }
             }
+            // Root tab bar/floating "+" button only at this screen's own
+            // root — see NavigationChromeVisibility.
+            .tabRootChrome(app.navigationChrome, isPushed: voiceCloneRoute != nil)
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $isCreateVoicePresented) {
@@ -129,5 +135,6 @@ struct VoicesTabView: View {
 }
 
 #Preview {
-    VoicesTabView(viewModel: VoiceCloneViewModel(dependencies: DependencyContainer()))
+    let app = AppEnvironment.preview()
+    return VoicesTabView(viewModel: app.voiceClone, app: app)
 }

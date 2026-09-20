@@ -10,6 +10,10 @@ import SwiftUI
 /// generate-progress bar don't fit a primitives-only shared component.
 struct ChapterRow: View {
     let chapter: Chapter
+    // The project's voice — same for every chapter (one text, one voice),
+    // shown in the description area so it's clear who's reading before you
+    // even tap Play.
+    let voiceName: String
     let isKokoro: Bool
     let isGenerated: Bool
     let isActive: Bool
@@ -23,26 +27,22 @@ struct ChapterRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Circle()
-                    .fill(Color.appSecondaryBackground)
-                    .frame(width: 40, height: 40)
-                    .overlay {
-                        LucideIcon(.audioWaveform, size: 16, color: Color.appPrimaryText)
-                    }
+                playButton
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(chapter.title).appText(.rowTitle)
-                    Text(subtitle).appText(.label).lineLimit(1)
+                    Text(chapter.preview).appText(.label).lineLimit(1)
+                    voiceRow
                 }
 
                 Spacer()
 
-                HStack(spacing: 14) {
-                    playButton
-                    if isKokoro { generateControl }
-                }
+                if isKokoro { generateControl }
             }
 
+            if let statusText {
+                Text(statusText).appText(.meta)
+            }
             if case let .running(done, total) = generationState, total > 0 {
                 ProgressView(value: Double(done), total: Double(total))
                     .tint(Color.appPrimaryText)
@@ -51,25 +51,43 @@ struct ChapterRow: View {
         .padding(.vertical, 4)
     }
 
-    private var subtitle: String {
+    // Generation feedback ("Generating…"/"Waiting"/a failure message) is
+    // its own line rather than replacing the chapter's own description —
+    // the description should always describe the chapter, not the
+    // transient state of generating its audio.
+    private var statusText: String? {
         switch generationState {
         case .running(let done, let total): return "Generating… \(done)/\(total)"
         case .queued: return "Waiting to generate…"
         case .failed(let message): return message
-        case nil: return isGenerated ? "Generated" : chapter.preview
+        case nil: return nil
+        }
+    }
+
+    private var voiceRow: some View {
+        HStack(spacing: 6) {
+            Image(VoiceCoverArt.assetName(for: voiceName))
+                .resizable()
+                .scaledToFill()
+                .frame(width: 16, height: 16)
+                .clipShape(Circle())
+            Text(VoiceDisplayName.forCode(voiceName)).appText(.meta)
         }
     }
 
     private var playButton: some View {
         Button(action: onPlayTapped) {
-            if isActive && isBuffering {
-                ProgressView()
-                    .frame(width: 22, height: 22)
-            } else {
-                LucideIcon(
-                    isActive && isPlaying ? .circlePause : .circlePlay, size: 22,
-                    color: Color.appPrimaryText)
+            ZStack {
+                Circle().fill(Color.appSecondaryBackground)
+                if isActive && isBuffering {
+                    ProgressView()
+                } else {
+                    LucideIcon(
+                        isActive && isPlaying ? .pause : .play, style: .filled, size: 22,
+                        color: Color.appPrimaryText)
+                }
             }
+            .frame(width: 52, height: 52)
         }
         .buttonStyle(.plain)
     }
