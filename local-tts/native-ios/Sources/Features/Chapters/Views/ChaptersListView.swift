@@ -44,11 +44,6 @@ struct ChaptersListView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Chapters")
         .navigationBarTitleDisplayMode(.inline)
-        // Root tab bar is only for Home/Library/Tools/Voices themselves —
-        // hidden on every pushed screen. RootTabView's own floating "+"
-        // isn't part of the real tab bar, so it needs NavigationChromeVisibility
-        // instead (set by the tab root that pushed this, not here).
-        .toolbar(.hidden, for: .tabBar)
         .navigationDestination(item: $playerChapterRef) { ref in
             ChapterPlayerView(project: project, chapterRef: ref, chapterPlayer: chapterPlayer)
         }

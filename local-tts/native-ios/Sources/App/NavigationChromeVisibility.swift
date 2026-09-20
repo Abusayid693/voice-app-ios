@@ -1,9 +1,21 @@
 import SwiftUI
 
-/// Whether the app's root chrome (tab bar, floating "+" button) should be
-/// visible — true only while every tab's own `NavigationStack` sits at its
-/// root screen (Home/Library/Tools/Voices), false the moment anything is
-/// pushed within any of them.
+/// Whether `RootTabView`'s custom bottom bar (`CustomTabBar` — the 4 tabs
+/// and the "+" button, all in one row) should be visible — true only while
+/// every tab's own `NavigationStack` sits at its root screen (Home/Library/
+/// Tools/Voices), false the moment anything is pushed within any of them.
+///
+/// There used to be two separate hiding mechanisms here: the real
+/// `UITabBar` via `.toolbar(.hidden, for: .tabBar)` (UIKit-transition-
+/// timed) and this object driving a separately-floating "+" button
+/// (SwiftUI-`.animation`-timed). Those two clocks kept visibly desyncing —
+/// the "+" button appearing before the real tab bar finished reappearing —
+/// and no amount of re-tuning the animation duration fixed it, because
+/// there were structurally two systems to keep in sync. Replacing the
+/// native tab bar with `CustomTabBar` collapsed that back to one: this
+/// object now drives the *entire* bar's visibility through one
+/// `.transition`/`.animation` in `RootTabView`, so there's nothing left to
+/// desync against.
 ///
 /// Driven by each tab root's own push-triggering `@State` (`openProjectID`,
 /// `voiceCloneRoute`, …) via `.onChange`, not by the pushed screens
@@ -14,11 +26,6 @@ import SwiftUI
 /// it's one value, changed in one place, and stays non-nil for as long as
 /// anything is pushed under it however many levels deep — so reading it
 /// straight from the presenter is both simpler and race-free.
-///
-/// The system tab bar itself doesn't need this — `.toolbar(.hidden, for:
-/// .tabBar)` on each pushed screen already handles that natively. This
-/// object exists only for the custom "+" button, which isn't part of the
-/// real tab bar and doesn't respond to that modifier.
 @MainActor
 final class NavigationChromeVisibility: ObservableObject {
     @Published var isAtTabRoot = true
@@ -30,8 +37,8 @@ extension View {
     /// matters: without it, the flag is only ever written when `isPushed`
     /// itself changes, so if anything ever left it stale — a future
     /// programmatic tab switch, a deep link — there'd be no way back to a
-    /// visible "+" button short of triggering another push/pop. Resyncing
-    /// on every appearance makes that self-healing instead of a latent trap.
+    /// visible tab bar short of triggering another push/pop. Resyncing on
+    /// every appearance makes that self-healing instead of a latent trap.
     func tabRootChrome(_ chrome: NavigationChromeVisibility, isPushed: Bool) -> some View {
         onAppear { chrome.isAtTabRoot = !isPushed }
             .onChange(of: isPushed) { _, pushed in chrome.isAtTabRoot = !pushed }

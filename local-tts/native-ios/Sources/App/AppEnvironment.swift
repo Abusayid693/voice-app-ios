@@ -28,10 +28,9 @@ struct AppEnvironment {
     let chapterPlayer: ChapterAudioPlayer
     let generationStore: ChapterGenerationStore
     // Not "pass-through" like the others above — a live flag tab roots
-    // write to and RootTabView observes, so the floating "+" button can
-    // hide itself on pushed screens. See NavigationChromeVisibility's own
-    // doc comment for why it's not folded into the tab bar's own
-    // .toolbar(.hidden, for: .tabBar) handling.
+    // write to and RootTabView observes, so RootTabView's custom bottom
+    // bar (tabs + "+", all in one row — see CustomTabBar) can hide itself
+    // on pushed screens. See NavigationChromeVisibility's own doc comment.
     let navigationChrome: NavigationChromeVisibility
 }
 

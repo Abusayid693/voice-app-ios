@@ -55,7 +55,6 @@ struct InstantCloneView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Instant Clone")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
     }
 
     private var currentPassage: String {

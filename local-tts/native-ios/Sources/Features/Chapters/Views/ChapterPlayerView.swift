@@ -37,7 +37,6 @@ struct ChapterPlayerView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle(chapter?.title ?? "Chapter")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
         .preferredColorScheme(.dark)
         .onChange(of: chapterPlayer.elapsed) { _, newValue in
             guard !isScrubbing else { return }
