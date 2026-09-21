@@ -4,10 +4,10 @@ import SwiftUI
 /// supplied mockup) — not theme-adaptive, used deliberately regardless of
 /// system light/dark mode.
 extension Color {
-    static let appBackground = Color(hex: 0x1D1D1C)
-    static let appSecondaryBackground = Color(hex: 0x242323)
+    static let appBackground = Color(hex: 0x191A1C)
+    static let appSecondaryBackground = Color(hex: 0x1F2024)
     static let appPrimaryText = Color(hex: 0xEEEEEE)
-    static let appSecondaryText = Color(hex: 0xB3B3B3)
+    static let appSecondaryText = Color(hex: 0x949599)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
     // Deliberately its own value, not derived from appTertiaryText — the
     // finest metadata tier (timestamps, file sizes) reads as its own
@@ -31,6 +31,13 @@ extension Color {
     // silently follow the CTA colors if those ever change again.
     static let highlightBadgeBackground = Color(hex: 0xF6F6F6)
     static let highlightBadgeText = Color(hex: 0x000000)
+
+    // ChapterPlayerView's read-along: the currently-playing paragraph's
+    // background box, and the currently-playing word's own highlight pill
+    // within it — two different colors/scopes, not one reused at two
+    // opacities, so each can be tuned independently.
+    static let chunkHighlightBackground = Color(hex: 0x0E2439)
+    static let wordHighlightBackground = Color(hex: 0x1F5182)
 
     init(hex: UInt32) {
         self.init(

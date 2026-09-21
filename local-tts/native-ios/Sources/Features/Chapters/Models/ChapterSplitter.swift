@@ -5,9 +5,9 @@ import Foundation
 /// smaller synthesis chunks. Packs whole paragraphs greedily so a chapter
 /// break lands on a paragraph boundary wherever possible; a single
 /// over-long paragraph falls back to sentence packing (reusing
-/// `KokoroTextChunker.splitIntoSentences`, the same boundary logic
-/// synthesis chunking already relies on), and a pathological single
-/// sentence longer than the whole budget falls back to word packing.
+/// `KokoroTextChunker.sentenceRanges`, the same boundary logic synthesis
+/// chunking already relies on), and a pathological single sentence longer
+/// than the whole budget falls back to word packing.
 enum ChapterSplitter {
     static let defaultMaxWords = 2000
 
@@ -49,6 +49,13 @@ enum ChapterSplitter {
         }
     }
 
+    // A line ending in sentence-terminal punctuation reads as a complete
+    // thought — text formatted one-sentence-per-line (no blank lines
+    // between paragraphs) relies on exactly this to mean "new paragraph."
+    // A line that doesn't end this way is a mid-sentence wrap instead, and
+    // stays a soft line break within the same paragraph.
+    private static let sentenceTerminators: Set<Character> = [".", "!", "?"]
+
     private static func splitIntoParagraphs(_ text: String) -> [String] {
         let paragraphs =
             text
@@ -59,8 +66,14 @@ enum ChapterSplitter {
                     result.append("")
                 } else if result.isEmpty || result[result.count - 1].isEmpty {
                     result.append(trimmedLine)
+                } else if let last = result[result.count - 1].last, sentenceTerminators.contains(last) {
+                    // Previous line ended a sentence — treat this break as
+                    // a new paragraph, same as a blank line would.
+                    result.append(trimmedLine)
                 } else {
-                    result[result.count - 1] += " " + trimmedLine
+                    // "\n", not " " — a single Return inside a paragraph is
+                    // a real line break, not a word-join.
+                    result[result.count - 1] += "\n" + trimmedLine
                 }
             }
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -68,31 +81,40 @@ enum ChapterSplitter {
         return paragraphs.isEmpty ? [text] : paragraphs
     }
 
+    // Packs sentences by extending a range over `paragraph` (like
+    // KokoroTextChunker.chunk) rather than joining trimmed sentence
+    // strings, so whitespace/newlines between sentences survive verbatim.
     private static func splitOverlongParagraph(_ paragraph: String, maxWords: Int) -> [String] {
         var pieces: [String] = []
-        var current: [String] = []
+        var current: Range<String.Index>?
         var currentWordCount = 0
 
         func flush() {
-            guard !current.isEmpty else { return }
-            pieces.append(current.joined(separator: " "))
-            current = []
+            guard let range = current else { return }
+            pieces.append(String(paragraph[range]).trimmingCharacters(in: .whitespaces))
+            current = nil
             currentWordCount = 0
         }
 
-        for sentence in KokoroTextChunker.splitIntoSentences(paragraph) {
-            let count = wordCount(sentence)
+        for sentenceRange in KokoroTextChunker.sentenceRanges(in: paragraph) {
+            let sentence = paragraph[sentenceRange]
+            let count = wordCount(String(sentence))
             if count > maxWords {
                 flush()
-                pieces.append(contentsOf: splitByWords(sentence, maxWords: maxWords))
+                pieces.append(contentsOf: splitByWords(String(sentence), maxWords: maxWords))
                 continue
             }
-            if current.isEmpty || currentWordCount + count <= maxWords {
-                current.append(sentence)
-                currentWordCount += count
+            if let existing = current {
+                if currentWordCount + count <= maxWords {
+                    current = existing.lowerBound..<sentenceRange.upperBound
+                    currentWordCount += count
+                } else {
+                    flush()
+                    current = sentenceRange
+                    currentWordCount = count
+                }
             } else {
-                flush()
-                current = [sentence]
+                current = sentenceRange
                 currentWordCount = count
             }
         }

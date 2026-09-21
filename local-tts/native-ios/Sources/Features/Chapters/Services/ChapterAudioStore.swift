@@ -80,4 +80,41 @@ enum ChapterAudioStore {
     static func clearStaging(_ ref: ChapterRef, project: SavedGeneration) {
         try? FileManager.default.removeItem(at: stagingDirectory(ref, project: project))
     }
+
+    // MARK: - Staged word timings
+
+    private static func stagedWordTimingsURL(
+        _ ref: ChapterRef, project: SavedGeneration, chunkIndex: Int
+    ) -> URL {
+        stagingDirectory(ref, project: project).appendingPathComponent("chunk_\(chunkIndex).words.json")
+    }
+
+    /// Loads word timings for the first `count` staged chunks (the count
+    /// `loadStagedChunks` already found — the WAV's presence is
+    /// authoritative for "how many chunks are staged", not this file). A
+    /// missing or corrupt timings file reads as empty (chunk-level
+    /// fallback for that one chunk) rather than stopping the whole load,
+    /// so a crash between writing the two files on a prior run can't
+    /// desync this array's length from `loadStagedChunks`'.
+    static func loadStagedWordTimings(
+        _ ref: ChapterRef, project: SavedGeneration, count: Int
+    ) -> [[WordTiming]] {
+        (0..<count).map { index in
+            guard
+                let data = try? Data(
+                    contentsOf: stagedWordTimingsURL(ref, project: project, chunkIndex: index)),
+                let timings = try? JSONDecoder().decode([WordTiming].self, from: data)
+            else { return [] }
+            return timings
+        }
+    }
+
+    static func saveStagedWordTimings(
+        _ timings: [WordTiming], ref: ChapterRef, project: SavedGeneration, chunkIndex: Int
+    ) throws {
+        let directory = stagingDirectory(ref, project: project)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(timings)
+        try data.write(to: stagedWordTimingsURL(ref, project: project, chunkIndex: chunkIndex))
+    }
 }

@@ -101,6 +101,10 @@ struct ChaptersListView: View {
                 viewModel.stopEnginePlayback()
                 chapterPlayer.stream(ref, chapter: chapter, voice: project.voiceName)
             }
+            // Same player screen as the saved path — streaming now carries
+            // real word-level highlighting too (ChapterAudioPlayer keeps
+            // its published surface correct for both modes).
+            playerChapterRef = ref
         case .pocketTts, .supertonic3:
             chapterPlayer.stop()
             nonKokoroActiveChapterIndex = chapter.index

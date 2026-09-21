@@ -117,6 +117,49 @@ final class KokoroEngineService {
         try await manager.synthesize(text: text, voice: voice)
     }
 
+    // Exposes inputIds/predictedDurations for word-level timing derivation
+    // (see ChapterSynthesisService) — synthesize() discards these.
+    func synthesizeDetailed(text: String, voice: String) async throws -> KokoroAneSynthesisResult {
+        try await manager.synthesizeDetailed(text: text, voice: voice)
+    }
+
+    private var phonemeGroupCountCache: [String: Int] = [:]
+
+    /// How many space-separated phoneme groups one normalized word
+    /// produces — used by WordTimingDeriver to know how many of the real
+    /// synthesis's token groups a displayed word should consume. Memoized:
+    /// real text repeats words heavily, and the SDK itself has no cache for
+    /// this (only for in-lexicon G2P lookups, not the string wrapping this
+    /// method does around them).
+    func phonemeGroupCount(for word: String) async -> Int {
+        if let cached = phonemeGroupCountCache[word] { return cached }
+        let count: Int
+        if let phonemeString = try? await manager.phonemes(for: word) {
+            count = max(1, phonemeString.split(separator: " ").count)
+        } else {
+            count = 1
+        }
+        phonemeGroupCountCache[word] = count
+        return count
+    }
+
+    private var cachedSpaceTokenId: Int32?
+
+    /// The vocab id for `" "` — the token `inputIds` uses to separate
+    /// words, per WordTimingDeriver's grouping. Loaded from the same
+    /// `directory` this manager itself reads its models/vocab from
+    /// (English only; Mandarin/Japanese managers have no bundled
+    /// `directory` and word-level timing isn't attempted for them).
+    func spaceTokenId() throws -> Int32 {
+        if let cached = cachedSpaceTokenId { return cached }
+        guard let directory else { throw KokoroEngineServiceError.noModelDirectory }
+        let vocabURL = directory.appendingPathComponent("kokoro-82m-coreml/ANE/vocab.json")
+        let vocab = try KokoroAneVocab.load(from: vocabURL)
+        guard let id = vocab.map[" "] else { throw KokoroEngineServiceError.noSpaceToken }
+        cachedSpaceTokenId = id
+        return id
+    }
+
     private var readyTask: Task<Void, Error>?
     private var preloadedVoice: String?
 
@@ -139,5 +182,10 @@ final class KokoroEngineService {
         readyTask = task
         try await task.value
         preloadedVoice = voice
+    }
+
+    enum KokoroEngineServiceError: Error {
+        case noModelDirectory
+        case noSpaceToken
     }
 }
