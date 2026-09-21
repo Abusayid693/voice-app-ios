@@ -131,6 +131,16 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Selection outlines and icons inside the reader options sheet. Dark
+    /// and Carbon deliberately use white here while their native toggles
+    /// keep the familiar green `controlAccent` tint.
+    var optionsAccent: Color {
+        switch self {
+        case .dark, .carbon: return .white
+        case .claude, .chatGPT, .midnight, .sage: return controlAccent
+        }
+    }
+
     var chunkHighlightBackground: Color {
         switch self {
         case .dark: return Color(hex: 0x182B3D)

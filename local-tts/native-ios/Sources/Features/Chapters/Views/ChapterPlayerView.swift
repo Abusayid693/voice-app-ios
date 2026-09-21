@@ -131,6 +131,7 @@ struct ChapterPlayerView: View {
     // paragraph-level box still marks where playback is.
     @AppStorage("chapterPlayerWordHighlightEnabled") private var wordHighlightEnabled = true
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("chapterPlayerFontFamily") private var readerFontFamily: ReaderFontFamily = .sfProText
     @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
 
     private var chapter: Chapter? {
@@ -170,6 +171,7 @@ struct ChapterPlayerView: View {
                 autoScrollEnabled: $autoScrollEnabled,
                 wordHighlightEnabled: $wordHighlightEnabled,
                 fontSize: $readerFontSize,
+                fontFamily: $readerFontFamily,
                 theme: $readerTheme)
         }
         .preferredColorScheme(readerTheme.colorScheme)
@@ -700,6 +702,7 @@ struct ChapterPlayerView: View {
                     ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
+                fontFamily: readerFontFamily,
                 theme: readerTheme
             ).equatable()
         }
@@ -731,12 +734,13 @@ struct ChapterPlayerView: View {
         let highlightedWordIndex: Int?
         let isCurrentGroup: Bool
         let fontSize: ReaderFontSize
+        let fontFamily: ReaderFontFamily
         let theme: ReaderTheme
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
                 && lhs.highlightedWordIndex == rhs.highlightedWordIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
-                && lhs.fontSize == rhs.fontSize && lhs.theme == rhs.theme
+                && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily && lhs.theme == rhs.theme
         }
 
         // The two inputs that can change a word's measured size. Colors
@@ -747,6 +751,7 @@ struct ChapterPlayerView: View {
             var hasher = Hasher()
             hasher.combine(itemsRevision)
             hasher.combine(fontSize)
+            hasher.combine(fontFamily)
             return hasher.finalize()
         }
 
@@ -764,7 +769,7 @@ struct ChapterPlayerView: View {
                         isCurrentGroup && item.chunkIndex == highlightedChunkIndex
                             && item.wordIndexInChunk == highlightedWordIndex
                     Text(item.text)
-                        .font(fontSize.font)
+                        .font(fontSize.font(family: fontFamily))
                         .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
