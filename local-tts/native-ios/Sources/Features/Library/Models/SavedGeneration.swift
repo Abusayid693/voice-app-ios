@@ -10,16 +10,23 @@ import Foundation
 /// per-chunk files this used to write. Pocket TTS and Supertonic-3 chapters
 /// only ever stream (per-chapter Generate is Kokoro-only), so they never
 /// have saved audio.
-struct SavedGeneration: Identifiable, Codable, Equatable {
+struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
+    /// A human-readable project name. Hand-written projects fall back to a
+    /// short excerpt of `text`; imported PDFs use their filename instead.
+    let title: String?
     let text: String
     let engine: Engine
     let voiceName: String
     let createdAt: Date
     let chapters: [Chapter]
 
-    init(id: UUID, text: String, engine: Engine, voiceName: String, createdAt: Date, chapters: [Chapter]) {
+    init(
+        id: UUID, title: String? = nil, text: String, engine: Engine, voiceName: String,
+        createdAt: Date, chapters: [Chapter]
+    ) {
         self.id = id
+        self.title = title
         self.text = text
         self.engine = engine
         self.voiceName = voiceName
@@ -38,6 +45,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
         text = try container.decode(String.self, forKey: .text)
         engine = try container.decode(Engine.self, forKey: .engine)
         voiceName = try container.decode(String.self, forKey: .voiceName)
@@ -64,6 +72,40 @@ struct SavedGeneration: Identifiable, Codable, Equatable {
         return directory
     }()
 
+    static var projectsDirectory: URL {
+        let directory = baseDirectory.appendingPathComponent("Projects", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    static var indexURL: URL {
+        baseDirectory.appendingPathComponent("index.json")
+    }
+
+    static func projectFileURL(id: UUID) -> URL {
+        projectsDirectory.appendingPathComponent("\(id.uuidString).json")
+    }
+
+    /// What Library and Home need before a project is opened. Keeping this
+    /// separate from the full chapter payload lets large imports stay on
+    /// disk until the user actually enters the project.
+    var summary: SavedGenerationSummary {
+        SavedGenerationSummary(
+            id: id, title: title ?? Self.defaultTitle(for: text), engine: engine,
+            voiceName: voiceName, createdAt: createdAt, chapterCount: chapters.count)
+    }
+
+    private static func defaultTitle(for text: String) -> String {
+        let firstLine = text
+            .split(whereSeparator: \.isNewline)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled project"
+        guard firstLine.count > 72 else { return firstLine.isEmpty ? "Untitled project" : firstLine }
+        let end = firstLine.index(firstLine.startIndex, offsetBy: 72)
+        return "\(firstLine[..<end])…"
+    }
+
     var audioDirectory: URL {
         Self.baseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
     }
@@ -87,4 +129,15 @@ struct SavedGeneration: Identifiable, Codable, Equatable {
     func hasGeneratedAudio(chapterIndex: Int) -> Bool {
         FileManager.default.fileExists(atPath: chapterAudioFileURL(index: chapterIndex).path)
     }
+}
+
+/// Lightweight metadata stored in the library index. Full text and chapters
+/// live in one JSON file per project and are decoded only when opened.
+struct SavedGenerationSummary: Identifiable, Codable, Equatable {
+    let id: UUID
+    let title: String
+    let engine: Engine
+    let voiceName: String
+    let createdAt: Date
+    let chapterCount: Int
 }

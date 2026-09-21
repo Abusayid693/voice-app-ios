@@ -24,6 +24,7 @@ struct AppEnvironment {
     let tts: TTSViewModel
     let voiceClone: VoiceCloneViewModel
     let library: LibraryViewModel
+    let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
     let generationStore: ChapterGenerationStore
@@ -43,12 +44,12 @@ extension AppEnvironment {
         let dependencies = DependencyContainer()
         let tts = TTSViewModel(dependencies: dependencies)
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
+        let library = LibraryViewModel()
         return AppEnvironment(
             tts: tts, voiceClone: VoiceCloneViewModel(dependencies: dependencies),
-            library: LibraryViewModel(), previewPlayer: VoicePreviewPlayer(),
+            library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
             chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis),
             generationStore: ChapterGenerationStore(synthesisService: synthesis),
             navigationChrome: NavigationChromeVisibility())
     }
 }
-

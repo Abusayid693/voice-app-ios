@@ -2,10 +2,12 @@ import SwiftUI
 
 @main
 struct KokoroAneTestApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     private let dependencies = DependencyContainer()
     private let viewModel: TTSViewModel
     private let voiceCloneViewModel: VoiceCloneViewModel
-    private let libraryViewModel = LibraryViewModel()
+    private let libraryViewModel: LibraryViewModel
+    private let pdfImportManager: PDFImportManager
     private let previewPlayer = VoicePreviewPlayer()
     // Chapters flow (issue: split Generate into save-then-chapters):
     // ChapterSynthesisService needs viewModel.kokoroServices, so these are
@@ -16,6 +18,9 @@ struct KokoroAneTestApp: App {
     private let navigationChrome = NavigationChromeVisibility()
 
     init() {
+        libraryViewModel = LibraryViewModel()
+        pdfImportManager = PDFImportManager(library: libraryViewModel)
+        PDFImportManager.registerBackgroundTask(manager: pdfImportManager)
         viewModel = TTSViewModel(dependencies: dependencies)
         voiceCloneViewModel = VoiceCloneViewModel(dependencies: dependencies)
         chapterSynthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
@@ -26,13 +31,18 @@ struct KokoroAneTestApp: App {
     private var appEnvironment: AppEnvironment {
         AppEnvironment(
             tts: viewModel, voiceClone: voiceCloneViewModel, library: libraryViewModel,
-            previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
+            pdfImports: pdfImportManager, previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
             generationStore: chapterGenerationStore, navigationChrome: navigationChrome)
     }
 
     var body: some Scene {
         WindowGroup {
             RootTabView(app: appEnvironment)
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background {
+                        pdfImportManager.applicationDidEnterBackground()
+                    }
+                }
         }
     }
 }

@@ -1,6 +1,7 @@
 import Hugeicons
 import LucideSwift
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Reports whether a ScrollView is parked at (or within `threshold` of) its
 /// top, so ImportHomeView can fade the Setup pointer out as soon as the user
@@ -61,6 +62,7 @@ private enum HomeTab: Hashable, Identifiable, CaseIterable {
 struct ImportHomeView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var pdfImports: PDFImportManager
     // Observed: this screen's tile availability and the Setup pointer both
     // read pack readiness.
     @ObservedObject var packs: VoicePackStore
@@ -86,7 +88,7 @@ struct ImportHomeView: View {
     @State private var isSettingsPresented = false
     // Set when tapping a Projects entry (any engine) — pushes ChaptersListView
     // for that saved project.
-    @State private var openProjectID: UUID?
+    @State private var openProject: SavedGeneration?
     // Set by WriteTextView's onGenerated the moment Generate saves a new
     // project, but not applied to openProjectID until the fullScreenCover's
     // own onDismiss fires — setting both isWriteTextPresented = false and
@@ -104,6 +106,14 @@ struct ImportHomeView: View {
 
     private var isFullyDownloaded: Bool {
         packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
+    }
+
+    private var selectedVoiceName: String {
+        switch viewModel.engine {
+        case .kokoroAne: return viewModel.kokoroVoice
+        case .pocketTts: return viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
+        case .supertonic3: return viewModel.supertonicVoice.displayName
+        }
     }
 
     var body: some View {
@@ -181,18 +191,16 @@ struct ImportHomeView: View {
                     UploadVoiceView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
                 }
             }
-            .navigationDestination(item: $openProjectID) { projectID in
-                if let project = libraryViewModel.savedGenerations.first(where: { $0.id == projectID }) {
-                    ChaptersListView(
-                        project: project, chapterPlayer: app.chapterPlayer, generationStore: app.generationStore,
-                        viewModel: viewModel)
-                }
+            .navigationDestination(item: $openProject) { project in
+                ChaptersListView(
+                    project: project, chapterPlayer: app.chapterPlayer, generationStore: app.generationStore,
+                    viewModel: viewModel)
             }
             // The root tab bar/floating "+" button should only show at
             // this screen's own root, not on anything pushed above it —
             // see NavigationChromeVisibility. Two triggers, either one
             // non-nil means something's pushed.
-            .tabRootChrome(app.navigationChrome, isPushed: openProjectID != nil || voiceCloneRoute != nil)
+            .tabRootChrome(app.navigationChrome, isPushed: openProject != nil || voiceCloneRoute != nil)
         }
         .sheet(isPresented: $viewModel.isSetupPresented) {
             SetupSheet(viewModel: viewModel, packs: packs)
@@ -201,7 +209,7 @@ struct ImportHomeView: View {
             isPresented: $viewModel.isWriteTextPresented,
             onDismiss: {
                 if let pendingProjectID {
-                    openProjectID = pendingProjectID
+                    openProject = libraryViewModel.project(for: pendingProjectID)
                     self.pendingProjectID = nil
                 }
             }
@@ -225,6 +233,16 @@ struct ImportHomeView: View {
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
+        }
+        .fileImporter(
+            isPresented: $pdfImports.isDocumentPickerPresented,
+            allowedContentTypes: [.pdf], allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first else { return }
+            Task {
+                await pdfImports.importPDF(
+                    from: url, engine: viewModel.engine, voiceName: selectedVoiceName)
+            }
         }
     }
 
@@ -315,7 +333,9 @@ struct ImportHomeView: View {
     private var listenActionsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             ImportActionCard(title: "Paste a link", icon: .link, action: {})
-            ImportActionCard(title: "Upload a file", icon: .file, action: {})
+            ImportActionCard(title: "Upload a file", icon: .file) {
+                pdfImports.requestDocumentPicker()
+            }
             ImportActionCard(title: "Scan text", icon: .scan, action: {})
             ImportActionCard(title: "Write text", icon: .textCursor) {
                 viewModel.isWriteTextPresented = true
@@ -329,7 +349,9 @@ struct ImportHomeView: View {
     private var makeAudioActionsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             ImportActionCard(title: "Clone voice", icon: .mic, action: {})
-            ImportActionCard(title: "Upload Book", icon: .bookUp, action: {})
+            ImportActionCard(title: "Upload Book", icon: .bookUp) {
+                pdfImports.requestDocumentPicker()
+            }
             ImportActionCard(title: "Create Podcast", icon: .radio, action: {})
             ImportActionCard(title: "Change Voice", icon: .repeatIcon, action: {})
         }
@@ -469,6 +491,9 @@ struct ImportHomeView: View {
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
             Text("Projects").appText(.sectionTitle)
+            ForEach(pdfImports.jobs.filter { $0.phase != .completed && $0.phase != .cancelled }.prefix(2)) { job in
+                PDFImportJobCard(job: job, manager: pdfImports)
+            }
             if libraryViewModel.savedGenerations.isEmpty {
                 ForEach(DemoContent.projects) { project in
                     projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
@@ -479,10 +504,10 @@ struct ImportHomeView: View {
                     GenerationRow(
                         icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
                         iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
-                        title: generation.text,
+                        title: generation.title,
                         subtitle:
                             "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
-                        onTap: { openProjectID = generation.id }
+                        onTap: { openProject = libraryViewModel.project(for: generation.id) }
                     )
                 }
             }
@@ -634,5 +659,6 @@ struct VoiceTile: Identifiable {
 #Preview {
     let app = AppEnvironment.preview()
     return ImportHomeView(
-        viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs, app: app)
+        viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
+        packs: app.tts.packs, app: app)
 }

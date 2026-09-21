@@ -84,7 +84,11 @@ targets:
         # Lets Kokoro playback keep running (and the process stay
         # unsuspended) once the screen locks or the app backgrounds — see
         # NowPlayingService.swift and TTSViewModel's Kokoro playback methods.
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, processing]
+        # Imports are checkpointed page-by-page and resumed by this
+        # opportunistic iOS background processing task.
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.rehanchoudhury.kokoroanetest.pdf-import
         # Voice cloning (Features/VoiceClone) records a short in-app sample
         # via AVAudioRecorder — required or the app crashes on first mic use.
         NSMicrophoneUsageDescription: Used to record a short sample of your voice to create a cloned voice.
