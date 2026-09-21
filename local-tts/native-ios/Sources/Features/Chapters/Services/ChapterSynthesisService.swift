@@ -5,9 +5,11 @@ import Foundation
 /// Owns Kokoro chapter synthesis: resolving which variant's manager a
 /// voice belongs to, warming it up, running the actual `synthesize()`
 /// calls, and merging a chapter's chunks into one saved WAV. Used both for
-/// streaming (one chunk at a time, via `synthesizeChunk`) and for a
+/// streaming (one chunk at a time, via `synthesizeChunkDetailed`) and for a
 /// chapter's Generate button (`generateAndSave`, the whole chapter as one
-/// job).
+/// job) — both funnel through `synthesizeOneChunk`, the shared per-chunk
+/// logic (English gets real word timings via `synthesizeDetailed`;
+/// non-English just audio).
 ///
 /// `KokoroAneManager` is itself an actor, so concurrent `synthesize()`
 /// calls from two callers are memory-safe on their own — but without
@@ -26,13 +28,17 @@ final class ChapterSynthesisService {
         self.kokoroServices = kokoroServices
     }
 
-    /// Synthesizes and plays one synthesis chunk's worth of text — the
-    /// streaming path. Not persisted.
-    func synthesizeChunk(text: String, voice: String) async throws -> Data {
+    /// Synthesizes one chunk with word-level timing data — the streaming
+    /// path (`ChapterAudioPlayer.stream`), which retains the result itself
+    /// for in-session seeking. Not persisted to disk; that only happens via
+    /// `generateAndSave`.
+    func synthesizeChunkDetailed(
+        chunkText: String, voice: String
+    ) async throws -> (data: Data, wordTimings: [WordTiming], duration: TimeInterval) {
         try await runSerially {
             let service = try self.service(forVoice: voice)
             try await service.ensureReady(voice: voice)
-            return try await service.synthesize(text: Self.spokenText(text), voice: voice)
+            return try await Self.synthesizeOneChunk(chunkText: chunkText, voice: voice, service: service)
         }
     }
 
@@ -57,14 +63,6 @@ final class ChapterSynthesisService {
     /// restarts), then merges them into the chapter's final saved WAV +
     /// sidecar manifest. `onProgress(done, total)` fires after every chunk,
     /// including ones already staged from a prior attempt.
-    ///
-    /// English voices additionally get exact word-level timings per chunk
-    /// (see `WordTimingDeriver`) — synthesized via `synthesizeDetailed`
-    /// instead of the plain `synthesize`, so the real per-token duration
-    /// data used to render the audio is available. Non-English voices skip
-    /// this entirely (the alignment relies on the English normalizer/
-    /// phonemizer path); every chunk's `wordTimings` stays empty, same as
-    /// before this feature existed.
     func generateAndSave(
         ref: ChapterRef, project: SavedGeneration, chapter: Chapter, voice: String,
         onProgress: @escaping (Int, Int) -> Void
@@ -73,7 +71,6 @@ final class ChapterSynthesisService {
             try Task.checkCancellation()
             let service = try self.service(forVoice: voice)
             try await service.ensureReady(voice: voice)
-            let isEnglish = VoiceCatalog.variant(forCode: voice) == .english
 
             let chunkTexts = KokoroTextChunker.chunk(chapter.text)
             var stagedChunks = ChapterAudioStore.loadStagedChunks(ref, project: project)
@@ -83,21 +80,8 @@ final class ChapterSynthesisService {
 
             for index in stagedChunks.count..<chunkTexts.count {
                 try Task.checkCancellation()
-                let chunkText = chunkTexts[index]
-                // Display keeps its newlines; the engine never sees them.
-                let spoken = Self.spokenText(chunkText)
-                let data: Data
-                let wordTimings: [WordTiming]
-                if isEnglish {
-                    let result = try await service.synthesizeDetailed(text: spoken, voice: voice)
-                    data = try AudioWAV.data(
-                        from: result.samples, sampleRate: Double(result.sampleRate), normalize: false)
-                    wordTimings = await Self.deriveWordTimings(
-                        chunkText: chunkText, spokenText: spoken, result: result, service: service)
-                } else {
-                    data = try await service.synthesize(text: spoken, voice: voice)
-                    wordTimings = []
-                }
+                let (data, wordTimings, _) = try await Self.synthesizeOneChunk(
+                    chunkText: chunkTexts[index], voice: voice, service: service)
                 try ChapterAudioStore.saveStagedChunk(data, ref: ref, project: project, chunkIndex: index)
                 try ChapterAudioStore.saveStagedWordTimings(
                     wordTimings, ref: ref, project: project, chunkIndex: index)
@@ -118,12 +102,37 @@ final class ChapterSynthesisService {
         }
     }
 
+    /// The shared per-chunk synthesis logic both `generateAndSave` and
+    /// `synthesizeChunkDetailed` funnel through. English voices get exact
+    /// word-level timings (see `WordTimingDeriver`) via `synthesizeDetailed`
+    /// instead of the plain `synthesize`, since only that call exposes the
+    /// real per-token duration data used to render the audio. Non-English
+    /// voices skip this — the alignment relies on the English normalizer/
+    /// phonemizer path — and get an empty `wordTimings`, same fallback
+    /// chunk-level highlighting already uses.
+    private static func synthesizeOneChunk(
+        chunkText: String, voice: String, service: KokoroEngineService
+    ) async throws -> (data: Data, wordTimings: [WordTiming], duration: TimeInterval) {
+        let spoken = spokenText(chunkText)
+        guard VoiceCatalog.variant(forCode: voice) == .english else {
+            let data = try await service.synthesize(text: spoken, voice: voice)
+            let duration = (try? AVAudioPlayer(data: data))?.duration ?? 0
+            return (data, [], duration)
+        }
+        let result = try await service.synthesizeDetailed(text: spoken, voice: voice)
+        let data = try AudioWAV.data(
+            from: result.samples, sampleRate: Double(result.sampleRate), normalize: false)
+        let wordTimings = await deriveWordTimings(
+            chunkText: chunkText, spokenText: spoken, result: result, service: service)
+        return (data, wordTimings, result.durationSeconds)
+    }
+
     /// Runs the two calls `WordTimingDeriver` needs — the public FST
     /// normalizer once for the whole chunk, then a memoized
     /// `phonemes(for:)` per unique normalized word — and hands the result
     /// to the pure deriver. A vocab/space-token load failure degrades this
     /// one chunk to no word timings rather than failing the whole
-    /// Generate; audio still saves either way.
+    /// Generate/stream; audio still returns either way.
     private static func deriveWordTimings(
         chunkText: String, spokenText: String, result: KokoroAneSynthesisResult,
         service: KokoroEngineService
