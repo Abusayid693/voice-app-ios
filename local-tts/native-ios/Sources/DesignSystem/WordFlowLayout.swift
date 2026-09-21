@@ -21,6 +21,15 @@ struct WordFlowLayout: Layout {
     // (paragraph break), so it reads as more separated than a plain
     // single-newline line break.
     var paragraphExtraSpacing: CGFloat = 8
+    // Bump this whenever anything that affects a child's MEASURED size
+    // changes — its text, or the font it's rendered in. Sizes are then
+    // re-measured only when it moves, instead of on every layout pass:
+    // the caller re-runs its body ~12x/sec while highlighting (only the
+    // highlighted word's colors change, which can't affect measurement),
+    // and each of those passes was costing a Core Text measurement for
+    // every word in the paragraph. Callers with a single fixed font and
+    // fixed text can leave it at 0.
+    var measurementVersion: Int = 0
 
     // Measured sizes, so the two passes below don't each independently
     // call `sizeThatFits(.unspecified)` on every subview — that was
@@ -35,14 +44,20 @@ struct WordFlowLayout: Layout {
     // fill changes, which can't affect measurement.
     struct Cache {
         var sizes: [CGSize] = []
+        var version: Int?
     }
 
     func makeCache(subviews: Subviews) -> Cache {
-        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) })
+        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) }, version: measurementVersion)
     }
 
     func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        // The count check isn't redundant with the version: a caller that
+        // leaves measurementVersion at its default still needs its cache
+        // refreshed when children are added or removed.
+        guard cache.version != measurementVersion || cache.sizes.count != subviews.count else { return }
         cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        cache.version = measurementVersion
     }
 
     // Never index `cache.sizes` directly: subview counts genuinely change

@@ -7,6 +7,7 @@ struct ChapterPlayerOptionsSheet: View {
     @Binding var keepScreenOn: Bool
     @Binding var showFloatingPlayer: Bool
     @Binding var autoScrollEnabled: Bool
+    @Binding var wordHighlightEnabled: Bool
     @Binding var fontSize: ReaderFontSize
     @Binding var theme: ReaderTheme
 
@@ -25,6 +26,10 @@ struct ChapterPlayerOptionsSheet: View {
                     title: "Auto-scroll",
                     subtitle: "Follow the currently playing text",
                     isOn: $autoScrollEnabled)
+                row(
+                    title: "Word highlighting",
+                    subtitle: "Highlight each word as it's spoken",
+                    isOn: $wordHighlightEnabled)
                 pickerCard(title: "Font size") {
                     HStack(spacing: 10) {
                         ForEach(ReaderFontSize.allCases) { option in
@@ -184,6 +189,7 @@ struct ChapterPlayerOptionsSheet: View {
                 keepScreenOn: .constant(false),
                 showFloatingPlayer: .constant(true),
                 autoScrollEnabled: .constant(true),
+                wordHighlightEnabled: .constant(true),
                 fontSize: .constant(.medium),
                 theme: .constant(.carbon))
         }
