@@ -122,26 +122,28 @@ final class ChapterSynthesisService {
         let result = try await service.synthesizeDetailed(text: spoken, voice: voice)
         let data = try AudioWAV.data(
             from: result.samples, sampleRate: Double(result.sampleRate), normalize: false)
-        let wordTimings = await deriveWordTimings(
-            chunkText: chunkText, spokenText: spoken, result: result, service: service)
+        let wordTimings = await deriveWordTimings(chunkText: chunkText, result: result, service: service)
         return (data, wordTimings, result.durationSeconds)
     }
 
-    /// Runs the two calls `WordTimingDeriver` needs — the public FST
-    /// normalizer once for the whole chunk, then a memoized
+    /// Runs the one remaining call `WordTimingDeriver` needs — a memoized
     /// `phonemes(for:)` per unique normalized word — and hands the result
     /// to the pure deriver. A vocab/space-token load failure degrades this
     /// one chunk to no word timings rather than failing the whole
     /// Generate/stream; audio still returns either way.
     private static func deriveWordTimings(
-        chunkText: String, spokenText: String, result: KokoroAneSynthesisResult,
-        service: KokoroEngineService
+        chunkText: String, result: KokoroAneSynthesisResult, service: KokoroEngineService
     ) async -> [WordTiming] {
         guard let spaceTokenId = try? service.spaceTokenId() else { return [] }
-        // Normalize the same string synthesis actually received, so the
-        // normalized word list lines up with the tokens it produced;
-        // `chunkText` (newlines intact) stays the display side.
-        let normalizedText = NemoTextNormalizer.normalize(spokenText, language: .english)
+        // The exact text synthesis actually normalized to — straight from
+        // the SDK (FluidInference/FluidAudio#944, the fix for #943 this app
+        // filed), not re-derived here. Re-running the public FST ourselves
+        // used to be both redundant (the SDK already ran it) and risky: its
+        // real path falls back to an internal Swift-side normalizer we have
+        // no way to call when the FST leaves text unchanged, so our own
+        // copy could silently diverge from what was actually spoken. This
+        // is ground truth instead of a reconstruction of it.
+        guard let normalizedText = result.normalizedText else { return [] }
         let normalizedWords = normalizedText.split(whereSeparator: \.isWhitespace).map(String.init)
         var counts: [String: Int] = [:]
         for word in Set(normalizedWords) {

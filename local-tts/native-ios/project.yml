@@ -8,12 +8,14 @@ packages:
   # specific main commit — FluidInference/FluidAudio#915 (merged
   # 2026-09-13), the fix that gives KokoroAneVariant.japanese a real text
   # frontend, isn't in any tagged release yet. Also picks up #918 (a real
-  # ModelHub download-verification bug fix, unrelated to Kokoro) and the
-  # new Chatterbox backends (unused by this app). Revisit once a release
-  # ships that includes 71242fa and switch back to exactVersion.
+  # ModelHub download-verification bug fix, unrelated to Kokoro), the new
+  # Chatterbox backends (unused by this app), and #944 (KokoroAneSynthesisResult
+  # .normalizedText — the fix for #943, an issue this app filed; see
+  # ChapterSynthesisService.deriveWordTimings). Revisit once a release
+  # ships that includes 5343241 and switch back to exactVersion.
   FluidAudio:
     url: https://github.com/FluidInference/FluidAudio
-    revision: 71242fa6df36ed956ee347690df4428a736eb761
+    revision: 5343241cd8a7576890e50925dec666bafc89d324
   # Smoother, rounded icon set replacing SF Symbols in the app's own UI
   # chrome (not a system-level override — SF Symbols are still used
   # wherever a truly native/system look is expected). ISC-licensed,
