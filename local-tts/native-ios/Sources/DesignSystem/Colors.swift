@@ -49,6 +49,118 @@ extension Color {
     }
 }
 
+/// Persistable color themes for long-form reading surfaces. Each theme owns
+/// the complete reader palette so highlights and floating controls remain
+/// legible when moving between dark and light designs.
+enum ReaderTheme: String, CaseIterable, Identifiable {
+    case dark
+    case carbon
+    case claude
+    case chatGPT
+    case midnight
+    case sage
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dark: return "Dark"
+        case .carbon: return "Carbon"
+        case .claude: return "Claude"
+        case .chatGPT: return "ChatGPT"
+        case .midnight: return "Midnight"
+        case .sage: return "Sage"
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .dark, .carbon, .midnight: return .dark
+        case .claude, .chatGPT, .sage: return .light
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .dark: return .black
+        case .carbon: return .appBackground
+        case .claude: return Color(hex: 0xF0EEE6)
+        case .chatGPT: return .white
+        case .midnight: return Color(hex: 0x101525)
+        case .sage: return Color(hex: 0xEEF2E8)
+        }
+    }
+
+    var primaryText: Color {
+        switch self {
+        case .dark: return .white
+        case .carbon: return .appPrimaryText
+        case .claude: return Color(hex: 0x141413)
+        case .chatGPT: return Color(hex: 0x0D0D0D)
+        case .midnight: return Color(hex: 0xEEF0FF)
+        case .sage: return Color(hex: 0x253128)
+        }
+    }
+
+    var secondaryText: Color {
+        switch self {
+        case .dark: return .white.opacity(0.72)
+        case .carbon: return .appMetaText
+        case .claude: return Color(hex: 0x6B6A65)
+        case .chatGPT: return Color(hex: 0x5D5D5D)
+        case .midnight: return Color(hex: 0x9CA6C8)
+        case .sage: return Color(hex: 0x687468)
+        }
+    }
+
+    var controlBackground: Color {
+        switch self {
+        case .dark: return .white.opacity(0.10)
+        case .carbon: return .appSecondaryBackground.opacity(0.92)
+        case .claude: return Color(hex: 0xE8E6DC).opacity(0.94)
+        case .chatGPT: return Color(hex: 0xF4F4F4).opacity(0.94)
+        case .midnight: return Color(hex: 0x1C2440).opacity(0.94)
+        case .sage: return Color(hex: 0xDDE5D5).opacity(0.94)
+        }
+    }
+
+    var controlAccent: Color {
+        switch self {
+        case .dark, .carbon: return .green
+        case .claude, .chatGPT, .midnight, .sage: return wordHighlightBackground
+        }
+    }
+
+    var chunkHighlightBackground: Color {
+        switch self {
+        case .dark: return Color(hex: 0x182B3D)
+        case .carbon: return .chunkHighlightBackground
+        case .claude: return Color(hex: 0xF3DDD3)
+        case .chatGPT: return Color(hex: 0xE5F2FF)
+        case .midnight: return Color(hex: 0x242A4C)
+        case .sage: return Color(hex: 0xD8E4CF)
+        }
+    }
+
+    var wordHighlightBackground: Color {
+        switch self {
+        case .dark: return Color(hex: 0x28669E)
+        case .carbon: return .wordHighlightBackground
+        case .claude: return Color(hex: 0xD97757)
+        case .chatGPT: return Color(hex: 0x0285FF)
+        case .midnight: return Color(hex: 0x6858C9)
+        case .sage: return Color(hex: 0x55705A)
+        }
+    }
+
+    var highlightedText: Color {
+        switch self {
+        case .dark, .carbon, .chatGPT, .midnight, .sage: return .white
+        case .claude: return Color(hex: 0x141413)
+        }
+    }
+}
+
 extension LinearGradient {
     /// Deterministic placeholder gradient keyed off a stable string seed
     /// (a book id) — the same seed always yields the same colors, so a

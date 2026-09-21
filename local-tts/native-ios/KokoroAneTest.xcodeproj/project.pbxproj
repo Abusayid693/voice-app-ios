@@ -62,6 +62,7 @@
 		7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */; };
 		7E87BB9E975F34CA26F70815 /* ChapterSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BACFBFFE9CED64254A3175 /* ChapterSplitter.swift */; };
 		8170183C42154B68C981A0E5 /* NativeTabSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63519E427B1C986C43392764 /* NativeTabSelector.swift */; };
+		8289F9482A21AD40BA5A82E2 /* Hugeicons in Frameworks */ = {isa = PBXBuildFile; productRef = 7CD848AEAD81E76358290CE3 /* Hugeicons */; };
 		83975B79CB40408F447C561F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA21F0B398C4B3DA5EE02D6 /* AboutView.swift */; };
 		858CED334C1AC7A9F9B8D1D7 /* SupertonicVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
@@ -96,6 +97,7 @@
 		CD66FC7950290E329B1C8F43 /* Lattice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393FDE207C524D2DE60C4A72 /* Lattice.swift */; };
 		CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */; };
 		CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5A425A4486E4739F80386 /* VoiceCloneViewModel.swift */; };
+		D0F97E1D33CBCEA2F46D4367 /* ChapterPlayerOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */; };
 		D4ECE0CB08DE017CE83DBFAE /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = D222238DD73C06B63B875D64 /* Snapshot.swift */; };
 		DA721668144A8C972C8117B9 /* ChapterPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */; };
 		DAD6F2DDAC26ACA71E2981EF /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F6E28A4B26F86F7C45667AE /* Chapter.swift */; };
@@ -158,6 +160,7 @@
 		5D1118094C4B055386486F9B /* BundledMandarinVoices */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledMandarinVoices; sourceTree = SOURCE_ROOT; };
 		62AD94F95142992881570C3F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		63519E427B1C986C43392764 /* NativeTabSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabSelector.swift; sourceTree = "<group>"; };
+		6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerOptionsSheet.swift; sourceTree = "<group>"; };
 		6AE3F8B4AA40B1B443FC700F /* ChapterGenerationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterGenerationStore.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
@@ -232,6 +235,7 @@
 			files = (
 				6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */,
 				E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */,
+				8289F9482A21AD40BA5A82E2 /* Hugeicons in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -489,6 +493,7 @@
 		8285572C57692FE933B5D8D0 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */,
 				85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */,
 				FC31D120E0533E3A82336C29 /* ChapterRow.swift */,
 				9E1A5A5D02A341D714F22518 /* ChaptersListView.swift */,
@@ -666,6 +671,7 @@
 			packageProductDependencies = (
 				CE49DCF4046639135F678D6A /* FluidAudio */,
 				A0D045B3092A9E63F40DEA50 /* LucideSwift */,
+				7CD848AEAD81E76358290CE3 /* Hugeicons */,
 			);
 			productName = KokoroAneTest;
 			productReference = 1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */;
@@ -697,6 +703,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */,
 				F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -739,6 +746,7 @@
 				60F12CEE2672B54951D1CC56 /* ChapterAudioPlayer.swift in Sources */,
 				A2439C5FE657461B63A1D7F4 /* ChapterAudioStore.swift in Sources */,
 				4DBB653E2E5D26CC015C740C /* ChapterGenerationStore.swift in Sources */,
+				D0F97E1D33CBCEA2F46D4367 /* ChapterPlayerOptionsSheet.swift in Sources */,
 				DA721668144A8C972C8117B9 /* ChapterPlayerView.swift in Sources */,
 				AC30C30CDFEC299A40972E99 /* ChapterRef.swift in Sources */,
 				1BE40BCABD958FBDC5F77653 /* ChapterRow.swift in Sources */,
@@ -1023,6 +1031,14 @@
 				revision = 5343241cd8a7576890e50925dec666bafc89d324;
 			};
 		};
+		CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/iSapozhnik/hugeicons-swift";
+			requirement = {
+				kind = revision;
+				revision = 81caddf04ce5352652ffaa619562f02477dbf35d;
+			};
+		};
 		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ajaxjiang96/lucide-swift";
@@ -1034,6 +1050,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		7CD848AEAD81E76358290CE3 /* Hugeicons */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */;
+			productName = Hugeicons;
+		};
 		A0D045B3092A9E63F40DEA50 /* LucideSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */;

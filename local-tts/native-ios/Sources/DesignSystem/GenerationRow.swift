@@ -1,3 +1,4 @@
+import Hugeicons
 import LucideSwift
 import SwiftUI
 
@@ -34,7 +35,12 @@ struct GenerationRow: View {
 
             Spacer()
 
-            LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
+            Hugeicons.play.image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.appPrimaryText)
+                .frame(width: 22, height: 22)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())

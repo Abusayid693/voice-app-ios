@@ -1,5 +1,31 @@
 import SwiftUI
 
+/// Persistable reading-size choices used by long-form reader surfaces.
+/// Medium preserves the app's original 17-point reading size.
+enum ReaderFontSize: String, CaseIterable, Identifiable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
+
+    var font: Font {
+        switch self {
+        case .small: return .system(size: 15, weight: .regular)
+        case .medium: return .system(size: 17, weight: .regular)
+        case .large: return .system(size: 21, weight: .regular)
+        }
+    }
+}
+
 /// The app's text-style scale — every piece of text reads from one of
 /// these cases via `.appText(_:)` rather than composing `.font(...)` +
 /// `.foregroundStyle(...)` by hand. Color lives in the style, not just

@@ -1,4 +1,4 @@
-import LucideSwift
+import Hugeicons
 import SwiftUI
 
 /// One voice's row in Trending voices: cover image, name, a short persona
@@ -30,7 +30,13 @@ struct PreviewVoiceCard: View {
 
                 Spacer(minLength: 8)
 
-                LucideIcon(isPreviewing ? .circlePause : .circlePlay, size: 22, color: Color.appTertiaryText)
+                (isPreviewing ? Hugeicons.pause : Hugeicons.play)
+                    .image()
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(Color.appTertiaryText)
+                    .frame(width: 22, height: 22)
             }
             .padding(.horizontal, 14)
             .frame(width: 310)

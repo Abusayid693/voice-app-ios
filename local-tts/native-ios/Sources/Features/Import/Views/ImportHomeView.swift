@@ -1,3 +1,4 @@
+import Hugeicons
 import LucideSwift
 import SwiftUI
 
@@ -391,7 +392,7 @@ struct ImportHomeView: View {
     // (Instant Clone / Upload file) as the Voices tab's own entry point.
     private var createYourOwnVoiceRow: some View {
         CreateYourOwnRow(
-            icon: .mic, iconStyle: .filled, title: "Create your own voice",
+            icon: Hugeicons.mic01, title: "Create your own voice",
             subtitle: "Clone your voice in seconds"
         ) {
             isCreateVoicePresented = true
@@ -456,7 +457,7 @@ struct ImportHomeView: View {
 
     private var createYourOwnBookRow: some View {
         CreateYourOwnRow(
-            icon: .circlePlus, title: "Create your own book",
+            icon: Hugeicons.plusSign, title: "Create your own book",
             subtitle: "Craft your own story in seconds"
         ) {}
     }
@@ -500,7 +501,12 @@ struct ImportHomeView: View {
                 Text(updatedLabel).appText(.labelDim)
             }
             Spacer()
-            LucideIcon(.circlePlay, size: 22, color: Color.appPrimaryText)
+            Hugeicons.play.image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.appPrimaryText)
+                .frame(width: 22, height: 22)
         }
         .contentShape(Rectangle())
     }

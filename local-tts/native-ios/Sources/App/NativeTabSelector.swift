@@ -1,4 +1,4 @@
-import LucideSwift
+import Hugeicons
 import SwiftUI
 import UIKit
 
@@ -45,9 +45,10 @@ struct NativeTabSelector: UIViewRepresentable {
         return control
     }
 
-    // Pins the height explicitly so it stays in sync with CustomTabBar's layout.
+    // Pins the height explicitly so it stays in sync with CustomTabBar's
+    // 60-point quick-action button.
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: 54)
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: 60)
     }
 
     func updateUIView(_ uiView: UISegmentedControl, context: Context) {
@@ -59,14 +60,19 @@ struct NativeTabSelector: UIViewRepresentable {
     }
 
     private func tabItemView(_ tab: RootTab) -> some View {
-        VStack(spacing: 2) {
-            LucideIcon(tab.icon, size: 22, color: Color.appPrimaryText)
+        VStack(spacing: 3) {
+            tab.icon.image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.appPrimaryText)
+                .frame(width: 24, height: 24)
             Text(tab.title)
-                .font(.system(size: 9))
+                .font(.system(size: 10))
                 .foregroundStyle(Color.appPrimaryText)
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 6.5)
+        .padding(.horizontal, 5)
     }
 
     final class Coordinator: NSObject {

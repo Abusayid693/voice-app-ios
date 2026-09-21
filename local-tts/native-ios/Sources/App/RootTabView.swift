@@ -1,4 +1,4 @@
-import LucideSwift
+import Hugeicons
 import SwiftUI
 
 enum RootTab: Hashable, CaseIterable, Identifiable {
@@ -15,12 +15,12 @@ enum RootTab: Hashable, CaseIterable, Identifiable {
         }
     }
 
-    var icon: LucideIconName {
+    var icon: HugeiconsAsset {
         switch self {
-        case .home: return .house
-        case .library: return .library
-        case .tools: return .wrench
-        case .voices: return .audioWaveform
+        case .home: return Hugeicons.home01
+        case .library: return Hugeicons.folderLibrary
+        case .tools: return Hugeicons.bolt
+        case .voices: return Hugeicons.audioWave02
         }
     }
 }
