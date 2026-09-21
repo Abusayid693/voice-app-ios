@@ -50,7 +50,21 @@ struct ChapterPlayerView: View {
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
 
     @State private var isAutoScrollPaused = false
-    @State private var visibleParagraphs: Set<Int> = []
+    // Reference type, not @State, for the same reason as groupHeightsBox
+    // below: rows cross the scroll-visibility threshold constantly during
+    // a flick, and as @State every one of those crossings re-evaluated
+    // this whole view — the entire ForEach over every paragraph — on top
+    // of the 4Hz ticker and the 12.5Hz highlight poll already running.
+    // That made scrolling-while-highlighting janky. Its only consumer is
+    // the "jump to current word" pill, which polls (see readAlong's
+    // overlay) rather than needing a publish.
+    private final class VisibleParagraphsBox {
+        var indices: Set<Int> = []
+    }
+    @State private var visibleParagraphsBox = VisibleParagraphsBox()
+    // Fixed once, so the TimelineViews below get a stable schedule value
+    // instead of a fresh one built from `.now` on every body pass.
+    @State private var pollAnchor = Date()
     @State private var isPlayerCollapsed = false
     @State private var displayedIsPlaying = false
     @State private var playPauseScale: CGFloat = 1
@@ -113,6 +127,9 @@ struct ChapterPlayerView: View {
     @AppStorage("chapterPlayerKeepScreenOn") private var keepScreenOn = false
     @AppStorage("chapterPlayerShowFloatingPlayer") private var showFloatingPlayer = true
     @AppStorage("chapterPlayerAutoScrollEnabled") private var autoScrollEnabled = true
+    // Off also stops the 12.5Hz poll that drives the highlight — the
+    // paragraph-level box still marks where playback is.
+    @AppStorage("chapterPlayerWordHighlightEnabled") private var wordHighlightEnabled = true
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
     @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
 
@@ -151,6 +168,7 @@ struct ChapterPlayerView: View {
                 keepScreenOn: $keepScreenOn,
                 showFloatingPlayer: $showFloatingPlayer,
                 autoScrollEnabled: $autoScrollEnabled,
+                wordHighlightEnabled: $wordHighlightEnabled,
                 fontSize: $readerFontSize,
                 theme: $readerTheme)
         }
@@ -528,9 +546,9 @@ struct ChapterPlayerView: View {
                             .modifier(
                                 ReaderScrollVisibilityObserver { isVisible in
                                     if isVisible {
-                                        visibleParagraphs.insert(groupIndex)
+                                        visibleParagraphsBox.indices.insert(groupIndex)
                                     } else {
-                                        visibleParagraphs.remove(groupIndex)
+                                        visibleParagraphsBox.indices.remove(groupIndex)
                                     }
                                 })
                     }
@@ -554,18 +572,25 @@ struct ChapterPlayerView: View {
                 withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
             }
             .overlay(alignment: .top) {
-                if autoScrollEnabled, isAutoScrollPaused, isCurrentParagraphOffscreen {
-                    TimelineView(.periodic(from: .now, by: 0.08)) { _ in
-                        currentWordResumeButton {
-                            isAutoScrollPaused = false
-                            if let (groupIndex, anchor) = scrollTarget(
-                                forChunk: chapterPlayer.currentChunkIndex)
-                            {
-                                withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+                // Both conditions here are @State that flip once per scroll,
+                // not per scroll event. Whether the playing paragraph is
+                // actually off-screen is checked INSIDE the poll instead,
+                // since that reads visibleParagraphsBox, which deliberately
+                // doesn't publish — see its declaration.
+                if autoScrollEnabled, isAutoScrollPaused {
+                    TimelineView(.periodic(from: pollAnchor, by: 0.08)) { _ in
+                        if isCurrentParagraphOffscreen {
+                            currentWordResumeButton {
+                                isAutoScrollPaused = false
+                                if let (groupIndex, anchor) = scrollTarget(
+                                    forChunk: chapterPlayer.currentChunkIndex)
+                                {
+                                    withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+                                }
                             }
+                            .padding(.top, 8)
                         }
                     }
-                    .padding(.top, 8)
                 }
             }
         }
@@ -575,7 +600,7 @@ struct ChapterPlayerView: View {
         guard let groupIndex = effectiveGroups.firstIndex(where: {
             $0.contains(chapterPlayer.currentChunkIndex)
         }) else { return false }
-        return !visibleParagraphs.contains(groupIndex)
+        return !visibleParagraphsBox.indices.contains(groupIndex)
     }
 
     private var currentSpokenWord: String {
@@ -650,10 +675,14 @@ struct ChapterPlayerView: View {
             paragraphWordItems.indices.contains(groupIndex)
             ? paragraphWordItems[groupIndex] : wordItems(for: group)
         let revision = paragraphRevisions.indices.contains(groupIndex) ? paragraphRevisions[groupIndex] : 0
-        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
+        // Position only — NOT gated on isPlaying, so the paragraph box and
+        // its last-highlighted word stay put on pause instead of both
+        // disappearing. What isPlaying actually decides is below: whether
+        // this row needs to keep ticking to track a moving position.
+        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex)
         let hasAnyWordTimings = items.contains { $0.wordIndexInChunk != nil }
-
-        let isPolling = hasAnyWordTimings && isCurrentGroup
+        let showsWordHighlight = wordHighlightEnabled && hasAnyWordTimings && isCurrentGroup
+        let isPolling = showsWordHighlight && chapterPlayer.isPlaying
 
         // One view type whether or not this row is the playing one. Putting
         // the TimelineView inside an if/else made the playing row a
@@ -663,11 +692,11 @@ struct ChapterPlayerView: View {
         // it. Only the tick interval varies now; a non-playing row's
         // schedule never fires in practice, and `.equatable()` still gates
         // the body either way.
-        return TimelineView(.periodic(from: .now, by: isPolling ? 0.08 : 3600)) { _ in
+        return TimelineView(.periodic(from: pollAnchor, by: isPolling ? 0.08 : 3600)) { _ in
             ParagraphRow(
                 items: items, itemsRevision: revision,
-                highlightedChunkIndex: isPolling ? chapterPlayer.currentChunkIndex : nil,
-                highlightedWordIndex: isPolling
+                highlightedChunkIndex: showsWordHighlight ? chapterPlayer.currentChunkIndex : nil,
+                highlightedWordIndex: showsWordHighlight
                     ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
@@ -710,8 +739,22 @@ struct ChapterPlayerView: View {
                 && lhs.fontSize == rhs.fontSize && lhs.theme == rhs.theme
         }
 
+        // The two inputs that can change a word's measured size. Colors
+        // (which is all the highlight changes) can't, so the ~12x/sec
+        // re-runs while this paragraph plays reuse the measured sizes
+        // instead of re-measuring every word each time.
+        private var measurementVersion: Int {
+            var hasher = Hasher()
+            hasher.combine(itemsRevision)
+            hasher.combine(fontSize)
+            return hasher.finalize()
+        }
+
         var body: some View {
-            WordFlowLayout(horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6) {
+            WordFlowLayout(
+                horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6,
+                measurementVersion: measurementVersion
+            ) {
                 // items.indices, not Array(items.enumerated()) — the
                 // latter allocates a fresh tuple array on every body run,
                 // which for the playing paragraph is 12x/sec.

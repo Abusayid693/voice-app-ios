@@ -28,6 +28,11 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.rehanchoudhury.kokoroanetest.pdf-import</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

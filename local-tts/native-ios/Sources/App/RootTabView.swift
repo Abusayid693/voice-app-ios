@@ -70,6 +70,7 @@ struct RootTabView: View {
     // reason: two presentation-affecting writes in one SwiftUI transaction
     // can silently drop one of them.
     @State private var pendingWriteText = false
+    @State private var pendingPDFImport = false
 
     init(app: AppEnvironment) {
         self.app = app
@@ -98,11 +99,19 @@ struct RootTabView: View {
                     selectedTab = .home
                     app.tts.isWriteTextPresented = true
                 }
+                if pendingPDFImport {
+                    pendingPDFImport = false
+                    selectedTab = .home
+                    app.pdfImports.requestDocumentPicker()
+                }
             }
         ) {
             QuickActionsSheet { action in
                 if action == .writeText {
                     pendingWriteText = true
+                }
+                if action == .uploadFile || action == .uploadBook {
+                    pendingPDFImport = true
                 }
                 isQuickActionsPresented = false
             }
@@ -115,7 +124,8 @@ struct RootTabView: View {
     private var tabContent: some View {
         ZStack {
             ImportHomeView(
-                viewModel: app.tts, libraryViewModel: app.library, packs: app.tts.packs, app: app
+                viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
+                packs: app.tts.packs, app: app
             )
             .opacity(selectedTab == .home ? 1 : 0)
             .allowsHitTesting(selectedTab == .home)

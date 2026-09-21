@@ -12,10 +12,10 @@ struct LibraryTabView: View {
     // rather than as three separate parameters. See AppEnvironment.
     let app: AppEnvironment
     @State private var viewingGeneration: SavedGeneration?
-    @State private var openProjectID: UUID?
+    @State private var openProject: SavedGeneration?
     @State private var sortNewestFirst = true
 
-    private var sortedGenerations: [SavedGeneration] {
+    private var sortedGenerations: [SavedGenerationSummary] {
         sortNewestFirst
             ? viewModel.savedGenerations.sorted { $0.createdAt > $1.createdAt }
             : viewModel.savedGenerations.sorted { $0.createdAt < $1.createdAt }
@@ -37,7 +37,7 @@ struct LibraryTabView: View {
                                         Label(title: { Text("Delete") }, icon: { LucideIcon(.trash) })
                                     }
                                     Button {
-                                        viewingGeneration = generation
+                                        viewingGeneration = viewModel.project(for: generation.id)
                                     } label: {
                                         Label(title: { Text("View Text") }, icon: { LucideIcon(.pencil) })
                                     }
@@ -64,16 +64,14 @@ struct LibraryTabView: View {
                     }
                 }
             }
-            .navigationDestination(item: $openProjectID) { projectID in
-                if let project = viewModel.savedGenerations.first(where: { $0.id == projectID }) {
-                    ChaptersListView(
-                        project: project, chapterPlayer: app.chapterPlayer,
-                        generationStore: app.generationStore, viewModel: app.tts)
-                }
+            .navigationDestination(item: $openProject) { project in
+                ChaptersListView(
+                    project: project, chapterPlayer: app.chapterPlayer,
+                    generationStore: app.generationStore, viewModel: app.tts)
             }
             // Root tab bar/floating "+" button only at this screen's own
             // root — see NavigationChromeVisibility.
-            .tabRootChrome(app.navigationChrome, isPushed: openProjectID != nil)
+            .tabRootChrome(app.navigationChrome, isPushed: openProject != nil)
         }
         .preferredColorScheme(.dark)
         .sheet(item: $viewingGeneration) { generation in
@@ -94,19 +92,19 @@ struct LibraryTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func row(for generation: SavedGeneration) -> some View {
+    private func row(for generation: SavedGenerationSummary) -> some View {
         GenerationRow(
             icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
             iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
-            title: generation.text,
+            title: generation.title,
             subtitle:
                 "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
             onTap: { open(generation) }
         )
     }
 
-    private func open(_ generation: SavedGeneration) {
-        openProjectID = generation.id
+    private func open(_ generation: SavedGenerationSummary) {
+        openProject = viewModel.project(for: generation.id)
     }
 }
 
