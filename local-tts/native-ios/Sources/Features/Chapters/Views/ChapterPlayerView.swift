@@ -4,7 +4,10 @@ import SwiftUI
 /// The music-player screen for a chapter: the whole page is the read-along
 /// text, with a compact, translucent transport bar floating over its
 /// bottom (scrubber on top, avatar + −10s/play-pause/+10s below) — text
-/// keeps scrolling underneath it, it doesn't reserve its own space.
+/// keeps scrolling underneath it, it doesn't reserve its own space. The
+/// transport bar fades out after a few seconds of inactivity (so it
+/// doesn't sit over the text while the user's just reading/listening) and
+/// fades back in on any tap on the page — see showControlsTemporarily.
 /// Reachable both from a saved chapter (`ChaptersListView` → `playSaved`)
 /// and from Play on one that hasn't been generated yet (→ `stream`) — the
 /// two feed identical scrubber/highlighting behavior through
@@ -43,6 +46,19 @@ struct ChapterPlayerView: View {
     // background in readAlong — used to estimate which chunk within a
     // multi-chunk paragraph a tap landed on (see handleParagraphTap).
     @State private var groupHeights: [Int: CGFloat] = [:]
+    // Whether the floating transport bar is showing — starts visible, then
+    // fades out after a few seconds of no interaction and back in on any
+    // tap. See showControlsTemporarily, called from every real interaction
+    // point (transport buttons, scrubbing, tap-to-seek) rather than relying
+    // on gesture propagation from one page-wide tap, which could otherwise
+    // get eaten by a paragraph row's own tap-to-seek gesture.
+    @State private var isControlsVisible = true
+    @State private var hideControlsTask: Task<Void, Never>?
+    // Play/pause button pulses opacity while nothing is playable yet
+    // (chapterPlayer.isBuffering — true entering the player before
+    // streaming's first chunk lands, or between chunks if playback ever
+    // catches up to the synthesis frontier).
+    @State private var isPulsingPlayButton = false
 
     private var chapter: Chapter? {
         project.chapters.first { $0.index == chapterRef.chapterIndex }
@@ -58,18 +74,63 @@ struct ChapterPlayerView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             readAlong
-            floatingPlayer
+            if isControlsVisible {
+                floatingPlayer
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: isControlsVisible)
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle(chapter?.title ?? "Chapter")
         .navigationBarTitleDisplayMode(.inline)
         .preferredColorScheme(.dark)
+        // Catch-all for a tap that lands on plain background rather than a
+        // specific control — simultaneousGesture so it never blocks a
+        // paragraph row's own tap-to-seek or the ScrollView's own drag.
+        .simultaneousGesture(TapGesture().onEnded { showControlsTemporarily() })
         .onChange(of: chapterPlayer.elapsed) { _, newValue in
             guard !isScrubbing else { return }
             scrubberValue = newValue
         }
         .onAppear {
             paragraphGroups = computeParagraphGroups()
+            scheduleHideControls()
+        }
+    }
+
+    // Cancels any pending auto-hide, shows the bar (if it was hidden), and
+    // starts a fresh countdown — call this from every real interaction
+    // with the page, not just the catch-all background tap.
+    private func showControlsTemporarily() {
+        hideControlsTask?.cancel()
+        isControlsVisible = true
+        scheduleHideControls()
+    }
+
+    private func scheduleHideControls() {
+        hideControlsTask = Task {
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            // Skip this cycle rather than hiding out from under an active
+            // scrub — endScrub already calls showControlsTemporarily,
+            // which reschedules once the user actually lets go.
+            guard !Task.isCancelled, !isScrubbing else { return }
+            isControlsVisible = false
+        }
+    }
+
+    // Starting a `.repeatForever` animation from `false` toggles it into
+    // an indefinite back-and-forth between 1 and 0.5 opacity; setting it
+    // back to `false` (with its own short, non-repeating animation) is
+    // what stops it once something is actually playable.
+    private func updatePlayButtonPulse(isBuffering: Bool) {
+        if isBuffering {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                isPulsingPlayButton = true
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isPulsingPlayButton = false
+            }
         }
     }
 
@@ -140,6 +201,7 @@ struct ChapterPlayerView: View {
             Slider(
                 value: $scrubberValue, in: 0...max(chapterPlayer.duration, 1),
                 onEditingChanged: { editing in
+                    showControlsTemporarily()
                     if editing {
                         isScrubbing = true
                         chapterPlayer.beginScrub()
@@ -166,16 +228,30 @@ struct ChapterPlayerView: View {
             Spacer()
 
             HStack(spacing: 28) {
-                skipButton(icon: .rotateCcw, label: "10") { chapterPlayer.skipBackward() }
+                skipButton(icon: .rotateCcw, label: "10") {
+                    showControlsTemporarily()
+                    chapterPlayer.skipBackward()
+                }
 
-                Button(action: chapterPlayer.togglePlayPause) {
+                Button(action: {
+                    showControlsTemporarily()
+                    chapterPlayer.togglePlayPause()
+                }) {
                     LucideIcon(
                         chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 44,
                         color: Color.appPrimaryText)
                 }
                 .buttonStyle(.plain)
+                .opacity(isPulsingPlayButton ? 0.5 : 1)
+                .onAppear { updatePlayButtonPulse(isBuffering: chapterPlayer.isBuffering) }
+                .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
+                    updatePlayButtonPulse(isBuffering: isBuffering)
+                }
 
-                skipButton(icon: .rotateCw, label: "10") { chapterPlayer.skipForward() }
+                skipButton(icon: .rotateCw, label: "10") {
+                    showControlsTemporarily()
+                    chapterPlayer.skipForward()
+                }
             }
 
             Spacer()
@@ -250,6 +326,7 @@ struct ChapterPlayerView: View {
             }
             .simultaneousGesture(
                 DragGesture().onChanged { _ in
+                    showControlsTemporarily()
                     isUserScrolling = true
                     scrollResumeTask?.cancel()
                     scrollResumeTask = Task {
@@ -319,78 +396,100 @@ struct ChapterPlayerView: View {
         }
         .padding(6)
         .background(
-            isCurrentGroup ? Color.appSecondaryBackground : Color.clear,
+            isCurrentGroup ? Color.chunkHighlightBackground : Color.clear,
             in: RoundedRectangle(cornerRadius: 8))
     }
 
-    // Concatenates every chunk in this paragraph group into one Text, so a
-    // paragraph the synthesis chunker had to cut for its ~350-char budget
-    // still wraps and reads as continuous prose instead of breaking
-    // mid-line at the cut. Coloring, not construction, is what changes
-    // with playback state — the whole group always builds the same way,
-    // current or not (the rule that fixed the earlier pause/resume reflow
-    // bug: swapping to a differently-measuring Text construction reflows
-    // everything below it).
+    // Flows every chunk in this paragraph group's words through
+    // WordFlowLayout, so a paragraph the synthesis chunker had to cut for
+    // its ~350-char budget still wraps and reads as continuous prose
+    // instead of breaking mid-line at the cut — while still letting the
+    // single currently-playing word carry its own rounded background
+    // highlight, which plain Text concatenation can't do (there's no way
+    // to give one piece within a `Text + Text` run its own background).
+    // All word text is one color at full opacity; only the word background
+    // (and the paragraph box in paragraphGroupView) signal position now.
+    // Every word carries constant padding regardless of highlight state —
+    // varying it would resize the word and reflow the paragraph as the
+    // highlight moves, the same class of bug the earlier construction-
+    // method-consistency fix addressed.
     private func paragraphText(group: [Int]) -> some View {
         let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
         let currentChunkIndex = chapterPlayer.currentChunkIndex
         let currentWord =
             isCurrentGroup ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil
 
-        var composed = Text("")
-        var isFirstPiece = true
-        func append(_ piece: Text, separator: String) {
-            if isFirstPiece {
-                composed = piece
-                isFirstPiece = false
-            } else {
-                composed = composed + Text(separator) + piece
+        return WordFlowLayout(horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6) {
+            ForEach(Array(wordItems(for: group).enumerated()), id: \.offset) { _, item in
+                let isHighlighted =
+                    isCurrentGroup && item.chunkIndex == currentChunkIndex && item.wordIndexInChunk == currentWord
+                Text(item.text)
+                    .font(AppTextStyle.reading.font)
+                    .foregroundStyle(Color.appPrimaryText)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 1)
+                    .background(
+                        isHighlighted ? Color.wordHighlightBackground : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 4))
+                    .lineBreaksBefore(item.lineBreaksBefore)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
+    // One entry per displayed word across a paragraph group's chunks,
+    // flattening chunk boundaries away — WordFlowLayout wraps this exactly
+    // like continuous prose. `wordIndexInChunk` is nil for a chunk with no
+    // word timings (non-English voice, or — streaming — not yet
+    // synthesized): its words still display via
+    // WordTimingDeriver.splitPreservingSeparators (the same real-separator
+    // splitter chunk text itself uses), they just can never be the
+    // highlighted word, matching the whole-chunk-only fallback this had
+    // before per-word highlighting existed.
+    private struct FlowWordItem {
+        let text: String
+        let chunkIndex: Int
+        let wordIndexInChunk: Int?
+        let lineBreaksBefore: Int
+    }
+
+    private func wordItems(for group: [Int]) -> [FlowWordItem] {
+        var items: [FlowWordItem] = []
         for chunkIndex in group {
             let timings = chapterPlayer.wordTimings(forChunk: chunkIndex)
-            let isThisChunkCurrent = isCurrentGroup && chunkIndex == currentChunkIndex
             let isFirstChunkInGroup = chunkIndex == group.first
             if timings.isEmpty {
-                // No word timings for this chunk (non-English voice, or —
-                // during streaming — not yet synthesized) — one muted
-                // piece for its whole text, same fallback as before
-                // grouping existed.
-                let piece = Text(chapterPlayer.chunkTexts[chunkIndex])
-                    .foregroundStyle(isThisChunkCurrent ? Color.appPrimaryText : Color.appSecondaryText)
-                append(piece, separator: isFirstChunkInGroup ? "" : " ")
+                let tokens = WordTimingDeriver.splitPreservingSeparators(chapterPlayer.chunkTexts[chunkIndex])
+                for (i, token) in tokens.enumerated() {
+                    let breaks = (isFirstChunkInGroup && i == 0) || i == 0
+                        ? 0 : token.precedingSeparator.filter { $0 == "\n" }.count
+                    items.append(
+                        FlowWordItem(
+                            text: token.word, chunkIndex: chunkIndex, wordIndexInChunk: nil,
+                            lineBreaksBefore: breaks))
+                }
             } else {
                 for (i, timing) in timings.enumerated() {
-                    let isCurrentWord = isThisChunkCurrent && i == currentWord
-                    let piece = Text(timing.word)
-                        .foregroundStyle(isCurrentWord ? Color.appPrimaryText : Color.appSecondaryText)
                     // A boundary INSIDE one group is, by definition, never
                     // a real line break (that's what makes it one group
-                    // instead of two) — the chunker drops the actual
-                    // whitespace at a chunk cut, so a plain space is
-                    // always correct there. Only within a single chunk's
-                    // own words does the real precedingSeparator (which
-                    // can be "\n"/"\n\n") apply.
-                    let separator: String
-                    if isFirstChunkInGroup && i == 0 {
-                        separator = ""
-                    } else if i == 0 {
-                        separator = " "
-                    } else {
-                        separator = timing.precedingSeparator
-                    }
-                    append(piece, separator: separator)
+                    // instead of two), so the first word of every chunk
+                    // after the group's first just flows on — only a real
+                    // precedingSeparator ("\n"/"\n\n", from a chunk's own
+                    // internal words) forces a break.
+                    let breaks = (isFirstChunkInGroup && i == 0) || i == 0
+                        ? 0 : timing.precedingSeparator.filter { $0 == "\n" }.count
+                    items.append(
+                        FlowWordItem(
+                            text: timing.word, chunkIndex: chunkIndex, wordIndexInChunk: i,
+                            lineBreaksBefore: breaks))
                 }
             }
         }
-
-        return composed
-            .font(AppTextStyle.reading.font)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        return items
     }
 
     private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {
+        showControlsTemporarily()
         let target: Int
         if group.count > 1 {
             let height = groupHeights[groupIndex] ?? 0

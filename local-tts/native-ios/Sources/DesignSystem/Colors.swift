@@ -32,6 +32,13 @@ extension Color {
     static let highlightBadgeBackground = Color(hex: 0xF6F6F6)
     static let highlightBadgeText = Color(hex: 0x000000)
 
+    // ChapterPlayerView's read-along: the currently-playing paragraph's
+    // background box, and the currently-playing word's own highlight pill
+    // within it — two different colors/scopes, not one reused at two
+    // opacities, so each can be tuned independently.
+    static let chunkHighlightBackground = Color(hex: 0x0E2439)
+    static let wordHighlightBackground = Color(hex: 0x1F5182)
+
     init(hex: UInt32) {
         self.init(
             .sRGB,

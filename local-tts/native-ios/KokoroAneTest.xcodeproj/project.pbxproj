@@ -81,6 +81,7 @@
 		A8904E7303B6816E970F89F9 /* ModelPreparingNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFF2153924F4CFABD8363417 /* ModelPreparingNotice.swift */; };
 		AA769E6B751D9894A65C6E4C /* DiskStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */; };
 		AC30C30CDFEC299A40972E99 /* ChapterRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4061CD489CD60ADA8C80E1DC /* ChapterRef.swift */; };
+		ACB598A2C981A084B1879C13 /* WordFlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 328664020D30E584E6F8336D /* WordFlowLayout.swift */; };
 		B0A5DC3ACF81E9B45FD8050D /* KokoroTextChunker.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D2324794240DBFFFD165A7 /* KokoroTextChunker.swift */; };
 		B3EDCBFDA125A597CC36EBB8 /* OpenLibraryBookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E725C92CB25C4424D6DFDE /* OpenLibraryBookService.swift */; };
 		B48D061C014B0B1E8233E5CA /* VoiceCloneRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29DEF9399180D4508313E7B /* VoiceCloneRoute.swift */; };
@@ -135,6 +136,7 @@
 		3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroAneTestApp.swift; sourceTree = "<group>"; };
 		30A3AE469CA3D6649CCD731F /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		30AF26904C7C9DDCCD962BD2 /* ChapterSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterSynthesisService.swift; sourceTree = "<group>"; };
+		328664020D30E584E6F8336D /* WordFlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordFlowLayout.swift; sourceTree = "<group>"; };
 		333D432EC9388D7C22E5D81F /* SupertonicLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupertonicLanguage.swift; sourceTree = "<group>"; };
 		336FA80C01B8751C4A246C5D /* CustomKokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CustomKokoroModel; sourceTree = SOURCE_ROOT; };
 		344A4ABF20807BF76484A45D /* LibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryViewModel.swift; sourceTree = "<group>"; };
@@ -518,6 +520,7 @@
 				270B63C767FECC0A2F841AFE /* Typography.swift */,
 				EBAD87C7410FFA103C87B053 /* VoiceCard.swift */,
 				BEED11653277D7A616018B63 /* VoiceCoverArt.swift */,
+				328664020D30E584E6F8336D /* WordFlowLayout.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -822,6 +825,7 @@
 				19D8C1A9FDD2C430A18F8359 /* VoicesTabView.swift in Sources */,
 				4016C37E42E714844E7B16CB /* WavConcatenator.swift in Sources */,
 				B51968532673117E229B85EE /* Web.swift in Sources */,
+				ACB598A2C981A084B1879C13 /* WordFlowLayout.swift in Sources */,
 				9E408C97CB25D574413B12F7 /* WordTiming.swift in Sources */,
 				7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */,
 			);
