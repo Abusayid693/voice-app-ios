@@ -82,6 +82,18 @@ struct ChapterPlayerView: View {
     // stays O(1) and runs on every publish.
     @State private var paragraphWordItems: [[FlowWordItem]] = []
     @State private var paragraphRevisions: [Int] = []
+    // Monotonic, never reused: a revision's only job is to be *different*
+    // from the value a row last rendered with, since ParagraphRow's `==`
+    // deliberately doesn't compare `items`. Per-row counters that restart
+    // at 0 (what this used to do on a group-count change) can hand a row
+    // the same revision it already had alongside completely different
+    // content — `==` then reports equal, SwiftUI skips the body, and the
+    // row keeps rendering stale text until some unrelated compared field
+    // changes. That's what made a paragraph render correctly and then
+    // visibly collapse the moment playback reached it (flipping
+    // isCurrentGroup was the unrelated change that finally forced a
+    // rebuild).
+    @State private var revisionCounter = 0
     // Reference type, not @State — the tap-position-estimate height
     // measurement in readAlong's GeometryReader fires on layout, not on a
     // meaningful content change, so writing it must not invalidate the
@@ -161,6 +173,13 @@ struct ChapterPlayerView: View {
         .onChange(of: chapterPlayer.duration) { _, _ in
             recomputeWordItems()
         }
+        // Grouping was computed only in .onAppear, so entering the player
+        // before the chunker had run (chunkTexts still empty) left the whole
+        // session on the per-chunk fallback, never grouped into paragraphs.
+        .onChange(of: chapterPlayer.chunkTexts.count) { _, _ in
+            paragraphGroups = computeParagraphGroups()
+            recomputeWordItems()
+        }
         .onAppear {
             isAutoScrollPaused = false
             isPlayerCollapsed = false
@@ -198,17 +217,19 @@ struct ChapterPlayerView: View {
     private func recomputeWordItems() {
         let fresh = effectiveGroups.map { wordItems(for: $0) }
         guard fresh.count == paragraphWordItems.count else {
-            // First population (or the group count somehow changed) —
-            // start every revision at 0. Safe to leave rows un-bumped
-            // here: wordItems(for:) is deterministic, so these match
-            // whatever the first frame's fallback already rendered.
+            // The group count changed — every row's content is now derived
+            // from a different set of chunks, so stamp them all with one
+            // fresh revision rather than resetting to 0, which could
+            // collide with what a row last rendered.
+            revisionCounter += 1
             paragraphWordItems = fresh
-            paragraphRevisions = Array(repeating: 0, count: fresh.count)
+            paragraphRevisions = Array(repeating: revisionCounter, count: fresh.count)
             return
         }
         var revisions = paragraphRevisions
         for index in fresh.indices where fresh[index] != paragraphWordItems[index] {
-            revisions[index] += 1
+            revisionCounter += 1
+            revisions[index] = revisionCounter
         }
         paragraphWordItems = fresh
         paragraphRevisions = revisions
@@ -255,7 +276,18 @@ struct ChapterPlayerView: View {
                 continue
             }
             if index > 0, let previousEnd {
-                gaps[index] = fullText[previousEnd..<range.lowerBound].contains(where: \.isNewline)
+                // Three places the break can be, not one. `KokoroTextChunker`
+                // trims chunks with `.whitespaces`, which excludes newlines
+                // (CharacterSet.whitespaces is Unicode Zs + tab), so a
+                // paragraph's newline usually rides along *inside* a chunk's
+                // own text — and since chunk ranges are contiguous, the gap
+                // between two matches is then empty. Checking only the gap
+                // reported "no break" at every boundary, merging a whole
+                // chapter into one paragraph group.
+                gaps[index] =
+                    fullText[previousEnd..<range.lowerBound].contains(where: \.isNewline)
+                    || texts[index - 1].last?.isNewline == true
+                    || text.first?.isNewline == true
             }
             previousEnd = range.upperBound
             searchStart = range.upperBound
@@ -621,28 +653,26 @@ struct ChapterPlayerView: View {
         let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
         let hasAnyWordTimings = items.contains { $0.wordIndexInChunk != nil }
 
-        return Group {
-            if hasAnyWordTimings, isCurrentGroup {
-                TimelineView(.periodic(from: .now, by: 0.08)) { _ in
-                    ParagraphRow(
-                        items: items, itemsRevision: revision,
-                        highlightedChunkIndex: chapterPlayer.currentChunkIndex,
-                        highlightedWordIndex: chapterPlayer.currentWordIndex(
-                            atElapsed: chapterPlayer.currentPlaybackTime),
-                        isCurrentGroup: true,
-                        fontSize: readerFontSize,
-                        theme: readerTheme
-                    ).equatable()
-                }
-            } else {
-                ParagraphRow(
-                    items: items, itemsRevision: revision,
-                    highlightedChunkIndex: nil, highlightedWordIndex: nil,
-                    isCurrentGroup: isCurrentGroup,
-                    fontSize: readerFontSize,
-                    theme: readerTheme
-                ).equatable()
-            }
+        let isPolling = hasAnyWordTimings && isCurrentGroup
+
+        // One view type whether or not this row is the playing one. Putting
+        // the TimelineView inside an if/else made the playing row a
+        // *different* view, so it was torn down and rebuilt — new
+        // WordFlowLayout cache, full re-measure — every time the highlight
+        // entered or left it, which in a LazyVStack shifts everything below
+        // it. Only the tick interval varies now; a non-playing row's
+        // schedule never fires in practice, and `.equatable()` still gates
+        // the body either way.
+        return TimelineView(.periodic(from: .now, by: isPolling ? 0.08 : 3600)) { _ in
+            ParagraphRow(
+                items: items, itemsRevision: revision,
+                highlightedChunkIndex: isPolling ? chapterPlayer.currentChunkIndex : nil,
+                highlightedWordIndex: isPolling
+                    ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
+                isCurrentGroup: isCurrentGroup,
+                fontSize: readerFontSize,
+                theme: readerTheme
+            ).equatable()
         }
     }
 
@@ -729,37 +759,57 @@ struct ChapterPlayerView: View {
 
     private func wordItems(for group: [Int]) -> [FlowWordItem] {
         var items: [FlowWordItem] = []
-        for chunkIndex in group {
+        for (positionInGroup, chunkIndex) in group.enumerated() {
+            // Newlines at the END of the previous chunk's text would
+            // otherwise be lost entirely: splitPreservingSeparators only
+            // reports whitespace that *precedes* a word, so a chunk ending
+            // in "\n\n" has nothing to attach them to. Carry them onto this
+            // chunk's first word instead. (A break mid-chunk needs none of
+            // this — it's already some word's own precedingSeparator.)
+            let carriedBreaks =
+                positionInGroup == 0
+                ? 0 : trailingNewlineCount(of: chapterPlayer.chunkTexts[group[positionInGroup - 1]])
             let timings = chapterPlayer.wordTimings(forChunk: chunkIndex)
-            let isFirstChunkInGroup = chunkIndex == group.first
+            let tokens: [(word: String, precedingSeparator: String, wordIndexInChunk: Int?)]
             if timings.isEmpty {
-                let tokens = WordTimingDeriver.splitPreservingSeparators(chapterPlayer.chunkTexts[chunkIndex])
-                for (i, token) in tokens.enumerated() {
-                    let breaks = (isFirstChunkInGroup && i == 0) || i == 0
-                        ? 0 : token.precedingSeparator.filter { $0 == "\n" }.count
-                    items.append(
-                        FlowWordItem(
-                            text: token.word, chunkIndex: chunkIndex, wordIndexInChunk: nil,
-                            lineBreaksBefore: breaks))
-                }
+                tokens = WordTimingDeriver.splitPreservingSeparators(chapterPlayer.chunkTexts[chunkIndex])
+                    .map { ($0.word, $0.precedingSeparator, nil) }
             } else {
-                for (i, timing) in timings.enumerated() {
-                    // A boundary INSIDE one group is, by definition, never
-                    // a real line break (that's what makes it one group
-                    // instead of two), so the first word of every chunk
-                    // after the group's first just flows on — only a real
-                    // precedingSeparator ("\n"/"\n\n", from a chunk's own
-                    // internal words) forces a break.
-                    let breaks = (isFirstChunkInGroup && i == 0) || i == 0
-                        ? 0 : timing.precedingSeparator.filter { $0 == "\n" }.count
-                    items.append(
-                        FlowWordItem(
-                            text: timing.word, chunkIndex: chunkIndex, wordIndexInChunk: i,
-                            lineBreaksBefore: breaks))
+                tokens = timings.enumerated().map { ($1.word, $1.precedingSeparator, $0) }
+            }
+            for (i, token) in tokens.enumerated() {
+                let ownBreaks = token.precedingSeparator.filter { $0 == "\n" }.count
+                let breaks: Int
+                if i > 0 {
+                    breaks = ownBreaks
+                } else if positionInGroup == 0 {
+                    // The group's very first word — nothing to break from.
+                    breaks = 0
+                } else {
+                    breaks = max(carriedBreaks, ownBreaks)
                 }
+                items.append(
+                    FlowWordItem(
+                        text: token.word, chunkIndex: chunkIndex,
+                        wordIndexInChunk: token.wordIndexInChunk,
+                        lineBreaksBefore: min(2, breaks)))
             }
         }
         return items
+    }
+
+    private func trailingNewlineCount(of text: String) -> Int {
+        var count = 0
+        for character in text.reversed() {
+            if character == "\n" {
+                count += 1
+            } else if character.isWhitespace {
+                continue
+            } else {
+                break
+            }
+        }
+        return count
     }
 
     private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {

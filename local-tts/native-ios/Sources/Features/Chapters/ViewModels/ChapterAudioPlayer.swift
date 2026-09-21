@@ -37,7 +37,11 @@ final class ChapterAudioPlayer: ObservableObject {
 
     /// Read-along text for whichever mode is active — the saved
     /// manifest's chunk texts, or the streaming chunks as they're known.
-    private(set) var chunkTexts: [String] = []
+    /// Published despite changing rarely: `ChapterPlayerView` derives its
+    /// whole paragraph structure from this, and while it was unpublished
+    /// that structure only refreshed when some *other* property happened to
+    /// publish (the 4 Hz ticker), landing a frame late or not at all.
+    @Published private(set) var chunkTexts: [String] = []
 
     private var player: AVAudioPlayer?
     private var delegate: AudioPlaybackDelegate?
