@@ -1,3 +1,4 @@
+import Hugeicons
 import LucideSwift
 import SwiftUI
 import UIKit
@@ -51,7 +52,11 @@ struct ChapterPlayerView: View {
     @State private var isAutoScrollPaused = false
     @State private var visibleParagraphs: Set<Int> = []
     @State private var isPlayerCollapsed = false
+    @State private var displayedIsPlaying = false
+    @State private var playPauseScale: CGFloat = 1
+    @State private var playPauseAnimationTask: Task<Void, Never>?
     @Namespace private var floatingPlayerNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Chunks that belong to the same paragraph in the chapter's own source
     // text, grouped so they render as one continuous Text — one row per
     // paragraph, not one row per ~350-char synthesis chunk (see
@@ -141,6 +146,9 @@ struct ChapterPlayerView: View {
         .onChange(of: keepScreenOn) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
         }
+        .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
+            animatePlayPauseIcon(to: isPlaying)
+        }
         .onChange(of: autoScrollEnabled) { _, isEnabled in
             if !isEnabled {
                 isAutoScrollPaused = false
@@ -156,11 +164,14 @@ struct ChapterPlayerView: View {
         .onAppear {
             isAutoScrollPaused = false
             isPlayerCollapsed = false
+            displayedIsPlaying = chapterPlayer.isPlaying
+            playPauseScale = 1
             paragraphGroups = computeParagraphGroups()
             recomputeWordItems()
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
         .onDisappear {
+            playPauseAnimationTask?.cancel()
             // Unconditional, not just "if keepScreenOn" — this is a
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
@@ -328,9 +339,9 @@ struct ChapterPlayerView: View {
         .onTapGesture { }
     }
 
-    // Liquid Glass is only available on iOS 26+. Tinting it with the active
-    // reader palette keeps both light and dark player cards visually tied
-    // to the page. The explicit themed fallback does the same on iOS 17–25.
+    // Liquid Glass is only available on iOS 26+. Its tint follows the
+    // active reader palette; older systems use the matching translucent
+    // theme surface instead.
     @ViewBuilder
     private func playerBackground(cornerRadius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
@@ -378,12 +389,17 @@ struct ChapterPlayerView: View {
         Button {
             chapterPlayer.togglePlayPause()
         } label: {
-            LucideIcon(
-                chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 44,
-                color: readerTheme.primaryText
-            )
-            .frame(width: 64, height: 64)
-            .contentShape(Rectangle())
+            (displayedIsPlaying ? Hugeicons.pause : Hugeicons.play)
+                .image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(readerTheme.primaryText)
+                .contentTransition(.identity)
+                .frame(width: 44, height: 44)
+                .scaleEffect(playPauseScale)
+                .frame(width: 64, height: 64)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(chapterPlayer.isPlaying ? "Pause" : "Play")
@@ -393,6 +409,32 @@ struct ChapterPlayerView: View {
             updatePlayButtonPulse(isBuffering: isBuffering)
         }
         .matchedGeometryEffect(id: "playPauseButton", in: floatingPlayerNamespace)
+    }
+
+    private func animatePlayPauseIcon(to isPlaying: Bool) {
+        playPauseAnimationTask?.cancel()
+
+        guard !reduceMotion else {
+            displayedIsPlaying = isPlaying
+            playPauseScale = 1
+            return
+        }
+
+        withAnimation(.easeIn(duration: 0.09)) {
+            playPauseScale = 0.76
+        }
+
+        playPauseAnimationTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 90_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Swap without animation at the compressed midpoint so the two
+            // PDF assets never cross-fade through one another.
+            displayedIsPlaying = isPlaying
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.52)) {
+                playPauseScale = 1
+            }
+        }
     }
 
     private var avatar: some View {
@@ -520,13 +562,17 @@ struct ChapterPlayerView: View {
                 Button(action: action) { currentWordResumeLabel }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Jump to current word: \(currentSpokenWord)")
-                    .glassEffect(.regular.interactive(), in: Capsule())
+                    .glassEffect(
+                        .regular.interactive(),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         } else {
             Button(action: action) { currentWordResumeLabel }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Jump to current word: \(currentSpokenWord)")
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(
+                    .ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
@@ -539,7 +585,7 @@ struct ChapterPlayerView: View {
             .padding(.vertical, 6)
             .background(
                 readerTheme.wordHighlightBackground,
-                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .padding(6)
     }
 
