@@ -62,6 +62,7 @@
 		7D97624EFA622560ABFB2FD6 /* WriteTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9ABFA785F99BAA013D9F0 /* WriteTextView.swift */; };
 		7E87BB9E975F34CA26F70815 /* ChapterSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52BACFBFFE9CED64254A3175 /* ChapterSplitter.swift */; };
 		8170183C42154B68C981A0E5 /* NativeTabSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63519E427B1C986C43392764 /* NativeTabSelector.swift */; };
+		8289F9482A21AD40BA5A82E2 /* Hugeicons in Frameworks */ = {isa = PBXBuildFile; productRef = 7CD848AEAD81E76358290CE3 /* Hugeicons */; };
 		83975B79CB40408F447C561F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA21F0B398C4B3DA5EE02D6 /* AboutView.swift */; };
 		858CED334C1AC7A9F9B8D1D7 /* SupertonicVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EC94814A035C9B71D288FCF /* SupertonicVoice.swift */; };
 		873E3C0FFB3B9E4A6E61B9AE /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3AE469CA3D6649CCD731F /* RootTabView.swift */; };
@@ -126,7 +127,7 @@
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		0F6E28A4B26F86F7C45667AE /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackDelegate.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -168,7 +169,7 @@
 		79AA87B32F3119C1ED28D39A /* VoiceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDisplayName.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
-		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		83247F6E3B113FE5D6C0D79C /* CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTabBar.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
 		85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerView.swift; sourceTree = "<group>"; };
@@ -234,6 +235,7 @@
 			files = (
 				6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */,
 				E3BBF2957687BB2F26DBEB9F /* LucideSwift in Frameworks */,
+				8289F9482A21AD40BA5A82E2 /* Hugeicons in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -669,6 +671,7 @@
 			packageProductDependencies = (
 				CE49DCF4046639135F678D6A /* FluidAudio */,
 				A0D045B3092A9E63F40DEA50 /* LucideSwift */,
+				7CD848AEAD81E76358290CE3 /* Hugeicons */,
 			);
 			productName = KokoroAneTest;
 			productReference = 1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */;
@@ -684,6 +687,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
+						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -699,6 +703,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				30836D4390D9AAA71AE818D1 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */,
 				F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -843,7 +848,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -918,7 +923,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1026,6 +1031,14 @@
 				revision = 5343241cd8a7576890e50925dec666bafc89d324;
 			};
 		};
+		CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/iSapozhnik/hugeicons-swift";
+			requirement = {
+				kind = revision;
+				revision = 81caddf04ce5352652ffaa619562f02477dbf35d;
+			};
+		};
 		F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ajaxjiang96/lucide-swift";
@@ -1037,6 +1050,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		7CD848AEAD81E76358290CE3 /* Hugeicons */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CF9E646340ABC7588F3EDFD2 /* XCRemoteSwiftPackageReference "hugeicons-swift" */;
+			productName = Hugeicons;
+		};
 		A0D045B3092A9E63F40DEA50 /* LucideSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F40923B6D0214FB85A089CD0 /* XCRemoteSwiftPackageReference "lucide-swift" */;

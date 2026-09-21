@@ -1,5 +1,5 @@
 {
-  "originHash" : "286eb9542d5fafb398dd52383bcf48c54d2671c50734626711306da5a3900730",
+  "originHash" : "e722863756d6647e33f310c4e7738da60ee0429e842297bb00c419f24be5fd68",
   "pins" : [
     {
       "identity" : "fluidaudio",
@@ -7,6 +7,14 @@
       "location" : "https://github.com/FluidInference/FluidAudio",
       "state" : {
         "revision" : "5343241cd8a7576890e50925dec666bafc89d324"
+      }
+    },
+    {
+      "identity" : "hugeicons-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/iSapozhnik/hugeicons-swift",
+      "state" : {
+        "revision" : "81caddf04ce5352652ffaa619562f02477dbf35d"
       }
     },
     {

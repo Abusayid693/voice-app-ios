@@ -12,13 +12,14 @@ struct CustomTabBar: View {
     let onPlusTapped: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             tabSelector
             plusButton
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, 19)
+        .padding(.top, 9)
         .padding(.bottom, max(safeAreaBottom - 31, 8))
+        .offset(y: 25)
     }
 
     // .glassEffect() is iOS 26+ only; falls back to the app's usual
@@ -27,19 +28,19 @@ struct CustomTabBar: View {
     private var tabSelector: some View {
         if #available(iOS 26.0, *) {
             NativeTabSelector(selectedTab: $selectedTab)
-                .padding(2)
+                .padding(2.5)
                 .glassEffect(.regular, in: Capsule())
         } else {
             NativeTabSelector(selectedTab: $selectedTab)
-                .padding(2)
+                .padding(2.5)
                 .background(.ultraThinMaterial, in: Capsule())
         }
     }
 
     private var plusButton: some View {
         Button(action: onPlusTapped) {
-            LucideIcon(.plus, size: 24, color: Color.primaryButtonText)
-                .frame(width: 54, height: 54)
+            LucideIcon(.plus, size: 27, color: Color.primaryButtonText)
+                .frame(width: 60, height: 60)
                 .background(Circle().fill(.white))
                 .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
         }
