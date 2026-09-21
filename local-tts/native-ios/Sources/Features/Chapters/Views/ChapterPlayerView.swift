@@ -31,9 +31,28 @@ struct ChapterPlayerView: View {
     @State private var scrollResumeTask: Task<Void, Never>?
     @State private var scrubberValue: Double = 0
     @State private var isScrubbing = false
+    // Chunks that belong to the same paragraph in the chapter's own source
+    // text, grouped so they render as one continuous Text — one row per
+    // paragraph, not one row per ~350-char synthesis chunk (see
+    // computeParagraphGroups). Computed once on appear, not as a plain
+    // computed property: body re-evaluates at 4Hz while playing
+    // (chapterPlayer's ticker), and this does an O(n) string search over
+    // the chapter text.
+    @State private var paragraphGroups: [[Int]] = []
+    // Each group's rendered height, measured via a GeometryReader
+    // background in readAlong — used to estimate which chunk within a
+    // multi-chunk paragraph a tap landed on (see handleParagraphTap).
+    @State private var groupHeights: [Int: CGFloat] = [:]
 
     private var chapter: Chapter? {
         project.chapters.first { $0.index == chapterRef.chapterIndex }
+    }
+
+    // Falls back to one group per chunk before .onAppear populates
+    // paragraphGroups, so the very first render matches today's per-chunk
+    // layout instead of showing nothing.
+    private var effectiveGroups: [[Int]] {
+        paragraphGroups.isEmpty ? chapterPlayer.chunkTexts.indices.map { [$0] } : paragraphGroups
     }
 
     var body: some View {
@@ -49,6 +68,58 @@ struct ChapterPlayerView: View {
             guard !isScrubbing else { return }
             scrubberValue = newValue
         }
+        .onAppear {
+            paragraphGroups = computeParagraphGroups()
+        }
+    }
+
+    // Groups consecutive chunk indices that have no real break between
+    // them (per computeChunkGaps) into one paragraph each.
+    private func computeParagraphGroups() -> [[Int]] {
+        let gaps = computeChunkGaps()
+        guard !gaps.isEmpty else { return [] }
+        var groups: [[Int]] = [[0]]
+        for index in 1..<gaps.count {
+            if gaps[index] {
+                groups.append([index])
+            } else {
+                groups[groups.count - 1].append(index)
+            }
+        }
+        return groups
+    }
+
+    // For each chunk after the first: does a real line/paragraph break
+    // exist between it and the previous chunk in the chapter's own text?
+    // `chunkTexts` only carries chunk boundaries from the ~350-char
+    // synthesis budget, not paragraph structure, so this is the only way
+    // to tell an artificial cut (author never put a break there) apart
+    // from a real one. Locates each chunk as a literal substring of the
+    // full chapter text, searching forward from the previous match so
+    // ordering and repeated content resolve correctly, and checks whether
+    // any newline falls in the gap between consecutive matches.
+    private func computeChunkGaps() -> [Bool] {
+        let texts = chapterPlayer.chunkTexts
+        guard let fullText = chapter?.text, texts.count > 1 else {
+            return Array(repeating: true, count: texts.count)
+        }
+        var gaps = [Bool](repeating: true, count: texts.count)
+        var searchStart = fullText.startIndex
+        var previousEnd: String.Index?
+        for (index, text) in texts.enumerated() {
+            guard let range = fullText.range(of: text, range: searchStart..<fullText.endIndex) else {
+                // Couldn't locate this chunk verbatim (shouldn't happen —
+                // fail safe to a normal gap rather than guessing).
+                previousEnd = nil
+                continue
+            }
+            if index > 0, let previousEnd {
+                gaps[index] = fullText[previousEnd..<range.lowerBound].contains(where: \.isNewline)
+            }
+            previousEnd = range.upperBound
+            searchStart = range.upperBound
+        }
+        return gaps
     }
 
     // MARK: - Floating player
@@ -151,14 +222,25 @@ struct ChapterPlayerView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(chapterPlayer.chunkTexts.indices, id: \.self) { index in
-                        chunkText(index: index)
-                            .id(index)
-                            .onTapGesture {
-                                guard let start = chapterPlayer.startTime(forChunk: index) else { return }
-                                chapterPlayer.seek(to: start)
-                                scrubberValue = start
-                            }
+                    ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
+                        let group = effectiveGroups[groupIndex]
+                        paragraphGroupView(group: group, groupIndex: groupIndex)
+                            .id(groupIndex)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .onAppear { groupHeights[groupIndex] = geo.size.height }
+                                        .onChange(of: geo.size.height) { _, newValue in
+                                            groupHeights[groupIndex] = newValue
+                                        }
+                                }
+                            )
+                            .gesture(
+                                SpatialTapGesture().onEnded { value in
+                                    handleParagraphTap(
+                                        group: group, groupIndex: groupIndex, localY: value.location.y)
+                                }
+                            )
                     }
                 }
                 .padding()
@@ -179,14 +261,17 @@ struct ChapterPlayerView: View {
             )
             .onChange(of: chapterPlayer.currentChunkIndex) { _, chunkIndex in
                 guard !isUserScrolling else { return }
-                withAnimation { proxy.scrollTo(chunkIndex, anchor: .center) }
+                guard let (groupIndex, anchor) = scrollTarget(forChunk: chunkIndex) else { return }
+                withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
             }
             .overlay(alignment: .top) {
                 if isUserScrolling {
                     Button("Jump to current") {
                         scrollResumeTask?.cancel()
                         isUserScrolling = false
-                        withAnimation { proxy.scrollTo(chapterPlayer.currentChunkIndex, anchor: .center) }
+                        if let (groupIndex, anchor) = scrollTarget(forChunk: chapterPlayer.currentChunkIndex) {
+                            withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+                        }
                     }
                     .font(AppTextStyle.label.font)
                     .foregroundStyle(Color.ghostButtonText)
@@ -199,61 +284,140 @@ struct ChapterPlayerView: View {
         }
     }
 
-    private func chunkText(index: Int) -> some View {
-        let isCurrentChunk = index == chapterPlayer.currentChunkIndex && chapterPlayer.isPlaying
-        let hasWordTimings = !chapterPlayer.wordTimings(forChunk: index).isEmpty
+    // A single-chunk group scrolls to .center, same as before grouping
+    // existed. A multi-chunk (merged-paragraph) group scrolls to the
+    // vertical point matching the playing chunk's own position within
+    // that paragraph, so a couple-of-pages-long paragraph keeps following
+    // playback through it instead of parking at the paragraph's midpoint.
+    private func scrollTarget(forChunk chunkIndex: Int) -> (Int, UnitPoint)? {
+        let groups = effectiveGroups
+        guard let groupIndex = groups.firstIndex(where: { $0.contains(chunkIndex) }) else { return nil }
+        let group = groups[groupIndex]
+        guard group.count > 1, let positionInGroup = group.firstIndex(of: chunkIndex) else {
+            return (groupIndex, .center)
+        }
+        let progress = Double(positionInGroup) / Double(group.count - 1)
+        return (groupIndex, UnitPoint(x: 0, y: progress))
+    }
+
+    private func paragraphGroupView(group: [Int], groupIndex: Int) -> some View {
+        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
+        let hasAnyWordTimings = group.contains { !chapterPlayer.wordTimings(forChunk: $0).isEmpty }
         return Group {
-            if hasWordTimings, isCurrentChunk {
+            if hasAnyWordTimings, isCurrentGroup {
                 // 0.08s (~12 Hz): fine enough that a word swap doesn't
                 // read as a stutter, without publishing at that rate on
                 // ChapterAudioPlayer itself — see currentPlaybackTime.
+                // Only the currently-playing paragraph polls; every other
+                // row renders once.
                 TimelineView(.periodic(from: .now, by: 0.08)) { _ in
-                    wordHighlightedText(index: index, isCurrentChunk: true)
+                    paragraphText(group: group)
                 }
-            } else if hasWordTimings {
-                // Same concatenated-Text construction as the playing case,
-                // just with no word singled out (and no TimelineView, since
-                // nothing here needs to keep updating). Using plain
-                // Text(chunkTexts[index]) here instead — cheaper, but a
-                // different SwiftUI text-layout path — measured a few
-                // pixels differently for the same string, so this chunk
-                // would reflow (and shift everything below it) every time
-                // isCurrentChunk flips, e.g. on pause/resume.
-                wordHighlightedText(index: index, isCurrentChunk: false)
             } else {
-                Text(chapterPlayer.chunkTexts[index])
-                    .appText(isCurrentChunk ? .reading : .readingMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                paragraphText(group: group)
             }
         }
         .padding(6)
         .background(
-            isCurrentChunk ? Color.appSecondaryBackground : Color.clear,
+            isCurrentGroup ? Color.appSecondaryBackground : Color.clear,
             in: RoundedRectangle(cornerRadius: 8))
     }
 
-    // Concatenates this chunk's words into one Text, coloring only the
-    // word currently playing — WordTimingDeriver's exact per-word timings,
-    // no fallback. `.reading`/`.readingMuted` share one font (only their
-    // color differs — Typography.swift), so one `.font()` on the composed
-    // Text plus a per-word `.foregroundStyle` reproduces that pairing.
-    // Always used for a chunk with word timings, current or not — see
-    // chunkText's own comment for why the construction method must stay
-    // fixed per chunk.
-    private func wordHighlightedText(index: Int, isCurrentChunk: Bool) -> some View {
-        let timings = chapterPlayer.wordTimings(forChunk: index)
+    // Concatenates every chunk in this paragraph group into one Text, so a
+    // paragraph the synthesis chunker had to cut for its ~350-char budget
+    // still wraps and reads as continuous prose instead of breaking
+    // mid-line at the cut. Coloring, not construction, is what changes
+    // with playback state — the whole group always builds the same way,
+    // current or not (the rule that fixed the earlier pause/resume reflow
+    // bug: swapping to a differently-measuring Text construction reflows
+    // everything below it).
+    private func paragraphText(group: [Int]) -> some View {
+        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
+        let currentChunkIndex = chapterPlayer.currentChunkIndex
         let currentWord =
-            isCurrentChunk ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil
-        let composed = timings.indices.reduce(Text("")) { partial, i in
-            let piece = Text(timings[i].word)
-                .foregroundStyle(i == currentWord ? Color.appPrimaryText : Color.appSecondaryText)
-            // The word's own preceding whitespace — " " between ordinary
-            // words, "\n"/"\n\n" across a line or paragraph break — not a
-            // hardcoded space, or breaks collapse while this chunk plays.
-            return i == 0 ? piece : partial + Text(timings[i].precedingSeparator) + piece
+            isCurrentGroup ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil
+
+        var composed = Text("")
+        var isFirstPiece = true
+        func append(_ piece: Text, separator: String) {
+            if isFirstPiece {
+                composed = piece
+                isFirstPiece = false
+            } else {
+                composed = composed + Text(separator) + piece
+            }
         }
+
+        for chunkIndex in group {
+            let timings = chapterPlayer.wordTimings(forChunk: chunkIndex)
+            let isThisChunkCurrent = isCurrentGroup && chunkIndex == currentChunkIndex
+            let isFirstChunkInGroup = chunkIndex == group.first
+            if timings.isEmpty {
+                // No word timings for this chunk (non-English voice, or —
+                // during streaming — not yet synthesized) — one muted
+                // piece for its whole text, same fallback as before
+                // grouping existed.
+                let piece = Text(chapterPlayer.chunkTexts[chunkIndex])
+                    .foregroundStyle(isThisChunkCurrent ? Color.appPrimaryText : Color.appSecondaryText)
+                append(piece, separator: isFirstChunkInGroup ? "" : " ")
+            } else {
+                for (i, timing) in timings.enumerated() {
+                    let isCurrentWord = isThisChunkCurrent && i == currentWord
+                    let piece = Text(timing.word)
+                        .foregroundStyle(isCurrentWord ? Color.appPrimaryText : Color.appSecondaryText)
+                    // A boundary INSIDE one group is, by definition, never
+                    // a real line break (that's what makes it one group
+                    // instead of two) — the chunker drops the actual
+                    // whitespace at a chunk cut, so a plain space is
+                    // always correct there. Only within a single chunk's
+                    // own words does the real precedingSeparator (which
+                    // can be "\n"/"\n\n") apply.
+                    let separator: String
+                    if isFirstChunkInGroup && i == 0 {
+                        separator = ""
+                    } else if i == 0 {
+                        separator = " "
+                    } else {
+                        separator = timing.precedingSeparator
+                    }
+                    append(piece, separator: separator)
+                }
+            }
+        }
+
         return composed
             .font(AppTextStyle.reading.font)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {
+        let target: Int
+        if group.count > 1 {
+            let height = groupHeights[groupIndex] ?? 0
+            let proportion = height > 0 ? Double(max(0, min(localY, height)) / height) : 0
+            target = estimatedChunk(inGroup: group, atProportion: proportion)
+        } else {
+            target = group[0]
+        }
+        guard let start = chapterPlayer.startTime(forChunk: target) else { return }
+        chapterPlayer.seek(to: start)
+        scrubberValue = start
+    }
+
+    // Maps a vertical tap position (0...1 down the paragraph) to a chunk
+    // index, weighted by each chunk's character length — an estimate, not
+    // exact (assumes fairly even text density), but far more useful on a
+    // couple-of-pages paragraph than always seeking to its start.
+    private func estimatedChunk(inGroup group: [Int], atProportion proportion: Double) -> Int {
+        let lengths = group.map { Double(chapterPlayer.chunkTexts[$0].count) }
+        let total = lengths.reduce(0, +)
+        guard total > 0 else { return group.first ?? 0 }
+        let target = proportion * total
+        var cumulative: Double = 0
+        for (i, length) in lengths.enumerated() {
+            cumulative += length
+            if target <= cumulative { return group[i] }
+        }
+        return group.last ?? 0
     }
 }
