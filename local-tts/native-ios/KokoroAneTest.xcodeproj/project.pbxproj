@@ -96,6 +96,7 @@
 		CD66FC7950290E329B1C8F43 /* Lattice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 393FDE207C524D2DE60C4A72 /* Lattice.swift */; };
 		CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */; };
 		CF9A298027AC9A692970CC3E /* VoiceCloneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5A425A4486E4739F80386 /* VoiceCloneViewModel.swift */; };
+		D0F97E1D33CBCEA2F46D4367 /* ChapterPlayerOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */; };
 		D4ECE0CB08DE017CE83DBFAE /* Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = D222238DD73C06B63B875D64 /* Snapshot.swift */; };
 		DA721668144A8C972C8117B9 /* ChapterPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */; };
 		DAD6F2DDAC26ACA71E2981EF /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F6E28A4B26F86F7C45667AE /* Chapter.swift */; };
@@ -158,6 +159,7 @@
 		5D1118094C4B055386486F9B /* BundledMandarinVoices */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledMandarinVoices; sourceTree = SOURCE_ROOT; };
 		62AD94F95142992881570C3F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		63519E427B1C986C43392764 /* NativeTabSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabSelector.swift; sourceTree = "<group>"; };
+		6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerOptionsSheet.swift; sourceTree = "<group>"; };
 		6AE3F8B4AA40B1B443FC700F /* ChapterGenerationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterGenerationStore.swift; sourceTree = "<group>"; };
 		70E00DC0DEE3F54A5B425B63 /* PocketEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketEngineService.swift; sourceTree = "<group>"; };
 		725C7E7034B4C34315AA827C /* OrbCoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbCoverArt.swift; sourceTree = "<group>"; };
@@ -489,6 +491,7 @@
 		8285572C57692FE933B5D8D0 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */,
 				85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */,
 				FC31D120E0533E3A82336C29 /* ChapterRow.swift */,
 				9E1A5A5D02A341D714F22518 /* ChaptersListView.swift */,
@@ -739,6 +742,7 @@
 				60F12CEE2672B54951D1CC56 /* ChapterAudioPlayer.swift in Sources */,
 				A2439C5FE657461B63A1D7F4 /* ChapterAudioStore.swift in Sources */,
 				4DBB653E2E5D26CC015C740C /* ChapterGenerationStore.swift in Sources */,
+				D0F97E1D33CBCEA2F46D4367 /* ChapterPlayerOptionsSheet.swift in Sources */,
 				DA721668144A8C972C8117B9 /* ChapterPlayerView.swift in Sources */,
 				AC30C30CDFEC299A40972E99 /* ChapterRef.swift in Sources */,
 				1BE40BCABD958FBDC5F77653 /* ChapterRow.swift in Sources */,

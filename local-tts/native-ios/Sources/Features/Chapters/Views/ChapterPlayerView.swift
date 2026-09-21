@@ -1,5 +1,6 @@
 import LucideSwift
 import SwiftUI
+import UIKit
 
 /// The music-player screen for a chapter: the whole page is the read-along
 /// text, with a compact, translucent transport bar floating over its
@@ -59,6 +60,11 @@ struct ChapterPlayerView: View {
     // streaming's first chunk lands, or between chunks if playback ever
     // catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
+    @State private var isOptionsSheetPresented = false
+    // Both persisted across sessions — set once, stays that way for every
+    // chapter opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
+    @AppStorage("chapterPlayerKeepScreenOn") private var keepScreenOn = false
+    @AppStorage("chapterPlayerShowFloatingPlayer") private var showFloatingPlayer = true
 
     private var chapter: Chapter? {
         project.chapters.first { $0.index == chapterRef.chapterIndex }
@@ -74,7 +80,11 @@ struct ChapterPlayerView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             readAlong
-            if isControlsVisible {
+            // showFloatingPlayer is the persisted "off" switch — fully
+            // hidden, no tap-to-reveal, regardless of isControlsVisible's
+            // own auto-hide ticking. isControlsVisible still layers the
+            // existing fade-after-inactivity behavior on top when it's on.
+            if showFloatingPlayer, isControlsVisible {
                 floatingPlayer
                     .transition(.opacity)
             }
@@ -83,6 +93,18 @@ struct ChapterPlayerView: View {
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle(chapter?.title ?? "Chapter")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    isOptionsSheetPresented = true
+                } label: {
+                    LucideIcon(.ellipsis, color: Color.appPrimaryText)
+                }
+            }
+        }
+        .sheet(isPresented: $isOptionsSheetPresented) {
+            ChapterPlayerOptionsSheet(keepScreenOn: $keepScreenOn, showFloatingPlayer: $showFloatingPlayer)
+        }
         .preferredColorScheme(.dark)
         // Catch-all for a tap that lands on plain background rather than a
         // specific control — simultaneousGesture so it never blocks a
@@ -92,9 +114,19 @@ struct ChapterPlayerView: View {
             guard !isScrubbing else { return }
             scrubberValue = newValue
         }
+        .onChange(of: keepScreenOn) { _, newValue in
+            UIApplication.shared.isIdleTimerDisabled = newValue
+        }
         .onAppear {
             paragraphGroups = computeParagraphGroups()
             scheduleHideControls()
+            UIApplication.shared.isIdleTimerDisabled = keepScreenOn
+        }
+        .onDisappear {
+            // Unconditional, not just "if keepScreenOn" — this is a
+            // process-global flag, and leaving with the toggle on must not
+            // keep the rest of the app from ever auto-locking.
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 
