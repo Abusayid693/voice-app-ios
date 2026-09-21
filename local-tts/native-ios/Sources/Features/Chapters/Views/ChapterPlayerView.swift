@@ -33,6 +33,16 @@ struct ChapterPlayerView: View {
 
     @State private var isUserScrolling = false
     @State private var scrollResumeTask: Task<Void, Never>?
+    // Reference type, not @State — mutating .lastEventAt must NOT
+    // invalidate the view (it happens on every raw drag delta, potentially
+    // display-rate). Only isUserScrolling itself is @State, and only two
+    // places write it: the transition into scrolling, and the polling
+    // Task noticing 2s of no further drag events. See readAlong's
+    // DragGesture handler.
+    private final class ScrollActivity {
+        var lastEventAt = Date.distantPast
+    }
+    @State private var scrollActivity = ScrollActivity()
     @State private var scrubberValue: Double = 0
     @State private var isScrubbing = false
     // Chunks that belong to the same paragraph in the chapter's own source
@@ -43,10 +53,31 @@ struct ChapterPlayerView: View {
     // (chapterPlayer's ticker), and this does an O(n) string search over
     // the chapter text.
     @State private var paragraphGroups: [[Int]] = []
-    // Each group's rendered height, measured via a GeometryReader
-    // background in readAlong — used to estimate which chunk within a
-    // multi-chunk paragraph a tap landed on (see handleParagraphTap).
-    @State private var groupHeights: [Int: CGFloat] = [:]
+    // Precomputed per-group word items (see wordItems(for:)) + a
+    // per-group revision, both feeding ParagraphRow's Equatable
+    // conformance — the actual fix for read-along scroll jank. Without
+    // this, every group's words were rebuilt from scratch on every 4Hz
+    // publish from chapterPlayer's ticker, whether or not that group's
+    // content changed. Recomputed on appear and whenever a new chunk's
+    // words become available (streaming — see the chapterPlayer.duration
+    // onChange).
+    //
+    // Revisions are per group, not one shared counter: a streaming chunk
+    // arrival changes exactly one paragraph's words, and a shared counter
+    // would invalidate every paragraph in the chapter each time. The
+    // O(words) content comparison that decides which revisions to bump
+    // happens here, once per chunk — never in ParagraphRow's `==`, which
+    // stays O(1) and runs on every publish.
+    @State private var paragraphWordItems: [[FlowWordItem]] = []
+    @State private var paragraphRevisions: [Int] = []
+    // Reference type, not @State — the tap-position-estimate height
+    // measurement in readAlong's GeometryReader fires on layout, not on a
+    // meaningful content change, so writing it must not invalidate the
+    // view either (same reasoning as ScrollActivity above).
+    private final class GroupHeightsBox {
+        var heights: [Int: CGFloat] = [:]
+    }
+    @State private var groupHeightsBox = GroupHeightsBox()
     // Whether the floating transport bar is showing — starts visible, then
     // fades out after a few seconds of no interaction and back in on any
     // tap. See showControlsTemporarily, called from every real interaction
@@ -117,8 +148,16 @@ struct ChapterPlayerView: View {
         .onChange(of: keepScreenOn) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
         }
+        // Fires once per chunk as streaming synthesizes it (duration only
+        // grows in that mode — see ChapterAudioPlayer.stream), which is
+        // exactly when a paragraph's words need to upgrade from the plain-
+        // text fallback to real word timings. Not a per-frame cost.
+        .onChange(of: chapterPlayer.duration) { _, _ in
+            recomputeWordItems()
+        }
         .onAppear {
             paragraphGroups = computeParagraphGroups()
+            recomputeWordItems()
             scheduleHideControls()
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
@@ -127,6 +166,10 @@ struct ChapterPlayerView: View {
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
             UIApplication.shared.isIdleTimerDisabled = false
+            // Both outlive the view by a few seconds otherwise, waking up
+            // only to write state nothing is showing any more.
+            hideControlsTask?.cancel()
+            scrollResumeTask?.cancel()
         }
     }
 
@@ -143,9 +186,10 @@ struct ChapterPlayerView: View {
         hideControlsTask = Task {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             // Skip this cycle rather than hiding out from under an active
-            // scrub — endScrub already calls showControlsTemporarily,
-            // which reschedules once the user actually lets go.
-            guard !Task.isCancelled, !isScrubbing else { return }
+            // scrub/scroll — endScrub and the scroll-settle handler both
+            // already call showControlsTemporarily(), which reschedules
+            // once the user actually lets go/stops.
+            guard !Task.isCancelled, !isScrubbing, !isUserScrolling else { return }
             isControlsVisible = false
         }
     }
@@ -164,6 +208,25 @@ struct ChapterPlayerView: View {
                 isPulsingPlayButton = false
             }
         }
+    }
+
+    private func recomputeWordItems() {
+        let fresh = effectiveGroups.map { wordItems(for: $0) }
+        guard fresh.count == paragraphWordItems.count else {
+            // First population (or the group count somehow changed) —
+            // start every revision at 0. Safe to leave rows un-bumped
+            // here: wordItems(for:) is deterministic, so these match
+            // whatever the first frame's fallback already rendered.
+            paragraphWordItems = fresh
+            paragraphRevisions = Array(repeating: 0, count: fresh.count)
+            return
+        }
+        var revisions = paragraphRevisions
+        for index in fresh.indices where fresh[index] != paragraphWordItems[index] {
+            revisions[index] += 1
+        }
+        paragraphWordItems = fresh
+        paragraphRevisions = revisions
     }
 
     // Groups consecutive chunk indices that have no real break between
@@ -332,14 +395,14 @@ struct ChapterPlayerView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
                         let group = effectiveGroups[groupIndex]
-                        paragraphGroupView(group: group, groupIndex: groupIndex)
+                        paragraphRowView(groupIndex: groupIndex)
                             .id(groupIndex)
                             .background(
                                 GeometryReader { geo in
                                     Color.clear
-                                        .onAppear { groupHeights[groupIndex] = geo.size.height }
+                                        .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
                                         .onChange(of: geo.size.height) { _, newValue in
-                                            groupHeights[groupIndex] = newValue
+                                            groupHeightsBox.heights[groupIndex] = newValue
                                         }
                                 }
                             )
@@ -357,14 +420,33 @@ struct ChapterPlayerView: View {
                 .padding(.bottom, 140)
             }
             .simultaneousGesture(
+                // onChanged fires at display rate during a scroll — only
+                // the cheap timestamp write happens on every event; the
+                // real work (state write, Task) happens once per scroll
+                // gesture, not once per event. A raw DragGesture().onChanged
+                // creating/cancelling a Task on every delta was landing
+                // directly on the interaction that felt janky.
                 DragGesture().onChanged { _ in
+                    scrollActivity.lastEventAt = Date()
+                    guard !isUserScrolling else { return }
                     showControlsTemporarily()
                     isUserScrolling = true
                     scrollResumeTask?.cancel()
                     scrollResumeTask = Task {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        guard !Task.isCancelled else { return }
-                        isUserScrolling = false
+                        while !Task.isCancelled {
+                            try? await Task.sleep(nanoseconds: 300_000_000)
+                            guard !Task.isCancelled else { return }
+                            if Date().timeIntervalSince(scrollActivity.lastEventAt) >= 2.0 {
+                                isUserScrolling = false
+                                // Scrolling itself no longer calls
+                                // showControlsTemporarily() per event, so
+                                // the controls-hide countdown needs a
+                                // fresh start once scrolling actually
+                                // settles, not just at its first moment.
+                                showControlsTemporarily()
+                                return
+                            }
+                        }
                     }
                 }
             )
@@ -409,64 +491,101 @@ struct ChapterPlayerView: View {
         return (groupIndex, UnitPoint(x: 0, y: progress))
     }
 
-    private func paragraphGroupView(group: [Int], groupIndex: Int) -> some View {
+    // Only the currently-playing paragraph polls (TimelineView at ~12Hz);
+    // every other row is constructed fresh each time this is called (cheap
+    // — a handful of scalar fields) but its body only actually re-runs when
+    // ParagraphRow's Equatable comparison finds something changed. That's
+    // the real fix for read-along scroll jank: previously every paragraph's
+    // full word list rebuilt on every 4Hz publish from chapterPlayer's
+    // ticker, whether or not that paragraph's content changed.
+    private func paragraphRowView(groupIndex: Int) -> some View {
+        let group = effectiveGroups[groupIndex]
+        let items =
+            paragraphWordItems.indices.contains(groupIndex)
+            ? paragraphWordItems[groupIndex] : wordItems(for: group)
+        let revision = paragraphRevisions.indices.contains(groupIndex) ? paragraphRevisions[groupIndex] : 0
         let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
-        let hasAnyWordTimings = group.contains { !chapterPlayer.wordTimings(forChunk: $0).isEmpty }
+        let hasAnyWordTimings = items.contains { $0.wordIndexInChunk != nil }
+
         return Group {
             if hasAnyWordTimings, isCurrentGroup {
-                // 0.08s (~12 Hz): fine enough that a word swap doesn't
-                // read as a stutter, without publishing at that rate on
-                // ChapterAudioPlayer itself — see currentPlaybackTime.
-                // Only the currently-playing paragraph polls; every other
-                // row renders once.
                 TimelineView(.periodic(from: .now, by: 0.08)) { _ in
-                    paragraphText(group: group)
+                    ParagraphRow(
+                        items: items, itemsRevision: revision,
+                        highlightedChunkIndex: chapterPlayer.currentChunkIndex,
+                        highlightedWordIndex: chapterPlayer.currentWordIndex(
+                            atElapsed: chapterPlayer.currentPlaybackTime),
+                        isCurrentGroup: true
+                    ).equatable()
                 }
             } else {
-                paragraphText(group: group)
+                ParagraphRow(
+                    items: items, itemsRevision: revision,
+                    highlightedChunkIndex: nil, highlightedWordIndex: nil,
+                    isCurrentGroup: isCurrentGroup
+                ).equatable()
             }
         }
-        .padding(6)
-        .background(
-            isCurrentGroup ? Color.chunkHighlightBackground : Color.clear,
-            in: RoundedRectangle(cornerRadius: 8))
     }
 
-    // Flows every chunk in this paragraph group's words through
-    // WordFlowLayout, so a paragraph the synthesis chunker had to cut for
-    // its ~350-char budget still wraps and reads as continuous prose
-    // instead of breaking mid-line at the cut — while still letting the
-    // single currently-playing word carry its own rounded background
-    // highlight, which plain Text concatenation can't do (there's no way
-    // to give one piece within a `Text + Text` run its own background).
-    // All word text is one color at full opacity; only the word background
-    // (and the paragraph box in paragraphGroupView) signal position now.
-    // Every word carries constant padding regardless of highlight state —
-    // varying it would resize the word and reflow the paragraph as the
-    // highlight moves, the same class of bug the earlier construction-
-    // method-consistency fix addressed.
-    private func paragraphText(group: [Int]) -> some View {
-        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex) && chapterPlayer.isPlaying
-        let currentChunkIndex = chapterPlayer.currentChunkIndex
-        let currentWord =
-            isCurrentGroup ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil
+    // Flows one paragraph group's words through WordFlowLayout, so a
+    // paragraph the synthesis chunker had to cut for its ~350-char budget
+    // still wraps and reads as continuous prose instead of breaking
+    // mid-line at the cut — while still letting the single currently-
+    // playing word carry its own rounded background highlight, which plain
+    // Text concatenation can't do (no way to give one piece within a
+    // `Text + Text` run its own background). All word text is one color at
+    // full opacity; only the word background and the paragraph box signal
+    // position. Every word carries constant padding regardless of
+    // highlight state — varying it would resize the word and reflow the
+    // paragraph as the highlight moves, the construction-method-
+    // consistency rule from the earlier pause/resume reflow fix.
+    //
+    // Equatable so paragraphRowView's `.equatable()` can skip re-running
+    // body entirely for a paragraph nothing changed about — comparing only
+    // the four scalar/Int fields below, not `items` elementwise, which is
+    // what actually makes the check cheap. `itemsRevision` is what catches
+    // real content changes, including the nil→index transition when a
+    // streaming chunk's word timings land.
+    private struct ParagraphRow: View, Equatable {
+        let items: [FlowWordItem]
+        let itemsRevision: Int
+        let highlightedChunkIndex: Int?
+        let highlightedWordIndex: Int?
+        let isCurrentGroup: Bool
 
-        return WordFlowLayout(horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6) {
-            ForEach(Array(wordItems(for: group).enumerated()), id: \.offset) { _, item in
-                let isHighlighted =
-                    isCurrentGroup && item.chunkIndex == currentChunkIndex && item.wordIndexInChunk == currentWord
-                Text(item.text)
-                    .font(AppTextStyle.reading.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 1)
-                    .background(
-                        isHighlighted ? Color.wordHighlightBackground : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 4))
-                    .lineBreaksBefore(item.lineBreaksBefore)
-            }
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
+                && lhs.highlightedWordIndex == rhs.highlightedWordIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+
+        var body: some View {
+            WordFlowLayout(horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6) {
+                // items.indices, not Array(items.enumerated()) — the
+                // latter allocates a fresh tuple array on every body run,
+                // which for the playing paragraph is 12x/sec.
+                ForEach(items.indices, id: \.self) { index in
+                    let item = items[index]
+                    let isHighlighted =
+                        isCurrentGroup && item.chunkIndex == highlightedChunkIndex
+                            && item.wordIndexInChunk == highlightedWordIndex
+                    Text(item.text)
+                        .font(AppTextStyle.reading.font)
+                        .foregroundStyle(Color.appPrimaryText)
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 1)
+                        .background(
+                            isHighlighted ? Color.wordHighlightBackground : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 4))
+                        .lineBreaksBefore(item.lineBreaksBefore)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(6)
+            .background(
+                isCurrentGroup ? Color.chunkHighlightBackground : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     // One entry per displayed word across a paragraph group's chunks,
@@ -478,7 +597,9 @@ struct ChapterPlayerView: View {
     // splitter chunk text itself uses), they just can never be the
     // highlighted word, matching the whole-chunk-only fallback this had
     // before per-word highlighting existed.
-    private struct FlowWordItem {
+    // Equatable so recomputeWordItems can tell which paragraphs actually
+    // changed and bump only their revisions.
+    private struct FlowWordItem: Equatable {
         let text: String
         let chunkIndex: Int
         let wordIndexInChunk: Int?
@@ -524,7 +645,7 @@ struct ChapterPlayerView: View {
         showControlsTemporarily()
         let target: Int
         if group.count > 1 {
-            let height = groupHeights[groupIndex] ?? 0
+            let height = groupHeightsBox.heights[groupIndex] ?? 0
             let proportion = height > 0 ? Double(max(0, min(localY, height)) / height) : 0
             target = estimatedChunk(inGroup: group, atProportion: proportion)
         } else {
