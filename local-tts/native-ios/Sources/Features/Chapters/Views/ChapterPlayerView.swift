@@ -2,16 +2,33 @@ import LucideSwift
 import SwiftUI
 import UIKit
 
+/// Uses exact scroll visibility on iOS 18+, with LazyVStack lifecycle as
+/// the iOS 17 fallback. The fallback can retain a small prefetch margin,
+/// but never reports an off-screen row before SwiftUI has actually retired
+/// it from the lazy stack.
+private struct ReaderScrollVisibilityObserver: ViewModifier {
+    let onChange: (Bool) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollVisibilityChange(threshold: 0.01, onChange)
+        } else {
+            content
+                .onAppear { onChange(true) }
+                .onDisappear { onChange(false) }
+        }
+    }
+}
+
 /// The music-player screen for a chapter: the whole page is the read-along
 /// text, with a compact, translucent transport bar floating over its
-/// bottom (scrubber on top, avatar + −10s/play-pause/+10s below) — text
-/// keeps scrolling underneath it, it doesn't reserve its own space. The
-/// transport bar fades out after a few seconds of inactivity (so it
-/// doesn't sit over the text while the user's just reading/listening) and
-/// fades back in on any tap on the page — see showControlsTemporarily.
+/// bottom (elapsed/total time on top, avatar + −10s/play-pause/+10s
+/// below) — text keeps scrolling underneath it, it doesn't reserve its own
+/// space.
 /// Reachable both from a saved chapter (`ChaptersListView` → `playSaved`)
 /// and from Play on one that hasn't been generated yet (→ `stream`) — the
-/// two feed identical scrubber/highlighting behavior through
+/// two feed identical playback/highlighting behavior through
 /// `ChapterAudioPlayer`'s shared published surface (`duration`/`elapsed`/
 /// `wordTimings(forChunk:)`/etc.), which is kept correct for both modes
 /// internally; this view doesn't know or care which one is active. The one
@@ -19,9 +36,9 @@ import UIKit
 /// rather than being known upfront, and seeking is clamped to what's
 /// already been synthesized — both handled inside `ChapterAudioPlayer`.
 ///
-/// The read-along portion — the 2-second user-scroll override and the
-/// "Jump to current" pill — is lifted verbatim from the retired
-/// `ReadAlongPlayerView`. Highlighting is word-level for English Kokoro
+/// The read-along pauses auto-follow after any manual scroll and resumes it
+/// only when the user taps the floating current-word pill. Highlighting is
+/// word-level for English Kokoro
 /// chunks (see `WordTimingDeriver`) — every chunk's own word-timings entry
 /// drives this; an empty entry (non-English voice, a manifest saved before
 /// this feature existed, or — during streaming — a chunk not yet
@@ -31,20 +48,10 @@ struct ChapterPlayerView: View {
     let chapterRef: ChapterRef
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
 
-    @State private var isUserScrolling = false
-    @State private var scrollResumeTask: Task<Void, Never>?
-    // Reference type, not @State — mutating .lastEventAt must NOT
-    // invalidate the view (it happens on every raw drag delta, potentially
-    // display-rate). Only isUserScrolling itself is @State, and only two
-    // places write it: the transition into scrolling, and the polling
-    // Task noticing 2s of no further drag events. See readAlong's
-    // DragGesture handler.
-    private final class ScrollActivity {
-        var lastEventAt = Date.distantPast
-    }
-    @State private var scrollActivity = ScrollActivity()
-    @State private var scrubberValue: Double = 0
-    @State private var isScrubbing = false
+    @State private var isAutoScrollPaused = false
+    @State private var visibleParagraphs: Set<Int> = []
+    @State private var isPlayerCollapsed = false
+    @Namespace private var floatingPlayerNamespace
     // Chunks that belong to the same paragraph in the chapter's own source
     // text, grouped so they render as one continuous Text — one row per
     // paragraph, not one row per ~350-char synthesis chunk (see
@@ -73,29 +80,24 @@ struct ChapterPlayerView: View {
     // Reference type, not @State — the tap-position-estimate height
     // measurement in readAlong's GeometryReader fires on layout, not on a
     // meaningful content change, so writing it must not invalidate the
-    // view either (same reasoning as ScrollActivity above).
+    // view either; these measurements are bookkeeping, not visible state.
     private final class GroupHeightsBox {
         var heights: [Int: CGFloat] = [:]
     }
     @State private var groupHeightsBox = GroupHeightsBox()
-    // Whether the floating transport bar is showing — starts visible, then
-    // fades out after a few seconds of no interaction and back in on any
-    // tap. See showControlsTemporarily, called from every real interaction
-    // point (transport buttons, scrubbing, tap-to-seek) rather than relying
-    // on gesture propagation from one page-wide tap, which could otherwise
-    // get eaten by a paragraph row's own tap-to-seek gesture.
-    @State private var isControlsVisible = true
-    @State private var hideControlsTask: Task<Void, Never>?
     // Play/pause button pulses opacity while nothing is playable yet
     // (chapterPlayer.isBuffering — true entering the player before
     // streaming's first chunk lands, or between chunks if playback ever
     // catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
     @State private var isOptionsSheetPresented = false
-    // Both persisted across sessions — set once, stays that way for every
-    // chapter opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
+    // Persisted across sessions — set once, stays that way for every chapter
+    // opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
     @AppStorage("chapterPlayerKeepScreenOn") private var keepScreenOn = false
     @AppStorage("chapterPlayerShowFloatingPlayer") private var showFloatingPlayer = true
+    @AppStorage("chapterPlayerAutoScrollEnabled") private var autoScrollEnabled = true
+    @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
 
     private var chapter: Chapter? {
         project.chapters.first { $0.index == chapterRef.chapterIndex }
@@ -111,17 +113,11 @@ struct ChapterPlayerView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             readAlong
-            // showFloatingPlayer is the persisted "off" switch — fully
-            // hidden, no tap-to-reveal, regardless of isControlsVisible's
-            // own auto-hide ticking. isControlsVisible still layers the
-            // existing fade-after-inactivity behavior on top when it's on.
-            if showFloatingPlayer, isControlsVisible {
+            if showFloatingPlayer {
                 floatingPlayer
-                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: isControlsVisible)
-        .background(Color.appBackground.ignoresSafeArea())
+        .background(readerTheme.background.ignoresSafeArea())
         .navigationTitle(chapter?.title ?? "Chapter")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -129,24 +125,26 @@ struct ChapterPlayerView: View {
                 Button {
                     isOptionsSheetPresented = true
                 } label: {
-                    LucideIcon(.ellipsis, color: Color.appPrimaryText)
+                    LucideIcon(.ellipsis, color: readerTheme.primaryText)
                 }
             }
         }
         .sheet(isPresented: $isOptionsSheetPresented) {
-            ChapterPlayerOptionsSheet(keepScreenOn: $keepScreenOn, showFloatingPlayer: $showFloatingPlayer)
+            ChapterPlayerOptionsSheet(
+                keepScreenOn: $keepScreenOn,
+                showFloatingPlayer: $showFloatingPlayer,
+                autoScrollEnabled: $autoScrollEnabled,
+                fontSize: $readerFontSize,
+                theme: $readerTheme)
         }
-        .preferredColorScheme(.dark)
-        // Catch-all for a tap that lands on plain background rather than a
-        // specific control — simultaneousGesture so it never blocks a
-        // paragraph row's own tap-to-seek or the ScrollView's own drag.
-        .simultaneousGesture(TapGesture().onEnded { showControlsTemporarily() })
-        .onChange(of: chapterPlayer.elapsed) { _, newValue in
-            guard !isScrubbing else { return }
-            scrubberValue = newValue
-        }
+        .preferredColorScheme(readerTheme.colorScheme)
         .onChange(of: keepScreenOn) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
+        }
+        .onChange(of: autoScrollEnabled) { _, isEnabled in
+            if !isEnabled {
+                isAutoScrollPaused = false
+            }
         }
         // Fires once per chunk as streaming synthesizes it (duration only
         // grows in that mode — see ChapterAudioPlayer.stream), which is
@@ -156,9 +154,10 @@ struct ChapterPlayerView: View {
             recomputeWordItems()
         }
         .onAppear {
+            isAutoScrollPaused = false
+            isPlayerCollapsed = false
             paragraphGroups = computeParagraphGroups()
             recomputeWordItems()
-            scheduleHideControls()
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
         .onDisappear {
@@ -166,31 +165,6 @@ struct ChapterPlayerView: View {
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
             UIApplication.shared.isIdleTimerDisabled = false
-            // Both outlive the view by a few seconds otherwise, waking up
-            // only to write state nothing is showing any more.
-            hideControlsTask?.cancel()
-            scrollResumeTask?.cancel()
-        }
-    }
-
-    // Cancels any pending auto-hide, shows the bar (if it was hidden), and
-    // starts a fresh countdown — call this from every real interaction
-    // with the page, not just the catch-all background tap.
-    private func showControlsTemporarily() {
-        hideControlsTask?.cancel()
-        isControlsVisible = true
-        scheduleHideControls()
-    }
-
-    private func scheduleHideControls() {
-        hideControlsTask = Task {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            // Skip this cycle rather than hiding out from under an active
-            // scrub/scroll — endScrub and the scroll-settle handler both
-            // already call showControlsTemporarily(), which reschedules
-            // once the user actually lets go/stops.
-            guard !Task.isCancelled, !isScrubbing, !isUserScrolling else { return }
-            isControlsVisible = false
         }
     }
 
@@ -281,38 +255,95 @@ struct ChapterPlayerView: View {
     // MARK: - Floating player
 
     private var floatingPlayer: some View {
-        VStack(spacing: 14) {
-            scrubber
-            transportRow
+        ZStack(alignment: .bottom) {
+            if isPlayerCollapsed {
+                compactPlayer
+                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+            } else {
+                expandedPlayer
+                    .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
+            }
         }
-        .padding(16)
-        .background(Color.appSecondaryBackground.opacity(0.92), in: RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal)
         .padding(.bottom, 8)
+        .offset(y: 25)
     }
 
-    private var scrubber: some View {
-        VStack(spacing: 4) {
-            Slider(
-                value: $scrubberValue, in: 0...max(chapterPlayer.duration, 1),
-                onEditingChanged: { editing in
-                    showControlsTemporarily()
-                    if editing {
-                        isScrubbing = true
-                        chapterPlayer.beginScrub()
-                    } else {
-                        isScrubbing = false
-                        chapterPlayer.endScrub(to: scrubberValue)
-                    }
-                }
-            )
-            .tint(Color.appPrimaryText)
+    private var expandedPlayer: some View {
+        // 56pt header + 64pt transport row - 4pt overlap = 116pt,
+        // approximately 70% of the previous 166pt card, without shrinking
+        // any of the enlarged control hit targets.
+        VStack(spacing: -4) {
+            durationHeader
+            transportRow
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background { playerBackground(cornerRadius: 20) }
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onTapGesture { }
+    }
 
-            HStack {
-                Text(Self.formatTime(scrubberValue)).appText(.meta).monospacedDigit()
-                Spacer()
-                Text(Self.formatTime(chapterPlayer.duration)).appText(.meta).monospacedDigit()
+    private var durationHeader: some View {
+        ZStack(alignment: .trailing) {
+            Text("\(Self.formatTime(chapterPlayer.elapsed)) | \(Self.formatTime(chapterPlayer.duration))")
+                .appText(.meta)
+                .foregroundStyle(readerTheme.secondaryText)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity)
+
+            Button {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    isPlayerCollapsed = true
+                }
+            } label: {
+                LucideIcon(.x, size: 20, color: readerTheme.primaryText)
+                    .frame(width: 56, height: 56)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collapse player")
+        }
+        .frame(height: 56)
+    }
+
+    private var compactPlayer: some View {
+        HStack(spacing: 4) {
+            playPauseButton
+
+            Button {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    isPlayerCollapsed = false
+                }
+            } label: {
+                LucideIcon(.chevronUp, size: 24, color: readerTheme.primaryText)
+                    .frame(width: 56, height: 56)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Expand player")
+        }
+        .background { playerBackground(cornerRadius: 32) }
+        .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .onTapGesture { }
+    }
+
+    // Liquid Glass is only available on iOS 26+. Tinting it with the active
+    // reader palette keeps both light and dark player cards visually tied
+    // to the page. The explicit themed fallback does the same on iOS 17–25.
+    @ViewBuilder
+    private func playerBackground(cornerRadius: CGFloat) -> some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    .regular.tint(readerTheme.controlBackground),
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .matchedGeometryEffect(id: "playerBackground", in: floatingPlayerNamespace)
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(readerTheme.controlBackground)
+                .matchedGeometryEffect(id: "playerBackground", in: floatingPlayerNamespace)
         }
     }
 
@@ -324,27 +355,12 @@ struct ChapterPlayerView: View {
 
             HStack(spacing: 28) {
                 skipButton(icon: .rotateCcw, label: "10") {
-                    showControlsTemporarily()
                     chapterPlayer.skipBackward()
                 }
 
-                Button(action: {
-                    showControlsTemporarily()
-                    chapterPlayer.togglePlayPause()
-                }) {
-                    LucideIcon(
-                        chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 44,
-                        color: Color.appPrimaryText)
-                }
-                .buttonStyle(.plain)
-                .opacity(isPulsingPlayButton ? 0.5 : 1)
-                .onAppear { updatePlayButtonPulse(isBuffering: chapterPlayer.isBuffering) }
-                .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
-                    updatePlayButtonPulse(isBuffering: isBuffering)
-                }
+                playPauseButton
 
                 skipButton(icon: .rotateCw, label: "10") {
-                    showControlsTemporarily()
                     chapterPlayer.skipForward()
                 }
             }
@@ -356,6 +372,27 @@ struct ChapterPlayerView: View {
             // the trailing edge.
             Color.clear.frame(width: 44, height: 1)
         }
+    }
+
+    private var playPauseButton: some View {
+        Button {
+            chapterPlayer.togglePlayPause()
+        } label: {
+            LucideIcon(
+                chapterPlayer.isPlaying ? .circlePause : .circlePlay, size: 44,
+                color: readerTheme.primaryText
+            )
+            .frame(width: 64, height: 64)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(chapterPlayer.isPlaying ? "Pause" : "Play")
+        .opacity(isPulsingPlayButton ? 0.5 : 1)
+        .onAppear { updatePlayButtonPulse(isBuffering: chapterPlayer.isBuffering) }
+        .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
+            updatePlayButtonPulse(isBuffering: isBuffering)
+        }
+        .matchedGeometryEffect(id: "playPauseButton", in: floatingPlayerNamespace)
     }
 
     private var avatar: some View {
@@ -373,8 +410,10 @@ struct ChapterPlayerView: View {
     private func skipButton(icon: LucideIconName, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             ZStack {
-                LucideIcon(icon, size: 28, color: Color.appPrimaryText)
-                Text(label).appText(.meta)
+                LucideIcon(icon, size: 28, color: readerTheme.primaryText)
+                Text(label)
+                    .appText(.meta)
+                    .foregroundStyle(readerTheme.secondaryText)
             }
             .frame(width: 44, height: 44)
         }
@@ -382,9 +421,9 @@ struct ChapterPlayerView: View {
     }
 
     private static func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
         let total = Int(seconds)
-        return String(format: "%d:%02d", total / 60, total % 60)
+        return String(format: "%02d:%02d", total / 60, total % 60)
     }
 
     // MARK: - Read-along text
@@ -392,7 +431,7 @@ struct ChapterPlayerView: View {
     private var readAlong: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
                         let group = effectiveGroups[groupIndex]
                         paragraphRowView(groupIndex: groupIndex)
@@ -412,67 +451,96 @@ struct ChapterPlayerView: View {
                                         group: group, groupIndex: groupIndex, localY: value.location.y)
                                 }
                             )
+                            .modifier(
+                                ReaderScrollVisibilityObserver { isVisible in
+                                    if isVisible {
+                                        visibleParagraphs.insert(groupIndex)
+                                    } else {
+                                        visibleParagraphs.remove(groupIndex)
+                                    }
+                                })
                     }
                 }
                 .padding()
                 // Clears the floating player so the last few lines of text
                 // aren't permanently hidden underneath it.
-                .padding(.bottom, 140)
+                .padding(
+                    .bottom,
+                    showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
             }
             .simultaneousGesture(
-                // onChanged fires at display rate during a scroll — only
-                // the cheap timestamp write happens on every event; the
-                // real work (state write, Task) happens once per scroll
-                // gesture, not once per event. A raw DragGesture().onChanged
-                // creating/cancelling a Task on every delta was landing
-                // directly on the interaction that felt janky.
                 DragGesture().onChanged { _ in
-                    scrollActivity.lastEventAt = Date()
-                    guard !isUserScrolling else { return }
-                    showControlsTemporarily()
-                    isUserScrolling = true
-                    scrollResumeTask?.cancel()
-                    scrollResumeTask = Task {
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 300_000_000)
-                            guard !Task.isCancelled else { return }
-                            if Date().timeIntervalSince(scrollActivity.lastEventAt) >= 2.0 {
-                                isUserScrolling = false
-                                // Scrolling itself no longer calls
-                                // showControlsTemporarily() per event, so
-                                // the controls-hide countdown needs a
-                                // fresh start once scrolling actually
-                                // settles, not just at its first moment.
-                                showControlsTemporarily()
-                                return
-                            }
-                        }
-                    }
+                    guard autoScrollEnabled, !isAutoScrollPaused else { return }
+                    isAutoScrollPaused = true
                 }
             )
             .onChange(of: chapterPlayer.currentChunkIndex) { _, chunkIndex in
-                guard !isUserScrolling else { return }
+                guard autoScrollEnabled, !isAutoScrollPaused else { return }
                 guard let (groupIndex, anchor) = scrollTarget(forChunk: chunkIndex) else { return }
                 withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
             }
             .overlay(alignment: .top) {
-                if isUserScrolling {
-                    Button("Jump to current") {
-                        scrollResumeTask?.cancel()
-                        isUserScrolling = false
-                        if let (groupIndex, anchor) = scrollTarget(forChunk: chapterPlayer.currentChunkIndex) {
-                            withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+                if autoScrollEnabled, isAutoScrollPaused, isCurrentParagraphOffscreen {
+                    TimelineView(.periodic(from: .now, by: 0.08)) { _ in
+                        currentWordResumeButton {
+                            isAutoScrollPaused = false
+                            if let (groupIndex, anchor) = scrollTarget(
+                                forChunk: chapterPlayer.currentChunkIndex)
+                            {
+                                withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+                            }
                         }
                     }
-                    .font(AppTextStyle.label.font)
-                    .foregroundStyle(Color.ghostButtonText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
                     .padding(.top, 8)
                 }
             }
         }
+    }
+
+    private var isCurrentParagraphOffscreen: Bool {
+        guard let groupIndex = effectiveGroups.firstIndex(where: {
+            $0.contains(chapterPlayer.currentChunkIndex)
+        }) else { return false }
+        return !visibleParagraphs.contains(groupIndex)
+    }
+
+    private var currentSpokenWord: String {
+        let timings = chapterPlayer.wordTimings(forChunk: chapterPlayer.currentChunkIndex)
+        guard
+            let wordIndex = chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime),
+            timings.indices.contains(wordIndex)
+        else { return "Current" }
+        return timings[wordIndex].word
+    }
+
+    @ViewBuilder
+    private func currentWordResumeButton(action: @escaping () -> Void) -> some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) {
+                Button(action: action) { currentWordResumeLabel }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Jump to current word: \(currentSpokenWord)")
+                    .glassEffect(.regular.interactive(), in: Capsule())
+            }
+        } else {
+            Button(action: action) { currentWordResumeLabel }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Jump to current word: \(currentSpokenWord)")
+                .background(.ultraThinMaterial, in: Capsule())
+        }
+    }
+
+    private var currentWordResumeLabel: some View {
+        Text(currentSpokenWord)
+            .font(AppTextStyle.label.font)
+            .foregroundStyle(readerTheme.highlightedText)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                readerTheme.wordHighlightBackground,
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .padding(6)
     }
 
     // A single-chunk group scrolls to .center, same as before grouping
@@ -515,14 +583,18 @@ struct ChapterPlayerView: View {
                         highlightedChunkIndex: chapterPlayer.currentChunkIndex,
                         highlightedWordIndex: chapterPlayer.currentWordIndex(
                             atElapsed: chapterPlayer.currentPlaybackTime),
-                        isCurrentGroup: true
+                        isCurrentGroup: true,
+                        fontSize: readerFontSize,
+                        theme: readerTheme
                     ).equatable()
                 }
             } else {
                 ParagraphRow(
                     items: items, itemsRevision: revision,
                     highlightedChunkIndex: nil, highlightedWordIndex: nil,
-                    isCurrentGroup: isCurrentGroup
+                    isCurrentGroup: isCurrentGroup,
+                    fontSize: readerFontSize,
+                    theme: readerTheme
                 ).equatable()
             }
         }
@@ -543,20 +615,23 @@ struct ChapterPlayerView: View {
     //
     // Equatable so paragraphRowView's `.equatable()` can skip re-running
     // body entirely for a paragraph nothing changed about — comparing only
-    // the four scalar/Int fields below, not `items` elementwise, which is
-    // what actually makes the check cheap. `itemsRevision` is what catches
-    // real content changes, including the nil→index transition when a
-    // streaming chunk's word timings land.
+    // scalar values and the two small preference enums below, not `items`
+    // elementwise, which is what actually makes the check cheap.
+    // `itemsRevision` is what catches real content changes, including the
+    // nil→index transition when a streaming chunk's word timings land.
     private struct ParagraphRow: View, Equatable {
         let items: [FlowWordItem]
         let itemsRevision: Int
         let highlightedChunkIndex: Int?
         let highlightedWordIndex: Int?
         let isCurrentGroup: Bool
+        let fontSize: ReaderFontSize
+        let theme: ReaderTheme
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
                 && lhs.highlightedWordIndex == rhs.highlightedWordIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
+                && lhs.fontSize == rhs.fontSize && lhs.theme == rhs.theme
         }
 
         var body: some View {
@@ -570,12 +645,12 @@ struct ChapterPlayerView: View {
                         isCurrentGroup && item.chunkIndex == highlightedChunkIndex
                             && item.wordIndexInChunk == highlightedWordIndex
                     Text(item.text)
-                        .font(AppTextStyle.reading.font)
-                        .foregroundStyle(Color.appPrimaryText)
+                        .font(fontSize.font)
+                        .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
                         .background(
-                            isHighlighted ? Color.wordHighlightBackground : Color.clear,
+                            isHighlighted ? theme.wordHighlightBackground : Color.clear,
                             in: RoundedRectangle(cornerRadius: 4))
                         .lineBreaksBefore(item.lineBreaksBefore)
                 }
@@ -583,7 +658,7 @@ struct ChapterPlayerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(6)
             .background(
-                isCurrentGroup ? Color.chunkHighlightBackground : Color.clear,
+                isCurrentGroup ? theme.chunkHighlightBackground : Color.clear,
                 in: RoundedRectangle(cornerRadius: 8))
         }
     }
@@ -642,7 +717,6 @@ struct ChapterPlayerView: View {
     }
 
     private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {
-        showControlsTemporarily()
         let target: Int
         if group.count > 1 {
             let height = groupHeightsBox.heights[groupIndex] ?? 0
@@ -653,7 +727,6 @@ struct ChapterPlayerView: View {
         }
         guard let start = chapterPlayer.startTime(forChunk: target) else { return }
         chapterPlayer.seek(to: start)
-        scrubberValue = start
     }
 
     // Maps a vertical tap position (0...1 down the paragraph) to a chunk
