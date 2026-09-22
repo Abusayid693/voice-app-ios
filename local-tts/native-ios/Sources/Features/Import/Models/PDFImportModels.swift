@@ -8,7 +8,7 @@ enum PDFImportPhase: String, Codable, Equatable {
     case queued
     case validating
     case extracting
-    case chaptering
+    case preparingPages
     case finalizing
     case completed
     case failed
@@ -19,7 +19,7 @@ enum PDFImportPhase: String, Codable, Equatable {
         case .queued: return "Queued"
         case .validating: return "Checking PDF"
         case .extracting: return "Reading pages"
-        case .chaptering: return "Finding chapters"
+        case .preparingPages: return "Preparing pages"
         case .finalizing: return "Saving book"
         case .completed: return "Ready to read"
         case .failed: return "Import failed"
@@ -77,10 +77,20 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
     }
 
     var sourceURL: URL { directory.appendingPathComponent("source.pdf") }
+    /// A small raster of the first physical page, retained during import so
+    /// it can be copied beside the final project's independently stored pages.
+    var coverURL: URL { directory.appendingPathComponent("cover.jpg") }
     var pagesDirectory: URL { directory.appendingPathComponent("pages", isDirectory: true) }
+    var readerPagesDirectory: URL {
+        directory.appendingPathComponent("reader-pages", isDirectory: true)
+    }
 
     func pageURL(index: Int) -> URL {
         pagesDirectory.appendingPathComponent(String(format: "%06d.json", index))
+    }
+
+    func readerPageURL(index: Int) -> URL {
+        readerPagesDirectory.appendingPathComponent(String(format: "%06d.json", index))
     }
 }
 
@@ -131,16 +141,13 @@ struct PDFParagraph: Codable, Hashable {
     let isBold: Bool
 }
 
-struct PDFOutlineEntry: Codable, Hashable {
-    let title: String
-    let pageIndex: Int
-    let top: Double
-    let depth: Int
-}
-
 struct PDFImportResult: Sendable {
     let title: String
-    let chapters: [Chapter]
+    let pagesDirectory: URL
+    let pageCount: Int
+    /// Optional so a thumbnail rendering failure cannot discard otherwise
+    /// readable imported content; callers use the standard project icon then.
+    let coverURL: URL?
 }
 
 struct PDFProcessingProgress: Sendable {
@@ -165,7 +172,7 @@ enum PDFImportError: LocalizedError {
         case .noTextLayer:
             return "This PDF does not contain selectable text. Scanned PDFs are not supported yet."
         case .insufficientText:
-            return "This PDF does not contain enough selectable text to create chapters."
+            return "This PDF does not contain enough selectable text to create readable pages."
         case .noReadableContent:
             return "No readable content could be extracted from this PDF."
         }

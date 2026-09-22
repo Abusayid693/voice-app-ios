@@ -73,6 +73,7 @@ final class TTSViewModel: ObservableObject {
     @Published var text = "Hello from FluidAudio!"
     @Published var status = "Idle"
     @Published var isBusy = false
+    @Published private(set) var isReaderPlaybackActive = false
     @Published var initSeconds: TimeInterval?
     @Published var synthSeconds: TimeInterval?
     @Published var isWarmInit = false
@@ -97,6 +98,8 @@ final class TTSViewModel: ObservableObject {
     private var noticedKokoroVariants: Set<KokoroVariant> = []
     private var noticedPocketLanguages: Set<PocketLanguage> = []
     private var noticedSupertonic3 = false
+    private var readerPlaybackTask: Task<Void, Never>?
+    private var readerPlaybackID: UUID?
 
     // MARK: - Import screen: voice-pack setup + new sheet flags
 
@@ -175,18 +178,34 @@ final class TTSViewModel: ObservableObject {
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
     }
 
-    /// Dispatches a chapter's text to whichever non-Kokoro engine is
-    /// selected — Kokoro chapters are handled entirely by
-    /// `ChapterAudioPlayer.stream`/`ChaptersListView`, which never calls
-    /// this (see that view's `play(chapter:ref:isGenerated:)`).
-    func speakChapter(text: String) {
-        switch engine {
+    /// Plays a saved reader page with the engine and voice captured when the
+    /// project was created, rather than whichever engine is selected now.
+    func speakPage(
+        text: String, engine pageEngine: Engine, voiceName: String,
+        clonedVoice: ClonedVoice? = nil
+    ) {
+        engine = pageEngine
+        switch pageEngine {
         case .kokoroAne:
             break
         case .pocketTts:
+            if let clonedVoice {
+                selectedClonedVoice = clonedVoice
+                pocketLanguage = clonedVoice.language
+            } else {
+                selectedClonedVoice = nil
+                pocketVoice = voiceName
+            }
             runPocketTts(text: text)
+            isReaderPlaybackActive = true
         case .supertonic3:
+            if let voice = SupertonicVoice.allCases.first(where: {
+                $0.rawValue == voiceName || $0.displayName == voiceName
+            }) {
+                supertonicVoice = voice
+            }
             runSupertonicTts(text: text)
+            isReaderPlaybackActive = true
         }
     }
 
@@ -345,11 +364,14 @@ final class TTSViewModel: ObservableObject {
         streamChunkProgress = nil
     }
 
-    // Stops Pocket/Supertonic-3 playback. Kokoro chapter playback (saved or
-    // streaming) lives entirely on `ChapterAudioPlayer` now, which callers
-    // stop directly (see ChaptersListView's coordination) — this has
-    // nothing Kokoro-specific left to clean up.
+    // Stops Pocket/Supertonic-3 playback and cancels the active reader task.
+    // Kokoro page playback lives entirely on `ChapterAudioPlayer`; app-level
+    // background Generate jobs are intentionally unaffected.
     func stopEnginePlayback() {
+        readerPlaybackTask?.cancel()
+        readerPlaybackTask = nil
+        readerPlaybackID = nil
+        isReaderPlaybackActive = false
         supertonicPlayer?.stop()
         supertonicPlayer = nil
         supertonicPlayerDelegate = nil
@@ -364,9 +386,8 @@ final class TTSViewModel: ObservableObject {
         for service in pocketServices.values { service.stopPlayback() }
     }
 
-    // `text` param: a chapter's own text (speakChapter) — defaults to the
-    // ViewModel's own `text` for WriteTextView's earlier direct-speak call
-    // sites that predate the chapters flow.
+    // `text` defaults to the ViewModel's editor value; the page reader passes
+    // the selected page explicitly.
     private func runPocketTts(text overrideText: String? = nil) {
         resetRunState()
         let voice = pocketVoice
@@ -382,7 +403,10 @@ final class TTSViewModel: ObservableObject {
         let pocketService = pocketServices[pocketLanguage]!
         let language = pocketLanguage
 
-        Task {
+        let playbackID = UUID()
+        readerPlaybackID = playbackID
+        readerPlaybackTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
@@ -418,6 +442,7 @@ final class TTSViewModel: ObservableObject {
                 }
                 var receivedFirstFrame = false
                 for try await frame in stream {
+                    try Task.checkCancellation()
                     if !receivedFirstFrame {
                         receivedFirstFrame = true
                         timeToFirstAudio = Date().timeIntervalSince(synthStart)
@@ -428,13 +453,21 @@ final class TTSViewModel: ObservableObject {
                 }
                 synthSeconds = Date().timeIntervalSince(synthStart)
                 status = "Idle"
+            } catch is CancellationError {
+                status = "Idle"
             } catch {
                 status = "Error: \(error.localizedDescription)"
+                if readerPlaybackID == playbackID {
+                    isReaderPlaybackActive = false
+                }
             }
             isBusy = false
             // The notice has no
             // auto-dismiss, so every exit path has to clear it.
             isPreparingModel = false
+            if readerPlaybackID == playbackID {
+                readerPlaybackTask = nil
+            }
         }
     }
 
@@ -450,7 +483,10 @@ final class TTSViewModel: ObservableObject {
         let language = supertonicLanguage
         let voice = supertonicVoice
 
-        Task {
+        let playbackID = UUID()
+        readerPlaybackID = playbackID
+        readerPlaybackTask = Task { [weak self] in
+            guard let self else { return }
             do {
                 try AVAudioSession.sharedInstance().setCategory(.playback)
                 try AVAudioSession.sharedInstance().setActive(true)
@@ -480,13 +516,18 @@ final class TTSViewModel: ObservableObject {
                 let synthStart = Date()
                 let data = try await supertonicService.synthesize(
                     text: inputText, language: language.code, voice: voice)
+                try Task.checkCancellation()
                 synthSeconds = Date().timeIntervalSince(synthStart)
 
                 let player = try AVAudioPlayer(data: data)
                 let delegate = AudioPlaybackDelegate { [weak self] in
                     Task { @MainActor in
+                        guard self?.readerPlaybackID == playbackID else { return }
                         self?.supertonicPlayer = nil
                         self?.supertonicPlayerDelegate = nil
+                        self?.isReaderPlaybackActive = false
+                        self?.readerPlaybackTask = nil
+                        self?.readerPlaybackID = nil
                     }
                 }
                 player.delegate = delegate
@@ -495,15 +536,21 @@ final class TTSViewModel: ObservableObject {
                 player.play()
 
                 status = "Idle"
+            } catch is CancellationError {
+                status = "Idle"
             } catch {
                 status = "Error: \(error.localizedDescription)"
+                if readerPlaybackID == playbackID {
+                    isReaderPlaybackActive = false
+                }
             }
             isBusy = false
             // The notice has no
             // auto-dismiss, so every exit path has to clear it.
             isPreparingModel = false
+            if readerPlaybackID == playbackID, supertonicPlayer == nil {
+                readerPlaybackTask = nil
+            }
         }
     }
 }
-
-

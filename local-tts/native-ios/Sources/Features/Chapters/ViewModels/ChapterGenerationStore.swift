@@ -1,10 +1,8 @@
 import Foundation
 
-/// Per-chapter Generate progress, keyed by `ChapterRef`. Owned at app
-/// level (constructor-injected, like `VoicePackStore`) rather than by
-/// `ChaptersListView` — a 2-4 minute chapter synthesis must survive the
-/// user navigating back to Library and returning, not restart every time
-/// the list view appears.
+/// Per-page Generate progress, keyed by `ReaderPageRef`. Owned at app
+/// level (constructor-injected, like `VoicePackStore`) so a long page
+/// synthesis survives page changes and navigation.
 enum ChapterGenerationState: Equatable {
     case queued
     case running(done: Int, total: Int)
@@ -13,8 +11,8 @@ enum ChapterGenerationState: Equatable {
 
 @MainActor
 final class ChapterGenerationStore: ObservableObject {
-    @Published private(set) var states: [ChapterRef: ChapterGenerationState] = [:]
-    private var tasks: [ChapterRef: Task<Void, Never>] = [:]
+    @Published private(set) var states: [ReaderPageRef: ChapterGenerationState] = [:]
+    private var tasks: [ReaderPageRef: Task<Void, Never>] = [:]
 
     private let synthesisService: ChapterSynthesisService
 
@@ -22,19 +20,19 @@ final class ChapterGenerationStore: ObservableObject {
         self.synthesisService = synthesisService
     }
 
-    func state(for ref: ChapterRef) -> ChapterGenerationState? { states[ref] }
-    func isGenerating(_ ref: ChapterRef) -> Bool { tasks[ref] != nil }
+    func state(for ref: ReaderPageRef) -> ChapterGenerationState? { states[ref] }
+    func isGenerating(_ ref: ReaderPageRef) -> Bool { tasks[ref] != nil }
 
-    /// No-op if this chapter is already generating — a second Generate tap
+    /// No-op if this page is already generating — a second Generate tap
     /// while one's in flight shouldn't start a duplicate job.
-    func generate(ref: ChapterRef, project: SavedGeneration, chapter: Chapter, voice: String) {
+    func generate(ref: ReaderPageRef, project: SavedGeneration, page: ReaderPage, voice: String) {
         guard tasks[ref] == nil else { return }
         states[ref] = .queued
         let task = Task { [weak self] in
             guard let self else { return }
             do {
                 try await self.synthesisService.generateAndSave(
-                    ref: ref, project: project, chapter: chapter, voice: voice,
+                    ref: ref, project: project, page: page, voice: voice,
                     onProgress: { done, total in
                         Task { @MainActor in self.states[ref] = .running(done: done, total: total) }
                     })
@@ -52,9 +50,9 @@ final class ChapterGenerationStore: ObservableObject {
     }
 
     /// Cancels an in-flight Generate. Already-staged chunks stay on disk
-    /// (see `ChapterAudioStore`'s staging dir), so a later re-Generate
+    /// (see `PageAudioStore`'s staging dir), so a later re-Generate
     /// resumes from where this left off rather than starting over.
-    func cancel(_ ref: ChapterRef) {
+    func cancel(_ ref: ReaderPageRef) {
         tasks[ref]?.cancel()
         tasks[ref] = nil
         states[ref] = nil

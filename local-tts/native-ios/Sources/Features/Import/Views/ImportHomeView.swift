@@ -86,7 +86,7 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
-    // Set when tapping a Projects entry (any engine) — pushes ChaptersListView
+    // Set when tapping a Projects entry (any engine) — opens page 1.
     // for that saved project.
     @State private var openProject: SavedGeneration?
     // Set by WriteTextView's onGenerated the moment Generate saves a new
@@ -192,9 +192,11 @@ struct ImportHomeView: View {
                 }
             }
             .navigationDestination(item: $openProject) { project in
-                ChaptersListView(
-                    project: project, chapterPlayer: app.chapterPlayer, generationStore: app.generationStore,
-                    viewModel: viewModel)
+                ChapterPlayerView(
+                    project: project, library: libraryViewModel,
+                    voiceCloneViewModel: app.voiceClone,
+                    chapterPlayer: app.chapterPlayer,
+                    generationStore: app.generationStore, viewModel: viewModel)
             }
             // The root tab bar/floating "+" button should only show at
             // this screen's own root, not on anything pushed above it —
@@ -504,9 +506,10 @@ struct ImportHomeView: View {
                     GenerationRow(
                         icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
                         iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+                        coverURL: generation.coverURL,
                         title: generation.title,
                         subtitle:
-                            "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+                            "\(generation.pageCountLabel) · \(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
                         onTap: { openProject = libraryViewModel.project(for: generation.id) }
                     )
                 }

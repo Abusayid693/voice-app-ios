@@ -50,8 +50,8 @@ enum KokoroTextChunker {
         return chunks
     }
 
-    // Not private: ChapterSplitter reuses this same sentence-boundary logic
-    // for packing paragraphs into chapters. Returns ranges (not trimmed
+    // Not private: PageSplitter reuses this same sentence-boundary logic
+    // for packing paragraphs into reader pages. Returns ranges (not trimmed
     // strings) so callers can pack sentences by extending a span over the
     // original text — the whitespace/newlines between sentences ride along
     // in the span verbatim instead of needing to be reconstructed with a

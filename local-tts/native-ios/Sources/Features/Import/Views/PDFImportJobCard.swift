@@ -54,7 +54,7 @@ struct PDFImportJobCard: View {
                 }
                 .buttonStyle(.plain)
             }
-        case .queued, .validating, .extracting, .chaptering, .finalizing:
+        case .queued, .validating, .extracting, .preparingPages, .finalizing:
             Button {
                 manager.cancel(job)
             } label: {
