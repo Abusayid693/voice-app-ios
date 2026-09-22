@@ -82,6 +82,7 @@ final class ChapterSynthesisService {
                 try Task.checkCancellation()
                 let (data, wordTimings, _) = try await Self.synthesizeOneChunk(
                     chunkText: chunkTexts[index], voice: voice, service: service)
+                try Task.checkCancellation()
                 try PageAudioStore.saveStagedChunk(data, ref: ref, project: project, chunkIndex: index)
                 try PageAudioStore.saveStagedWordTimings(
                     wordTimings, ref: ref, project: project, chunkIndex: index)
@@ -167,7 +168,11 @@ final class ChapterSynthesisService {
             return try await operation()
         }
         tail = Task<Void, Error> { _ = try await task.value }
-        return try await task.value
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     enum SynthesisError: Error {

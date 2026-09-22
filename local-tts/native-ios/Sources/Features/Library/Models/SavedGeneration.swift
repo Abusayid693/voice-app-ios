@@ -15,7 +15,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     let title: String
     let engine: Engine
-    let voiceName: String
+    var voiceName: String
     let createdAt: Date
     let pageCount: Int
     var lastReadPageIndex: Int = 0
