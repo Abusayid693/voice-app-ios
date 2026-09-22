@@ -124,7 +124,9 @@ struct ImportHomeView: View {
                     project: project, library: libraryViewModel,
                     voiceCloneViewModel: app.voiceClone,
                     chapterPlayer: app.chapterPlayer,
-                    generationStore: app.generationStore, viewModel: viewModel)
+                    generationStore: app.generationStore,
+                    viewModel: viewModel,
+                    previewPlayer: app.previewPlayer)
             }
             // The root tab bar/floating "+" button should only show at
             // this screen's own root, not on anything pushed above it.
@@ -147,6 +149,7 @@ struct ImportHomeView: View {
             WriteTextView(
                 viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
                 libraryViewModel: libraryViewModel, packs: packs,
+                previewPlayer: app.previewPlayer,
                 onGenerated: { projectID in
                     pendingProjectID = projectID
                     viewModel.isWriteTextPresented = false

@@ -22,8 +22,10 @@ struct VoicePreviewSheet: View {
     // Not observed here — each card observes it, so a meter tick doesn't
     // re-evaluate the whole carousel.
     let previewPlayer: VoicePreviewPlayer
+    let onUseVoice: ((VoiceTile) -> Void)?
 
     @State private var currentTileID: String?
+    @Environment(\.dismiss) private var dismiss
 
     /// Horizontal inset on each side of the focused card. The neighbouring
     /// card peeks in by `cardPeek - cardSpacing`, so these two together set
@@ -31,14 +33,52 @@ struct VoicePreviewSheet: View {
     private let cardPeek: CGFloat = 28
     private let cardSpacing: CGFloat = 12
 
-    init(tiles: [VoiceTile], initialTileID: String, previewPlayer: VoicePreviewPlayer) {
+    init(
+        tiles: [VoiceTile],
+        initialTileID: String,
+        previewPlayer: VoicePreviewPlayer,
+        onUseVoice: ((VoiceTile) -> Void)? = nil
+    ) {
         self.tiles = tiles
         self.initialTileID = initialTileID
         self.previewPlayer = previewPlayer
+        self.onUseVoice = onUseVoice
         _currentTileID = State(initialValue: initialTileID)
     }
 
     var body: some View {
+        Group {
+            if let tile = tiles.first, tiles.count == 1 {
+                VoicePreviewCard(
+                    tile: tile,
+                    previewPlayer: previewPlayer,
+                    onUseVoice: onUseVoice.map { action in
+                        { action(tile); dismiss() }
+                    })
+                    .padding(.horizontal, cardPeek)
+            } else {
+                carousel
+            }
+        }
+        .padding(.vertical, 16)
+        .presentationDetents(onUseVoice == nil ? [.medium] : [.height(620)])
+        .presentationDragIndicator(.visible)
+        // Hides the system sheet's own card so ours are the only ones on
+        // screen — see the type's doc comment.
+        .presentationBackground(.clear)
+        .preferredColorScheme(.dark)
+        // Scrolling to another voice always stops whatever was playing — its
+        // audio would otherwise keep going under a different voice's card.
+        // Doesn't auto-start the new one; matches today's tap-to-play.
+        .onChange(of: currentTileID) { _, _ in
+            previewPlayer.stop()
+        }
+        .onDisappear {
+            previewPlayer.stop()
+        }
+    }
+
+    private var carousel: some View {
         // The card width is computed from the real container width rather
         // than via containerRelativeFrame: that measures the container
         // *after* contentMargins has already inset it, so subtracting the
@@ -54,7 +94,7 @@ struct VoicePreviewSheet: View {
                     // needlessly heavy.
                     LazyHStack(spacing: cardSpacing) {
                         ForEach(tiles) { tile in
-                            VoicePreviewCard(tile: tile, previewPlayer: previewPlayer)
+                            VoicePreviewCard(tile: tile, previewPlayer: previewPlayer, onUseVoice: nil)
                                 .frame(width: cardWidth)
                                 .id(tile.id)
                         }
@@ -76,22 +116,6 @@ struct VoicePreviewSheet: View {
                 }
             }
         }
-        .padding(.vertical, 16)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        // Hides the system sheet's own card so ours are the only ones on
-        // screen — see the type's doc comment.
-        .presentationBackground(.clear)
-        .preferredColorScheme(.dark)
-        // Scrolling to another voice always stops whatever was playing — its
-        // audio would otherwise keep going under a different voice's card.
-        // Doesn't auto-start the new one; matches today's tap-to-play.
-        .onChange(of: currentTileID) { _, _ in
-            previewPlayer.stop()
-        }
-        .onDisappear {
-            previewPlayer.stop()
-        }
     }
 }
 
@@ -102,6 +126,7 @@ struct VoicePreviewSheet: View {
 private struct VoicePreviewCard: View {
     let tile: VoiceTile
     @ObservedObject var previewPlayer: VoicePreviewPlayer
+    let onUseVoice: (() -> Void)?
 
     private var isPlaying: Bool { previewPlayer.playingVoiceID == tile.name }
     // Preview playback is pure bundled-file playback, independent of
@@ -152,6 +177,12 @@ private struct VoicePreviewCard: View {
             if !hasPreview {
                 Text("Preview coming soon")
                     .appText(.meta)
+            }
+
+            if let onUseVoice {
+                Button("Use Voice", action: onUseVoice)
+                    .buttonStyle(.primary)
+                    .padding(.horizontal, 32)
             }
 
             Spacer(minLength: 0)

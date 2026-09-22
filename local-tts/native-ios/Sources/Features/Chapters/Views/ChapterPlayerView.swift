@@ -125,6 +125,7 @@ struct ChapterPlayerView: View {
     let project: SavedGeneration
     let library: LibraryViewModel
     let voiceCloneViewModel: VoiceCloneViewModel
+    let previewPlayer: VoicePreviewPlayer
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
     @ObservedObject var generationStore: ChapterGenerationStore
     @ObservedObject var viewModel: TTSViewModel
@@ -247,11 +248,14 @@ struct ChapterPlayerView: View {
         project: SavedGeneration, initialPageIndex: Int? = nil,
         library: LibraryViewModel, voiceCloneViewModel: VoiceCloneViewModel,
         chapterPlayer: ChapterAudioPlayer,
-        generationStore: ChapterGenerationStore, viewModel: TTSViewModel
+        generationStore: ChapterGenerationStore,
+        viewModel: TTSViewModel,
+        previewPlayer: VoicePreviewPlayer
     ) {
         self.project = project
         self.library = library
         self.voiceCloneViewModel = voiceCloneViewModel
+        self.previewPlayer = previewPlayer
         _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
         _generationStore = ObservedObject(wrappedValue: generationStore)
         _viewModel = ObservedObject(wrappedValue: viewModel)
@@ -336,6 +340,7 @@ struct ChapterPlayerView: View {
                 viewModel: viewModel,
                 packs: viewModel.packs,
                 voiceCloneViewModel: voiceCloneViewModel,
+                previewPlayer: previewPlayer,
                 restrictedEngine: project.engine,
                 selectedVoiceName: selectedVoiceName,
                 onVoiceSelected: changeVoice)
