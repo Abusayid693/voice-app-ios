@@ -1,7 +1,6 @@
 import Hugeicons
 import LucideSwift
 import SwiftUI
-import UIKit
 
 /// One saved generation's row — an engine-icon avatar, its text, and a
 /// trailing play icon (decorative; the whole row is the real tap target,
@@ -23,8 +22,9 @@ struct GenerationRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if let coverURL {
-                ProjectCoverThumbnail(
-                    url: coverURL, icon: icon, iconStyle: iconStyle)
+                SavedProjectCover(
+                    coverURL: coverURL, title: title,
+                    size: CGSize(width: 44, height: 66))
             } else {
                 fallbackIcon
             }
@@ -56,39 +56,5 @@ struct GenerationRow: View {
             .overlay {
                 LucideIcon(icon, style: iconStyle, size: 16, color: Color.appPrimaryText)
             }
-    }
-}
-
-/// Decodes only the small persisted PDF cover for a visible row. If a file is
-/// missing or corrupt, this deliberately preserves GenerationRow's existing
-/// engine-icon fallback rather than leaving an empty thumbnail.
-private struct ProjectCoverThumbnail: View {
-    private static let size = CGSize(width: 44, height: 66)
-    private static let cornerRadius: CGFloat = 3
-
-    let url: URL
-    let icon: LucideIconName
-    let iconStyle: LucideIconStyle
-    @State private var image: UIImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                RoundedRectangle(cornerRadius: Self.cornerRadius)
-                    .fill(Color.appSecondaryBackground)
-                    .overlay {
-                        LucideIcon(icon, style: iconStyle, size: 16, color: Color.appPrimaryText)
-                    }
-            }
-        }
-        .frame(width: Self.size.width, height: Self.size.height)
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
-        .task(id: url) {
-            image = UIImage(contentsOfFile: url.path)
-        }
     }
 }

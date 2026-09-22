@@ -31,7 +31,7 @@ final class LibraryViewModel: ObservableObject {
         let id = UUID()
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: Date(), pageCount: pageCount)
+            createdAt: Date(), pageCount: pageCount, source: .pdf)
         let destination = SavedGeneration.projectPagesDirectory(id: id)
 
         do {
@@ -111,7 +111,7 @@ final class LibraryViewModel: ObservableObject {
         let id = UUID()
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: Date(), pageCount: pages.count)
+            createdAt: Date(), pageCount: pages.count, source: .enteredText)
         let directory = SavedGeneration.projectPagesDirectory(id: id)
 
         do {
