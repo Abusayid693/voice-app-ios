@@ -1,7 +1,7 @@
 import LucideSwift
 import SwiftUI
 
-private enum BookShelfPalette {
+enum BookShelfPalette {
     static let background = Color(hex: 0xF5F3ED)
     static let primaryText = Color(hex: 0x171715)
     static let secondaryText = Color(hex: 0x686761)
@@ -12,9 +12,7 @@ private enum BookShelfPalette {
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
-    let app: AppEnvironment
-
-    @State private var openProject: SavedGeneration?
+    let onOpenBook: (SavedGenerationSummary) -> Void
 
     private var books: [SavedGenerationSummary] {
         library.savedGenerations
@@ -39,27 +37,6 @@ struct BookShelfView: View {
             }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BookShelfPalette.background, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Book Shelf")
-                    .font(.custom("Didot-Bold", size: 28, relativeTo: .title2))
-                    .foregroundStyle(BookShelfPalette.primaryText)
-                    .accessibilityAddTraits(.isHeader)
-            }
-        }
-        .navigationDestination(item: $openProject) { project in
-            ChapterPlayerView(
-                project: project, library: library,
-                voiceCloneViewModel: app.voiceClone,
-                chapterPlayer: app.chapterPlayer,
-                generationStore: app.generationStore, viewModel: app.tts)
-        }
-        .tint(BookShelfPalette.primaryText)
-        .preferredColorScheme(.light)
     }
 
     private var shelf: some View {
@@ -79,7 +56,7 @@ struct BookShelfView: View {
                             spacing: coverSpacing,
                             shelfWidth: shelfWidth
                         ) { book in
-                            openProject = library.project(for: book.id)
+                            onOpenBook(book)
                         }
                     }
                 }
@@ -177,6 +154,6 @@ private struct GlassBookShelf: View {
 #Preview {
     let app = AppEnvironment.preview()
     return NavigationStack {
-        BookShelfView(library: app.library, app: app)
+        BookShelfView(library: app.library, onOpenBook: { _ in })
     }
 }

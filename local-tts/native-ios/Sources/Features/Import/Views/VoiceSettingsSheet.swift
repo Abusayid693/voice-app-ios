@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Combined Kokoro + Pocket + Supertonic-3 voice picker for the Write text
 /// screen — one list, each voice tagged available/not-available based on
-/// whether that engine's pack has been downloaded (see SetupSheet).
+/// whether that engine's pack has been downloaded (see SetupView).
 /// Selecting an available voice also switches `viewModel.engine` to match.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel

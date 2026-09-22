@@ -51,7 +51,7 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
-    @State private var isBookShelfPresented = false
+    @AppStorage("home.mode") private var storedHomeMode = HomeMode.studio.rawValue
     // Set when tapping a Projects entry (any engine) — opens page 1.
     // for that saved project.
     @State private var openProject: SavedGeneration?
@@ -65,10 +65,6 @@ struct ImportHomeView: View {
     // keeps the other in sync.
     @State private var selectedHomeTab: HomeTab = .listen
 
-    private var isFullyDownloaded: Bool {
-        packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
-    }
-
     private var selectedVoiceName: String {
         switch viewModel.engine {
         case .kokoroAne: return viewModel.kokoroVoice
@@ -79,51 +75,54 @@ struct ImportHomeView: View {
 
     var body: some View {
         navigationContent
-            .preferredColorScheme(.dark)
+    }
+
+    /// Invalid values (including values left by older builds) deliberately
+    /// resolve to Studio rather than leaving Home without a visible mode.
+    private var homeMode: HomeMode {
+        HomeMode(rawValue: storedHomeMode) ?? .studio
+    }
+
+    private var homeModeBinding: Binding<HomeMode> {
+        Binding(
+            get: { HomeMode(rawValue: storedHomeMode) ?? .studio },
+            set: { storedHomeMode = $0.rawValue })
     }
 
     private var navigationContent: some View {
         NavigationStack {
-            ScrollView {
-                // 4 top-level groups (buttons, Trending voices, Read
-                // Anything, Projects) at AppSpacing.betweenGroups; within a
-                // multi-part group, siblings sit at the tighter
-                // AppSpacing.betweenSections instead.
-                VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
-                    actionTabsSection
+            GeometryReader { geometry in
+                ZStack {
+                    studioContent
+                        .opacity(homeMode == .studio ? 1 : 0)
+                        .allowsHitTesting(homeMode == .studio)
+                        .accessibilityHidden(homeMode != .studio)
 
-                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                        trendingVoicesSection
-                        createYourOwnVoiceRow
+                    BookShelfView(library: libraryViewModel) { book in
+                        openProject = libraryViewModel.project(for: book.id)
                     }
-
-                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                        readAnythingSection
-                        ClassicReadsSection(viewModel: classicReadsViewModel)
-                        newInRomanceSection
-                        createYourOwnBookRow
-                    }
-
-                    projectsSection
+                    .opacity(homeMode == .reading ? 1 : 0)
+                    .allowsHitTesting(homeMode == .reading)
+                    .accessibilityHidden(homeMode != .reading)
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+                .background(homeMode.background.ignoresSafeArea())
+                .simultaneousGesture(modeEdgeSwipe(in: geometry.size.width))
+                .animation(.easeInOut(duration: 0.24), value: homeMode)
             }
-            .scrollIndicators(.hidden)
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Home")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(homeMode.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    setupButton
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    bookShelfButton
+                ToolbarItem(placement: .principal) {
+                    HomeModeSwitcher(selection: homeModeBinding)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     settingsButton
                 }
             }
+            .tint(homeMode.primaryText)
+            .preferredColorScheme(homeMode.colorScheme)
             .task { await openLibraryBooksViewModel.loadIfNeeded() }
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {
@@ -140,19 +139,14 @@ struct ImportHomeView: View {
                     chapterPlayer: app.chapterPlayer,
                     generationStore: app.generationStore, viewModel: viewModel)
             }
-            .navigationDestination(isPresented: $isBookShelfPresented) {
-                BookShelfView(library: libraryViewModel, app: app)
-            }
             // The root tab bar/floating "+" button should only show at
-            // this screen's own root, not on anything pushed above it —
-            // see NavigationChromeVisibility. Two triggers, either one
-            // non-nil means something's pushed.
+            // this screen's own root, not on anything pushed above it.
             .tabRootChrome(
                 app.navigationChrome,
-                isPushed: openProject != nil || voiceCloneRoute != nil || isBookShelfPresented)
+                isPushed: openProject != nil || voiceCloneRoute != nil)
         }
-        .sheet(isPresented: $viewModel.isSetupPresented) {
-            SetupSheet(viewModel: viewModel, packs: packs)
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
         }
         .fullScreenCover(
             isPresented: $viewModel.isWriteTextPresented,
@@ -180,9 +174,6 @@ struct ImportHomeView: View {
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: app.previewPlayer)
         }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
-        }
         .fileImporter(
             isPresented: $pdfImports.isDocumentPickerPresented,
             allowedContentTypes: [.pdf], allowsMultipleSelection: false
@@ -195,16 +186,35 @@ struct ImportHomeView: View {
         }
     }
 
-    private var setupButton: some View {
-        Button {
-            viewModel.isSetupPresented = true
-        } label: {
-            Label(
-                title: { Text("Setup") },
-                icon: {
-                    LucideIcon(isFullyDownloaded ? .circleCheck : .circleArrowDown)
-                })
-        }
+    private var studioContent: some View {
+        ScrollView {
+                // 4 top-level groups (buttons, Trending voices, Read
+                // Anything, Projects) at AppSpacing.betweenGroups; within a
+                // multi-part group, siblings sit at the tighter
+                // AppSpacing.betweenSections instead.
+                VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
+                    actionTabsSection
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        trendingVoicesSection
+                        createYourOwnVoiceRow
+                    }
+
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        readAnythingSection
+                        ClassicReadsSection(viewModel: classicReadsViewModel)
+                        newInRomanceSection
+                        createYourOwnBookRow
+                    }
+
+                    projectsSection
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+            }
+            .scrollIndicators(.hidden)
+            .background(Color.appBackground.ignoresSafeArea())
     }
 
     private var settingsButton: some View {
@@ -215,13 +225,25 @@ struct ImportHomeView: View {
         }
     }
 
-    private var bookShelfButton: some View {
-        Button {
-            isBookShelfPresented = true
-        } label: {
-            LucideIcon(.book)
-        }
-        .accessibilityLabel("Open book shelf")
+    private func modeEdgeSwipe(in width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onEnded { value in
+                let translation = value.translation
+                guard abs(translation.width) >= 70,
+                      abs(translation.width) > abs(translation.height) * 1.25 else { return }
+
+                let startsAtRightEdge = value.startLocation.x >= width - 24
+                let startsAtLeftEdge = value.startLocation.x <= 24
+                if homeMode == .studio, startsAtRightEdge, translation.width < 0 {
+                    withAnimation(.smooth(duration: 0.28, extraBounce: 0.05)) {
+                        storedHomeMode = HomeMode.reading.rawValue
+                    }
+                } else if homeMode == .reading, startsAtLeftEdge, translation.width > 0 {
+                    withAnimation(.smooth(duration: 0.28, extraBounce: 0.05)) {
+                        storedHomeMode = HomeMode.studio.rawValue
+                    }
+                }
+            }
     }
 
     // Tab switcher + swipeable pages, both driving the same

@@ -1,10 +1,9 @@
 import LucideSwift
 import SwiftUI
 
-/// App settings — reached via the gear icon on Import, presented the same
-/// way as SetupSheet (a plain `.sheet`, dark theme, "Done" to dismiss).
-/// Voice Packs / Storage report real on-disk pack/size data; About reports
-/// the real bundle version (see issue #9).
+/// App settings — reached through Home's persistent trailing gear. Setup is
+/// a normal destination; Voice Packs / Storage remain read-only views of
+/// real on-disk state, and About reports the bundle version (see issue #9).
 struct SettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
@@ -14,6 +13,11 @@ struct SettingsSheet: View {
         NavigationStack {
             List {
                 Section {
+                    NavigationLink {
+                        SetupView(viewModel: viewModel, packs: viewModel.packs)
+                    } label: {
+                        row(title: "Setup", icon: .circleArrowDown)
+                    }
                     NavigationLink {
                         VoicePacksView(viewModel: viewModel, packs: viewModel.packs)
                     } label: {
