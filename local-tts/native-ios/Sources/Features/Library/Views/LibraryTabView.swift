@@ -8,6 +8,7 @@ struct LibraryTabView: View {
     // never read here — so they arrive in one non-observable container
     // rather than as three separate parameters. See AppEnvironment.
     let app: AppEnvironment
+    @Binding var homeMode: HomeMode
     @State private var openProject: SavedGeneration?
     @State private var sortNewestFirst = true
 
@@ -44,8 +45,15 @@ struct LibraryTabView: View {
                 }
             }
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Library")
+            .navigationTitle("")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HomeModeSwitcher(
+                        selection: $homeMode,
+                        foreground: .appPrimaryText,
+                        selectedBackground: .appSecondaryBackground,
+                        trackBackground: Color.appPrimaryText.opacity(0.12))
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         sortNewestFirst.toggle()
@@ -100,5 +108,5 @@ struct LibraryTabView: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return LibraryTabView(viewModel: app.library, app: app)
+    return LibraryTabView(viewModel: app.library, app: app, homeMode: .constant(.studio))
 }

@@ -37,6 +37,7 @@ struct ImportHomeView: View {
     // container rather than as four separate parameters, so none of it
     // subscribes this view to anything. See AppEnvironment.
     let app: AppEnvironment
+    @Binding var homeMode: HomeMode
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
@@ -51,7 +52,6 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
-    @AppStorage("home.mode") private var storedHomeMode = HomeMode.studio.rawValue
     // Set when tapping a Projects entry (any engine) — opens page 1.
     // for that saved project.
     @State private var openProject: SavedGeneration?
@@ -77,48 +77,35 @@ struct ImportHomeView: View {
         navigationContent
     }
 
-    /// Invalid values (including values left by older builds) deliberately
-    /// resolve to Studio rather than leaving Home without a visible mode.
-    private var homeMode: HomeMode {
-        HomeMode(rawValue: storedHomeMode) ?? .studio
-    }
-
-    private var homeModeBinding: Binding<HomeMode> {
-        Binding(
-            get: { HomeMode(rawValue: storedHomeMode) ?? .studio },
-            set: { storedHomeMode = $0.rawValue })
-    }
-
     private var navigationContent: some View {
         NavigationStack {
-            GeometryReader { geometry in
-                ZStack {
-                    studioContent
-                        .opacity(homeMode == .studio ? 1 : 0)
-                        .allowsHitTesting(homeMode == .studio)
-                        .accessibilityHidden(homeMode != .studio)
+            ZStack {
+                studioContent
+                    .opacity(homeMode == .studio ? 1 : 0)
+                    .allowsHitTesting(homeMode == .studio)
+                    .accessibilityHidden(homeMode != .studio)
 
-                    BookShelfView(library: libraryViewModel) { book in
-                        openProject = libraryViewModel.project(for: book.id)
-                    }
-                    .opacity(homeMode == .reading ? 1 : 0)
-                    .allowsHitTesting(homeMode == .reading)
-                    .accessibilityHidden(homeMode != .reading)
+                BookShelfView(library: libraryViewModel) { book in
+                    openProject = libraryViewModel.project(for: book.id)
                 }
-                .background(homeMode.background.ignoresSafeArea())
-                .simultaneousGesture(modeEdgeSwipe(in: geometry.size.width))
-                .animation(.easeInOut(duration: 0.24), value: homeMode)
+                .opacity(homeMode == .reading ? 1 : 0)
+                .allowsHitTesting(homeMode == .reading)
+                .accessibilityHidden(homeMode != .reading)
             }
+            .background(homeMode.background.ignoresSafeArea())
+            .animation(.easeInOut(duration: 0.24), value: homeMode)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(homeMode.background, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    HomeModeSwitcher(selection: homeModeBinding)
+                    HomeModeSwitcher(selection: $homeMode)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    settingsButton
+                if homeMode == .studio {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        settingsButton
+                    }
                 }
             }
             .tint(homeMode.primaryText)
@@ -193,7 +180,10 @@ struct ImportHomeView: View {
                 // multi-part group, siblings sit at the tighter
                 // AppSpacing.betweenSections instead.
                 VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
-                    actionTabsSection
+                    VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
+                        Text("Home").appText(.sectionTitle)
+                        actionTabsSection
+                    }
 
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
                         trendingVoicesSection
@@ -223,27 +213,6 @@ struct ImportHomeView: View {
         } label: {
             LucideIcon(.cog)
         }
-    }
-
-    private func modeEdgeSwipe(in width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onEnded { value in
-                let translation = value.translation
-                guard abs(translation.width) >= 70,
-                      abs(translation.width) > abs(translation.height) * 1.25 else { return }
-
-                let startsAtRightEdge = value.startLocation.x >= width - 24
-                let startsAtLeftEdge = value.startLocation.x <= 24
-                if homeMode == .studio, startsAtRightEdge, translation.width < 0 {
-                    withAnimation(.smooth(duration: 0.28, extraBounce: 0.05)) {
-                        storedHomeMode = HomeMode.reading.rawValue
-                    }
-                } else if homeMode == .reading, startsAtLeftEdge, translation.width > 0 {
-                    withAnimation(.smooth(duration: 0.28, extraBounce: 0.05)) {
-                        storedHomeMode = HomeMode.studio.rawValue
-                    }
-                }
-            }
     }
 
     // Tab switcher + swipeable pages, both driving the same
@@ -627,5 +596,5 @@ struct VoiceTile: Identifiable {
     let app = AppEnvironment.preview()
     return ImportHomeView(
         viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
-        packs: app.tts.packs, app: app)
+        packs: app.tts.packs, app: app, homeMode: .constant(.studio))
 }

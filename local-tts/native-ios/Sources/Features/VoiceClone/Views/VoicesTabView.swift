@@ -9,6 +9,7 @@ struct VoicesTabView: View {
     // Only used to update navigationChrome when this tab pushes a screen —
     // see NavigationChromeVisibility.
     let app: AppEnvironment
+    @Binding var homeMode: HomeMode
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
 
@@ -45,8 +46,15 @@ struct VoicesTabView: View {
                 }
             }
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Voices")
+            .navigationTitle("")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HomeModeSwitcher(
+                        selection: $homeMode,
+                        foreground: .appPrimaryText,
+                        selectedBackground: .appSecondaryBackground,
+                        trackBackground: Color.appPrimaryText.opacity(0.12))
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isCreateVoicePresented = true
@@ -136,5 +144,5 @@ struct VoicesTabView: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return VoicesTabView(viewModel: app.voiceClone, app: app)
+    return VoicesTabView(viewModel: app.voiceClone, app: app, homeMode: .constant(.studio))
 }

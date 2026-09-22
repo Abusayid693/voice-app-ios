@@ -29,44 +29,64 @@ struct BookShelfView: View {
     }
 
     var body: some View {
-        Group {
-            if books.isEmpty {
-                emptyState
-            } else {
-                shelf
-            }
-        }
-        .background(BookShelfPalette.background.ignoresSafeArea())
-    }
-
-    private var shelf: some View {
         GeometryReader { geometry in
-            let horizontalInset: CGFloat = 16
-            let coverSpacing: CGFloat = 24
-            let coverWidth = min(max(geometry.size.width * 0.245, 84), 98)
-            let coverSize = CGSize(width: coverWidth, height: coverWidth * 1.5)
-            let shelfWidth = geometry.size.width - horizontalInset * 2
-
             ScrollView {
-                LazyVStack(spacing: 24) {
-                    ForEach(Array(shelfRows.enumerated()), id: \.offset) { _, row in
-                        BookShelfRow(
-                            books: row,
-                            coverSize: coverSize,
-                            spacing: coverSpacing,
-                            shelfWidth: shelfWidth
-                        ) { book in
-                            onOpenBook(book)
-                        }
+                VStack(spacing: 0) {
+                    shelfHeader
+
+                    if books.isEmpty {
+                        emptyState
+                            .frame(minHeight: max(0, geometry.size.height - 100))
+                    } else {
+                        shelf(for: geometry.size.width)
                     }
                 }
-                .padding(.horizontal, horizontalInset)
-                .padding(.top, 20)
-                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
             .accessibilityLabel("PDF book shelves")
         }
+        .background(BookShelfPalette.background.ignoresSafeArea())
+    }
+
+    private var shelfHeader: some View {
+        VStack(spacing: 3) {
+            Text("My Shelf")
+                .font(.custom("Didot-Bold", size: 30, relativeTo: .title))
+                .foregroundStyle(BookShelfPalette.primaryText)
+                .accessibilityAddTraits(.isHeader)
+
+            Text("\(books.count) \(books.count == 1 ? "book" : "books")")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(BookShelfPalette.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 18)
+        .padding(.bottom, 8)
+    }
+
+    private func shelf(for availableWidth: CGFloat) -> some View {
+        let horizontalInset: CGFloat = 8
+        let coverSpacing: CGFloat = 12
+        let coverWidth = min(max(availableWidth * 0.245, 84), 98)
+        let coverSize = CGSize(width: coverWidth, height: coverWidth * 1.5)
+        let shelfWidth = availableWidth - horizontalInset * 2
+
+        return LazyVStack(spacing: 24) {
+            ForEach(Array(shelfRows.enumerated()), id: \.offset) { index, row in
+                BookShelfRow(
+                    books: row,
+                    coverSize: coverSize,
+                    spacing: coverSpacing,
+                    shelfWidth: shelfWidth,
+                    leadingContentInset: index == 0 ? 30 : 16
+                ) { book in
+                    onOpenBook(book)
+                }
+            }
+        }
+        .padding(.horizontal, horizontalInset)
+        .padding(.top, 20)
+        .padding(.bottom, 24)
     }
 
     private var emptyState: some View {
@@ -90,6 +110,7 @@ private struct BookShelfRow: View {
     let coverSize: CGSize
     let spacing: CGFloat
     let shelfWidth: CGFloat
+    let leadingContentInset: CGFloat
     let onSelect: (SavedGenerationSummary) -> Void
 
     var body: some View {
@@ -114,7 +135,11 @@ private struct BookShelfRow: View {
                 .padding(.bottom, 10)
             }
             .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 12, for: .scrollContent)
+            // The glass shelf remains inset, while only the scroll viewport
+            // extends to the screen edges so covers never clip at either end.
+            .padding(.horizontal, -8)
+            .contentMargins(.leading, leadingContentInset, for: .scrollContent)
+            .contentMargins(.trailing, 16, for: .scrollContent)
 
             GlassBookShelf()
                 .frame(

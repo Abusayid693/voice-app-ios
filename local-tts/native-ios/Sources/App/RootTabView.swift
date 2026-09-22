@@ -64,6 +64,7 @@ struct RootTabView: View {
     @ObservedObject private var navigationChrome: NavigationChromeVisibility
     @State private var selectedTab: RootTab = .home
     @State private var isQuickActionsPresented = false
+    @AppStorage("home.mode") private var storedHomeMode = HomeMode.studio.rawValue
     // Set the instant "Write text" is chosen in QuickActionsSheet, but only
     // acted on once this sheet's own onDismiss fires — mirrors
     // ImportHomeView's own pendingProjectID, which exists for the same
@@ -81,7 +82,7 @@ struct RootTabView: View {
         GeometryReader { geometry in
             tabContent
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if navigationChrome.isAtTabRoot {
+                    if shouldShowTabBar {
                         CustomTabBar(
                             selectedTab: $selectedTab, safeAreaBottom: geometry.safeAreaInsets.bottom,
                             onPlusTapped: { isQuickActionsPresented = true }
@@ -89,7 +90,7 @@ struct RootTabView: View {
                         .transition(.opacity)
                     }
                 }
-                .animation(.default, value: navigationChrome.isAtTabRoot)
+                .animation(.default, value: shouldShowTabBar)
         }
         .sheet(
             isPresented: $isQuickActionsPresented,
@@ -118,6 +119,33 @@ struct RootTabView: View {
         }
     }
 
+    /// Invalid stored values deliberately resolve to Studio, matching the
+    /// fallback used by earlier per-screen `@AppStorage` bindings.
+    private var homeMode: HomeMode {
+        HomeMode(rawValue: storedHomeMode) ?? .studio
+    }
+
+    /// Root owns both mode persistence and the one navigation consequence of
+    /// selecting Reading from another tab.
+    private var homeModeBinding: Binding<HomeMode> {
+        Binding(
+            get: { homeMode },
+            set: { mode in
+                storedHomeMode = mode.rawValue
+                if mode == .reading {
+                    selectedTab = .home
+                }
+            })
+    }
+
+    /// Reading is an immersive presentation only while Home is selected.
+    /// The other three app tabs retain their normal root-level tab bar even
+    /// when Reading remains the user's persisted Home preference.
+    private var shouldShowTabBar: Bool {
+        navigationChrome.isAtTabRoot
+            && (selectedTab != .home || homeMode != .reading)
+    }
+
     // All 4 unconditionally instantiated (never `if selectedTab == tab`),
     // toggled only by opacity/hit-testing/accessibility — see this type's
     // own doc comment for why.
@@ -125,23 +153,23 @@ struct RootTabView: View {
         ZStack {
             ImportHomeView(
                 viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
-                packs: app.tts.packs, app: app
+                packs: app.tts.packs, app: app, homeMode: homeModeBinding
             )
             .opacity(selectedTab == .home ? 1 : 0)
             .allowsHitTesting(selectedTab == .home)
             .accessibilityHidden(selectedTab != .home)
 
-            LibraryTabView(viewModel: app.library, app: app)
+            LibraryTabView(viewModel: app.library, app: app, homeMode: homeModeBinding)
                 .opacity(selectedTab == .library ? 1 : 0)
                 .allowsHitTesting(selectedTab == .library)
                 .accessibilityHidden(selectedTab != .library)
 
-            PlaceholderTabView(title: "Tools")
+            PlaceholderTabView(title: "Tools", homeMode: homeModeBinding)
                 .opacity(selectedTab == .tools ? 1 : 0)
                 .allowsHitTesting(selectedTab == .tools)
                 .accessibilityHidden(selectedTab != .tools)
 
-            VoicesTabView(viewModel: app.voiceClone, app: app)
+            VoicesTabView(viewModel: app.voiceClone, app: app, homeMode: homeModeBinding)
                 .opacity(selectedTab == .voices ? 1 : 0)
                 .allowsHitTesting(selectedTab == .voices)
                 .accessibilityHidden(selectedTab != .voices)

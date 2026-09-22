@@ -49,6 +49,31 @@ extension Color {
     }
 }
 
+/// Presentation values for the app-wide Home modes. Keeping these in the
+/// design system leaves `HomeMode` as persistable, UI-independent data.
+extension HomeMode {
+    var background: Color {
+        switch self {
+        case .studio: .appBackground
+        case .reading: Color(hex: 0xF5F3ED)
+        }
+    }
+
+    var primaryText: Color {
+        switch self {
+        case .studio: .appPrimaryText
+        case .reading: Color(hex: 0x171715)
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .studio: .dark
+        case .reading: .light
+        }
+    }
+}
+
 /// Persistable color themes for long-form reading surfaces. Each theme owns
 /// the complete reader palette so highlights and floating controls remain
 /// legible when moving between dark and light designs.
