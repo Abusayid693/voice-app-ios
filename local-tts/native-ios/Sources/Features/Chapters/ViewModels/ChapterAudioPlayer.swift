@@ -27,7 +27,7 @@ enum ChapterPlaybackMode: Equatable {
 
 @MainActor
 final class ChapterAudioPlayer: ObservableObject {
-    @Published private(set) var activeRef: ChapterRef?
+    @Published private(set) var activeRef: ReaderPageRef?
     @Published private(set) var mode: ChapterPlaybackMode?
     @Published private(set) var isPlaying = false
     @Published private(set) var isBuffering = false
@@ -66,14 +66,14 @@ final class ChapterAudioPlayer: ObservableObject {
         self.synthesisService = synthesisService
     }
 
-    func isActive(_ ref: ChapterRef) -> Bool { activeRef == ref }
+    func isActive(_ ref: ReaderPageRef) -> Bool { activeRef == ref }
 
     // MARK: - Saved playback (real duration, scrubbing)
 
-    func playSaved(_ ref: ChapterRef, project: SavedGeneration) {
+    func playSaved(_ ref: ReaderPageRef, project: SavedGeneration) {
         stop()
-        guard let audio = ChapterAudioStore.loadAudio(ref, project: project),
-            let manifest = ChapterAudioStore.loadManifest(ref, project: project)
+        guard let audio = PageAudioStore.loadAudio(ref, project: project),
+            let manifest = PageAudioStore.loadManifest(ref, project: project)
         else { return }
         do {
             let newPlayer = try AVAudioPlayer(data: audio)
@@ -209,11 +209,11 @@ final class ChapterAudioPlayer: ObservableObject {
 
     // MARK: - Streaming playback (synthesize-and-play, chunk by chunk)
 
-    func stream(_ ref: ChapterRef, chapter: Chapter, voice: String) {
+    func stream(_ ref: ReaderPageRef, page: ReaderPage, voice: String) {
         stop()
         activeRef = ref
         mode = .streaming
-        chunkTexts = KokoroTextChunker.chunk(chapter.text)
+        chunkTexts = KokoroTextChunker.chunk(page.text)
         isBuffering = true
         playbackWaitingForIndex = chunkTexts.isEmpty ? nil : 0
         startTicker()

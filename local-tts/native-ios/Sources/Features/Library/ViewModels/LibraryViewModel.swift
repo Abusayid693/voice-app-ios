@@ -1,76 +1,144 @@
 import Foundation
 
-/// Owns the library index and file-backed project documents. The index is
-/// deliberately small; chapter text is decoded only when a user opens a
-/// project, which keeps large PDF imports out of UserDefaults and startup
-/// memory.
+/// Owns the lightweight library index, project metadata, and independently
+/// persisted page bodies.
 @MainActor
 final class LibraryViewModel: ObservableObject {
     @Published private(set) var savedGenerations: [SavedGenerationSummary] = []
-
-    private static let legacyDefaultsKey = "savedGenerations"
-    private static let didCleanUpLegacyChunkAudioKey = "didCleanUpLegacyChunkAudio"
+    private static let didClearChapterStorageKey = "didClearChapterStorageForPageReader"
 
     init() {
-        migrateLegacyLibraryIfNeeded()
+        Self.clearChapterStorageIfNeeded()
         savedGenerations = Self.loadIndex()
-        cleanUpLegacyChunkAudioIfNeeded()
     }
 
     @discardableResult
     func save(text: String, engine: Engine, voiceName: String) -> UUID? {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        let entry = SavedGeneration(
-            id: UUID(), text: text, engine: engine, voiceName: voiceName, createdAt: Date(),
-            chapters: ChapterSplitter.split(text))
-        persist(entry)
-        return entry.id
+        let pages = PageSplitter.split(text)
+        guard !pages.isEmpty else { return nil }
+        return saveProject(
+            title: Self.defaultTitle(for: text), pages: pages,
+            engine: engine, voiceName: voiceName)
     }
 
-    /// Persists a completed PDF import in the existing project format so it
-    /// automatically receives the normal library, chapter-list, and player
-    /// UX.
+    /// Copies finalized PDF page files without decoding the full document.
     @discardableResult
     func saveImportedPDF(
-        title: String, chapters: [Chapter], engine: Engine, voiceName: String
+        title: String, pagesDirectory: URL, pageCount: Int, coverURL: URL?,
+        engine: Engine, voiceName: String
     ) -> UUID? {
-        guard !chapters.isEmpty else { return nil }
-        let text = chapters.map(\.text).joined(separator: "\n\n")
+        guard pageCount > 0 else { return nil }
+        let id = UUID()
         let entry = SavedGeneration(
-            id: UUID(), title: title, text: text, engine: engine, voiceName: voiceName,
-            createdAt: Date(), chapters: chapters)
-        persist(entry)
-        return entry.id
+            id: id, title: title, engine: engine, voiceName: voiceName,
+            createdAt: Date(), pageCount: pageCount)
+        let destination = SavedGeneration.projectPagesDirectory(id: id)
+
+        do {
+            try FileManager.default.createDirectory(
+                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: pagesDirectory, to: destination)
+            if let coverURL, FileManager.default.fileExists(atPath: coverURL.path) {
+                // A cover is visual polish, not a reason to reject the
+                // readable project if a raster file is unexpectedly bad.
+                try? FileManager.default.copyItem(
+                    at: coverURL, to: SavedGeneration.coverFileURL(id: id))
+            }
+            try persist(entry)
+            return id
+        } catch {
+            try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: SavedGeneration.projectFileURL(id: id))
+            return nil
+        }
     }
 
-    /// Loads one complete project on demand. It is intentionally synchronous:
-    /// callers invoke it from a tap/swipe action, not from the list render.
     func project(for id: UUID) -> SavedGeneration? {
         let url = SavedGeneration.projectFileURL(id: id)
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SavedGeneration.self, from: data)
     }
 
+    func page(for project: SavedGeneration, index: Int) -> ReaderPage? {
+        guard index >= 0, index < project.pageCount else { return nil }
+        let url = SavedGeneration.pageFileURL(projectID: project.id, index: index)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(ReaderPage.self, from: data)
+    }
+
+    /// Reads one page only when its row becomes visible in the picker, then
+    /// retains just a short normalized excerpt in the sheet's local cache.
+    func pagePreview(for project: SavedGeneration, index: Int) -> ReaderPagePreview? {
+        guard let page = page(for: project, index: index) else { return nil }
+        let normalized = page.text
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !normalized.isEmpty else {
+            return ReaderPagePreview(index: index, excerpt: "No selectable text", isBlank: true)
+        }
+        let excerpt: String
+        if normalized.count > 120 {
+            excerpt = "\(normalized.prefix(120))…"
+        } else {
+            excerpt = normalized
+        }
+        return ReaderPagePreview(index: index, excerpt: excerpt, isBlank: false)
+    }
+
+    /// Records successful page changes without disturbing the library's
+    /// creation-date ordering in its lightweight project index.
+    func recordLastReadPage(index: Int, for projectID: UUID) {
+        guard var project = project(for: projectID), index >= 0, index < project.pageCount else { return }
+        guard project.lastReadPageIndex != index else { return }
+        project.lastReadPageIndex = index
+        guard let data = try? JSONEncoder().encode(project) else { return }
+        try? data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+    }
+
     func delete(_ generation: SavedGenerationSummary) {
         savedGenerations.removeAll { $0.id == generation.id }
         Self.persistIndex(savedGenerations)
         try? FileManager.default.removeItem(at: SavedGeneration.projectFileURL(id: generation.id))
-        try? FileManager.default.removeItem(at: generation.audioDirectory)
+        try? FileManager.default.removeItem(
+            at: SavedGeneration.projectPagesDirectory(id: generation.id).deletingLastPathComponent())
+        try? FileManager.default.removeItem(
+            at: SavedGeneration.baseDirectory.appendingPathComponent(generation.id.uuidString))
     }
 
-    private func persist(_ entry: SavedGeneration) {
-        guard let data = try? JSONEncoder().encode(entry) else { return }
+    private func saveProject(
+        title: String, pages: [ReaderPage], engine: Engine, voiceName: String
+    ) -> UUID? {
+        let id = UUID()
+        let entry = SavedGeneration(
+            id: id, title: title, engine: engine, voiceName: voiceName,
+            createdAt: Date(), pageCount: pages.count)
+        let directory = SavedGeneration.projectPagesDirectory(id: id)
+
         do {
-            try FileManager.default.createDirectory(
-                at: SavedGeneration.projectsDirectory, withIntermediateDirectories: true)
-            try data.write(to: SavedGeneration.projectFileURL(id: entry.id), options: .atomic)
-            savedGenerations.removeAll { $0.id == entry.id }
-            savedGenerations.insert(entry.summary, at: 0)
-            Self.persistIndex(savedGenerations)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            for page in pages {
+                let data = try JSONEncoder().encode(page)
+                try data.write(
+                    to: SavedGeneration.pageFileURL(projectID: id, index: page.index),
+                    options: .atomic)
+            }
+            try persist(entry)
+            return id
         } catch {
-            // The library has no error surface today; leave the in-memory
-            // index untouched if the document could not be made durable.
+            try? FileManager.default.removeItem(at: directory.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: SavedGeneration.projectFileURL(id: id))
+            return nil
         }
+    }
+
+    private func persist(_ entry: SavedGeneration) throws {
+        let data = try JSONEncoder().encode(entry)
+        try FileManager.default.createDirectory(
+            at: SavedGeneration.projectsDirectory, withIntermediateDirectories: true)
+        try data.write(to: SavedGeneration.projectFileURL(id: entry.id), options: .atomic)
+        savedGenerations.removeAll { $0.id == entry.id }
+        savedGenerations.insert(entry.summary, at: 0)
+        Self.persistIndex(savedGenerations)
     }
 
     private static func loadIndex() -> [SavedGenerationSummary] {
@@ -80,51 +148,33 @@ final class LibraryViewModel: ObservableObject {
 
     private static func persistIndex(_ items: [SavedGenerationSummary]) {
         guard let data = try? JSONEncoder().encode(items) else { return }
-        try? FileManager.default.createDirectory(at: SavedGeneration.baseDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: SavedGeneration.baseDirectory, withIntermediateDirectories: true)
         try? data.write(to: SavedGeneration.indexURL, options: .atomic)
     }
 
-    /// One-time, lossless migration from the old single UserDefaults blob.
-    /// It leaves the old value in place until all project files and the new
-    /// index were written successfully, then removes it to reclaim space.
-    private func migrateLegacyLibraryIfNeeded() {
-        guard !FileManager.default.fileExists(atPath: SavedGeneration.indexURL.path) else { return }
-        guard
-            let data = UserDefaults.standard.data(forKey: Self.legacyDefaultsKey),
-            let legacy = try? JSONDecoder().decode([SavedGeneration].self, from: data)
-        else { return }
-
-        var summaries: [SavedGenerationSummary] = []
-        for entry in legacy {
-            guard let encoded = try? JSONEncoder().encode(entry) else { return }
-            do {
-                try encoded.write(to: SavedGeneration.projectFileURL(id: entry.id), options: .atomic)
-                summaries.append(entry.summary)
-            } catch {
-                return
+    private static func clearChapterStorageIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: didClearChapterStorageKey) else { return }
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let legacyDirectory = appSupport.appendingPathComponent(
+            "SavedGenerations", isDirectory: true)
+        do {
+            if FileManager.default.fileExists(atPath: legacyDirectory.path) {
+                try FileManager.default.removeItem(at: legacyDirectory)
             }
+            defaults.removeObject(forKey: "savedGenerations")
+            defaults.set(true, forKey: didClearChapterStorageKey)
+        } catch {
+            // Retry next launch rather than marking a partial cleanup done.
         }
-        Self.persistIndex(summaries)
-        guard FileManager.default.fileExists(atPath: SavedGeneration.indexURL.path) else { return }
-        UserDefaults.standard.removeObject(forKey: Self.legacyDefaultsKey)
     }
 
-    private func cleanUpLegacyChunkAudioIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: Self.didCleanUpLegacyChunkAudioKey) else { return }
-        for generation in savedGenerations {
-            guard let contents = try? FileManager.default.contentsOfDirectory(
-                at: generation.audioDirectory, includingPropertiesForKeys: nil)
-            else { continue }
-            for file in contents where file.lastPathComponent.hasPrefix("chunk_") {
-                try? FileManager.default.removeItem(at: file)
-            }
-        }
-        UserDefaults.standard.set(true, forKey: Self.didCleanUpLegacyChunkAudioKey)
-    }
-}
-
-private extension SavedGenerationSummary {
-    var audioDirectory: URL {
-        SavedGeneration.baseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
+    private static func defaultTitle(for text: String) -> String {
+        let firstLine = text.split(whereSeparator: \.isNewline).first.map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "Untitled project"
+        guard firstLine.count > 72 else { return firstLine.isEmpty ? "Untitled project" : firstLine }
+        return "\(firstLine.prefix(72))…"
     }
 }

@@ -22,13 +22,14 @@ private struct ReaderScrollVisibilityObserver: ViewModifier {
     }
 }
 
-/// The music-player screen for a chapter: the whole page is the read-along
+/// The page reader: one persisted page is visible at a time, with the
+/// read-along transport floating above Previous/Next page navigation.
 /// text, with a compact, translucent transport bar floating over its
 /// bottom (elapsed/total time on top, avatar + −10s/play-pause/+10s
 /// below) — text keeps scrolling underneath it, it doesn't reserve its own
 /// space.
-/// Reachable both from a saved chapter (`ChaptersListView` → `playSaved`)
-/// and from Play on one that hasn't been generated yet (→ `stream`) — the
+/// Opens at the project's saved page position (or page 1 when unavailable)
+/// and supports both saved playback (`playSaved`) and unsaved streaming (`stream`) — the
 /// two feed identical playback/highlighting behavior through
 /// `ChapterAudioPlayer`'s shared published surface (`duration`/`elapsed`/
 /// `wordTimings(forChunk:)`/etc.), which is kept correct for both modes
@@ -46,8 +47,15 @@ private struct ReaderScrollVisibilityObserver: ViewModifier {
 /// synthesized) falls back to highlighting the whole chunk, same as before.
 struct ChapterPlayerView: View {
     let project: SavedGeneration
-    let chapterRef: ChapterRef
+    let library: LibraryViewModel
+    let voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
+    @ObservedObject var generationStore: ChapterGenerationStore
+    @ObservedObject var viewModel: TTSViewModel
+
+    @State private var currentPageIndex: Int
+    @State private var currentPage: ReaderPage?
+    @State private var idleChunkTexts: [String] = []
 
     @State private var isAutoScrollPaused = false
     // Reference type, not @State, for the same reason as groupHeightsBox
@@ -122,6 +130,7 @@ struct ChapterPlayerView: View {
     // catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
     @State private var isOptionsSheetPresented = false
+    @State private var isPagePickerPresented = false
     // Persisted across sessions — set once, stays that way for every chapter
     // opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
     @AppStorage("chapterPlayerKeepScreenOn") private var keepScreenOn = false
@@ -131,31 +140,71 @@ struct ChapterPlayerView: View {
     // paragraph-level box still marks where playback is.
     @AppStorage("chapterPlayerWordHighlightEnabled") private var wordHighlightEnabled = true
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
+    @AppStorage("chapterPlayerFontFamily") private var readerFontFamily: ReaderFontFamily = .sfProText
     @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
 
-    private var chapter: Chapter? {
-        project.chapters.first { $0.index == chapterRef.chapterIndex }
+    init(
+        project: SavedGeneration, initialPageIndex: Int? = nil,
+        library: LibraryViewModel, voiceCloneViewModel: VoiceCloneViewModel,
+        chapterPlayer: ChapterAudioPlayer,
+        generationStore: ChapterGenerationStore, viewModel: TTSViewModel
+    ) {
+        self.project = project
+        self.library = library
+        self.voiceCloneViewModel = voiceCloneViewModel
+        _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
+        _generationStore = ObservedObject(wrappedValue: generationStore)
+        _viewModel = ObservedObject(wrappedValue: viewModel)
+        let requestedIndex = initialPageIndex ?? project.lastReadPageIndex
+        let hasValidRequestedIndex = project.pageCount > 0
+            && (0..<project.pageCount).contains(requestedIndex)
+        let boundedIndex = hasValidRequestedIndex ? requestedIndex : 0
+        _currentPageIndex = State(initialValue: boundedIndex)
+    }
+
+    private var pageRef: ReaderPageRef {
+        ReaderPageRef(projectID: project.id, pageIndex: currentPageIndex)
+    }
+
+    private var hasReadableText: Bool {
+        !(currentPage?.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    private var isCurrentKokoroPageActive: Bool {
+        project.engine == .kokoroAne && chapterPlayer.isActive(pageRef)
+    }
+
+    private var visibleChunkTexts: [String] {
+        isCurrentKokoroPageActive && !chapterPlayer.chunkTexts.isEmpty
+            ? chapterPlayer.chunkTexts : idleChunkTexts
     }
 
     // Falls back to one group per chunk before .onAppear populates
     // paragraphGroups, so the very first render matches today's per-chunk
     // layout instead of showing nothing.
     private var effectiveGroups: [[Int]] {
-        paragraphGroups.isEmpty ? chapterPlayer.chunkTexts.indices.map { [$0] } : paragraphGroups
+        paragraphGroups.isEmpty ? visibleChunkTexts.indices.map { [$0] } : paragraphGroups
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             readAlong
-            if showFloatingPlayer {
-                floatingPlayer
+            if showFloatingPlayer, hasReadableText {
+                // Expanded is 15pt lower than the prior placement; the
+                // compact pill sits another 15pt lower (30pt total) while
+                // remaining clear of the page-navigation bar.
+                floatingPlayer.padding(.bottom, isPlayerCollapsed ? 3 : 18)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
         .background(readerTheme.background.ignoresSafeArea())
-        .navigationTitle(chapter?.title ?? "Chapter")
+        .navigationTitle("Page \(currentPageIndex + 1) of \(project.pageCount)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if project.engine == .kokoroAne {
+                    generationToolbarControl
+                }
                 Button {
                     isOptionsSheetPresented = true
                 } label: {
@@ -170,14 +219,21 @@ struct ChapterPlayerView: View {
                 autoScrollEnabled: $autoScrollEnabled,
                 wordHighlightEnabled: $wordHighlightEnabled,
                 fontSize: $readerFontSize,
+                fontFamily: $readerFontFamily,
                 theme: $readerTheme)
+        }
+        .sheet(isPresented: $isPagePickerPresented) {
+            ReaderPagePickerSheet(
+                project: project, library: library, currentPageIndex: currentPageIndex,
+                theme: readerTheme,
+                onSelect: { currentPageIndex = $0 })
         }
         .preferredColorScheme(readerTheme.colorScheme)
         .onChange(of: keepScreenOn) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
         }
         .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
-            animatePlayPauseIcon(to: isPlaying)
+            animatePlayPauseIcon(to: isCurrentKokoroPageActive && isPlaying)
         }
         .onChange(of: autoScrollEnabled) { _, isEnabled in
             if !isEnabled {
@@ -189,31 +245,168 @@ struct ChapterPlayerView: View {
         // exactly when a paragraph's words need to upgrade from the plain-
         // text fallback to real word timings. Not a per-frame cost.
         .onChange(of: chapterPlayer.duration) { _, _ in
-            recomputeWordItems()
+            if isCurrentKokoroPageActive { recomputeWordItems() }
         }
         // Grouping was computed only in .onAppear, so entering the player
         // before the chunker had run (chunkTexts still empty) left the whole
         // session on the per-chunk fallback, never grouped into paragraphs.
         .onChange(of: chapterPlayer.chunkTexts.count) { _, _ in
-            paragraphGroups = computeParagraphGroups()
-            recomputeWordItems()
+            if isCurrentKokoroPageActive {
+                paragraphGroups = computeParagraphGroups()
+                recomputeWordItems()
+            }
+        }
+        .onChange(of: currentPageIndex) { oldValue, newValue in
+            guard oldValue != newValue else { return }
+            guard moveToPage(newValue) else {
+                currentPageIndex = oldValue
+                return
+            }
+            library.recordLastReadPage(index: newValue, for: project.id)
         }
         .onAppear {
             isAutoScrollPaused = false
             isPlayerCollapsed = false
-            displayedIsPlaying = chapterPlayer.isPlaying
+            displayedIsPlaying = false
             playPauseScale = 1
-            paragraphGroups = computeParagraphGroups()
-            recomputeWordItems()
+            _ = moveToPage(currentPageIndex)
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
         .onDisappear {
             playPauseAnimationTask?.cancel()
+            chapterPlayer.stop()
+            viewModel.stopEnginePlayback()
             // Unconditional, not just "if keepScreenOn" — this is a
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
             UIApplication.shared.isIdleTimerDisabled = false
         }
+    }
+
+    private var pageNavigator: some View {
+        HStack(spacing: 12) {
+            Button {
+                isPagePickerPresented = true
+            } label: {
+                Label("Pages", systemImage: "list.bullet")
+                    .font(AppTextStyle.label.font)
+                    .frame(height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(readerTheme.primaryText)
+            .accessibilityLabel("Choose page")
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                Button {
+                    currentPageIndex -= 1
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(
+                            readerTheme.controlBackground,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(readerTheme.primaryText)
+                .disabled(currentPageIndex == 0)
+                .opacity(currentPageIndex == 0 ? 0.35 : 1)
+                .accessibilityLabel("Previous page")
+
+                Button {
+                    currentPageIndex += 1
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(
+                            readerTheme.controlBackground,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(readerTheme.primaryText)
+                .disabled(currentPageIndex >= project.pageCount - 1)
+                .opacity(currentPageIndex >= project.pageCount - 1 ? 0.35 : 1)
+                .accessibilityLabel("Next page")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask {
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.72), .black],
+                        startPoint: .top,
+                        endPoint: .bottom)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    @ViewBuilder
+    private var generationToolbarControl: some View {
+        if let page = currentPage, hasReadableText {
+            switch generationStore.state(for: pageRef) {
+            case .queued:
+                Button { generationStore.cancel(pageRef) } label: {
+                    ProgressView().tint(readerTheme.primaryText)
+                }
+                .accessibilityLabel("Cancel page generation")
+            case let .running(done, total):
+                Button { generationStore.cancel(pageRef) } label: {
+                    ProgressView(value: Double(done), total: Double(max(total, 1)))
+                        .tint(readerTheme.primaryText)
+                        .frame(width: 24)
+                }
+                .accessibilityLabel("Cancel page generation, \(done) of \(total) parts complete")
+            case .failed:
+                Button("Retry") { generate(page) }
+                    .font(AppTextStyle.label.font)
+            case nil:
+                if PageAudioStore.isGenerated(pageRef, project: project) {
+                    LucideIcon(.circleCheck, size: 20, color: readerTheme.primaryText)
+                        .accessibilityLabel("Page audio generated")
+                } else {
+                    Button("Generate") { generate(page) }
+                        .font(AppTextStyle.label.font)
+                        .foregroundStyle(readerTheme.primaryText)
+                }
+            }
+        }
+    }
+
+    private func generate(_ page: ReaderPage) {
+        generationStore.generate(
+            ref: pageRef, project: project, page: page, voice: project.voiceName)
+    }
+
+    @discardableResult
+    private func moveToPage(_ index: Int) -> Bool {
+        guard let page = library.page(for: project, index: index) else { return false }
+        chapterPlayer.stop()
+        viewModel.stopEnginePlayback()
+        playPauseAnimationTask?.cancel()
+        displayedIsPlaying = false
+        playPauseScale = 1
+        isPulsingPlayButton = false
+        isAutoScrollPaused = false
+        visibleParagraphsBox = VisibleParagraphsBox()
+        groupHeightsBox = GroupHeightsBox()
+
+        currentPage = page
+        idleChunkTexts = KokoroTextChunker.chunk(page.text)
+        paragraphGroups = computeParagraphGroups()
+        paragraphWordItems = []
+        paragraphRevisions = []
+        recomputeWordItems()
+        return true
     }
 
     // Starting a `.repeatForever` animation from `false` toggles it into
@@ -279,8 +472,8 @@ struct ChapterPlayerView: View {
     // ordering and repeated content resolve correctly, and checks whether
     // any newline falls in the gap between consecutive matches.
     private func computeChunkGaps() -> [Bool] {
-        let texts = chapterPlayer.chunkTexts
-        guard let fullText = chapter?.text, texts.count > 1 else {
+        let texts = visibleChunkTexts
+        guard let fullText = currentPage?.text, texts.count > 1 else {
             return Array(repeating: true, count: texts.count)
         }
         var gaps = [Bool](repeating: true, count: texts.count)
@@ -315,19 +508,24 @@ struct ChapterPlayerView: View {
 
     // MARK: - Floating player
 
+    @ViewBuilder
     private var floatingPlayer: some View {
-        ZStack(alignment: .bottom) {
-            if isPlayerCollapsed {
-                compactPlayer
-                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-            } else {
-                expandedPlayer
-                    .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
+        if project.engine == .kokoroAne {
+            ZStack(alignment: .bottom) {
+                if isPlayerCollapsed {
+                    compactPlayer
+                        .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+                } else {
+                    expandedPlayer
+                        .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
+                }
             }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .offset(y: 25)
+        } else {
+            nonKokoroPlayer
         }
-        .padding(.horizontal)
-        .padding(.bottom, 8)
-        .offset(y: 25)
     }
 
     private var expandedPlayer: some View {
@@ -437,7 +635,7 @@ struct ChapterPlayerView: View {
 
     private var playPauseButton: some View {
         Button {
-            chapterPlayer.togglePlayPause()
+            toggleKokoroPlayback()
         } label: {
             (displayedIsPlaying ? Hugeicons.pause : Hugeicons.play)
                 .image()
@@ -452,13 +650,67 @@ struct ChapterPlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(chapterPlayer.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(isCurrentKokoroPageActive && chapterPlayer.isPlaying ? "Pause" : "Play")
+        .disabled(!hasReadableText)
         .opacity(isPulsingPlayButton ? 0.5 : 1)
-        .onAppear { updatePlayButtonPulse(isBuffering: chapterPlayer.isBuffering) }
+        .onAppear {
+            updatePlayButtonPulse(
+                isBuffering: isCurrentKokoroPageActive && chapterPlayer.isBuffering)
+        }
         .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
-            updatePlayButtonPulse(isBuffering: isBuffering)
+            updatePlayButtonPulse(isBuffering: isCurrentKokoroPageActive && isBuffering)
         }
         .matchedGeometryEffect(id: "playPauseButton", in: floatingPlayerNamespace)
+    }
+
+    private var nonKokoroPlayer: some View {
+        HStack(spacing: 14) {
+            avatar
+            Text(project.engine.rawValue)
+                .appText(.label)
+                .foregroundStyle(readerTheme.primaryText)
+            Spacer()
+            Button {
+                toggleNonKokoroPlayback()
+            } label: {
+                Image(systemName: viewModel.isReaderPlaybackActive ? "stop.fill" : "play.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(readerTheme.primaryText)
+                    .frame(width: 56, height: 56)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(viewModel.isReaderPlaybackActive ? "Stop" : "Play")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .background { playerBackground(cornerRadius: 20) }
+        .padding(.horizontal)
+        .offset(y: 17)
+    }
+
+    private func toggleKokoroPlayback() {
+        guard let page = currentPage, hasReadableText else { return }
+        viewModel.stopEnginePlayback()
+        if chapterPlayer.isActive(pageRef) {
+            chapterPlayer.togglePlayPause()
+        } else if PageAudioStore.isGenerated(pageRef, project: project) {
+            chapterPlayer.playSaved(pageRef, project: project)
+        } else {
+            chapterPlayer.stream(pageRef, page: page, voice: project.voiceName)
+        }
+    }
+
+    private func toggleNonKokoroPlayback() {
+        guard let page = currentPage, hasReadableText else { return }
+        chapterPlayer.stop()
+        if viewModel.isReaderPlaybackActive {
+            viewModel.stopEnginePlayback()
+        } else {
+            viewModel.speakPage(
+                text: page.text, engine: project.engine, voiceName: project.voiceName,
+                clonedVoice: voiceCloneViewModel.clonedVoices.first { $0.name == project.voiceName })
+        }
     }
 
     private func animatePlayPauseIcon(to isPlaying: Bool) {
@@ -523,51 +775,66 @@ struct ChapterPlayerView: View {
     private var readAlong: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
-                        let group = effectiveGroups[groupIndex]
-                        paragraphRowView(groupIndex: groupIndex)
-                            .id(groupIndex)
-                            .background(
-                                GeometryReader { geo in
-                                    Color.clear
-                                        .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
-                                        .onChange(of: geo.size.height) { _, newValue in
-                                            groupHeightsBox.heights[groupIndex] = newValue
-                                        }
-                                }
-                            )
-                            .gesture(
-                                SpatialTapGesture().onEnded { value in
-                                    handleParagraphTap(
-                                        group: group, groupIndex: groupIndex, localY: value.location.y)
-                                }
-                            )
-                            .modifier(
-                                ReaderScrollVisibilityObserver { isVisible in
-                                    if isVisible {
-                                        visibleParagraphsBox.indices.insert(groupIndex)
-                                    } else {
-                                        visibleParagraphsBox.indices.remove(groupIndex)
-                                    }
-                                })
+                if currentPage == nil {
+                    ProgressView()
+                        .tint(readerTheme.primaryText)
+                        .frame(maxWidth: .infinity, minHeight: 240)
+                } else if !hasReadableText {
+                    VStack(spacing: 10) {
+                        LucideIcon(.fileText, size: 32, color: readerTheme.secondaryText)
+                        Text("This page has no selectable text.")
+                            .appText(.body)
+                            .foregroundStyle(readerTheme.secondaryText)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 240)
+                    .padding()
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
+                            let group = effectiveGroups[groupIndex]
+                            paragraphRowView(groupIndex: groupIndex)
+                                .id(groupIndex)
+                                .background(
+                                    GeometryReader { geo in
+                                        Color.clear
+                                            .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
+                                            .onChange(of: geo.size.height) { _, newValue in
+                                                groupHeightsBox.heights[groupIndex] = newValue
+                                            }
+                                    }
+                                )
+                                .gesture(
+                                    SpatialTapGesture().onEnded { value in
+                                        handleParagraphTap(
+                                            group: group, groupIndex: groupIndex,
+                                            localY: value.location.y)
+                                    }
+                                )
+                                .modifier(
+                                    ReaderScrollVisibilityObserver { isVisible in
+                                        if isVisible {
+                                            visibleParagraphsBox.indices.insert(groupIndex)
+                                        } else {
+                                            visibleParagraphsBox.indices.remove(groupIndex)
+                                        }
+                                    })
+                        }
+                    }
+                    .padding()
+                    .padding(
+                        .bottom,
+                        showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
                 }
-                .padding()
-                // Clears the floating player so the last few lines of text
-                // aren't permanently hidden underneath it.
-                .padding(
-                    .bottom,
-                    showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
             }
+            .id(currentPageIndex)
             .simultaneousGesture(
                 DragGesture().onChanged { _ in
-                    guard autoScrollEnabled, !isAutoScrollPaused else { return }
+                    guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
                     isAutoScrollPaused = true
                 }
             )
             .onChange(of: chapterPlayer.currentChunkIndex) { _, chunkIndex in
-                guard autoScrollEnabled, !isAutoScrollPaused else { return }
+                guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
                 guard let (groupIndex, anchor) = scrollTarget(forChunk: chunkIndex) else { return }
                 withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
             }
@@ -577,7 +844,7 @@ struct ChapterPlayerView: View {
                 // actually off-screen is checked INSIDE the poll instead,
                 // since that reads visibleParagraphsBox, which deliberately
                 // doesn't publish — see its declaration.
-                if autoScrollEnabled, isAutoScrollPaused {
+                if isCurrentKokoroPageActive, autoScrollEnabled, isAutoScrollPaused {
                     TimelineView(.periodic(from: pollAnchor, by: 0.08)) { _ in
                         if isCurrentParagraphOffscreen {
                             currentWordResumeButton {
@@ -597,6 +864,7 @@ struct ChapterPlayerView: View {
     }
 
     private var isCurrentParagraphOffscreen: Bool {
+        guard isCurrentKokoroPageActive else { return false }
         guard let groupIndex = effectiveGroups.firstIndex(where: {
             $0.contains(chapterPlayer.currentChunkIndex)
         }) else { return false }
@@ -679,7 +947,8 @@ struct ChapterPlayerView: View {
         // its last-highlighted word stay put on pause instead of both
         // disappearing. What isPlaying actually decides is below: whether
         // this row needs to keep ticking to track a moving position.
-        let isCurrentGroup = group.contains(chapterPlayer.currentChunkIndex)
+        let isCurrentGroup = isCurrentKokoroPageActive
+            && group.contains(chapterPlayer.currentChunkIndex)
         let hasAnyWordTimings = items.contains { $0.wordIndexInChunk != nil }
         let showsWordHighlight = wordHighlightEnabled && hasAnyWordTimings && isCurrentGroup
         let isPolling = showsWordHighlight && chapterPlayer.isPlaying
@@ -700,6 +969,7 @@ struct ChapterPlayerView: View {
                     ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
+                fontFamily: readerFontFamily,
                 theme: readerTheme
             ).equatable()
         }
@@ -731,12 +1001,13 @@ struct ChapterPlayerView: View {
         let highlightedWordIndex: Int?
         let isCurrentGroup: Bool
         let fontSize: ReaderFontSize
+        let fontFamily: ReaderFontFamily
         let theme: ReaderTheme
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
                 && lhs.highlightedWordIndex == rhs.highlightedWordIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
-                && lhs.fontSize == rhs.fontSize && lhs.theme == rhs.theme
+                && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily && lhs.theme == rhs.theme
         }
 
         // The two inputs that can change a word's measured size. Colors
@@ -747,6 +1018,7 @@ struct ChapterPlayerView: View {
             var hasher = Hasher()
             hasher.combine(itemsRevision)
             hasher.combine(fontSize)
+            hasher.combine(fontFamily)
             return hasher.finalize()
         }
 
@@ -764,7 +1036,7 @@ struct ChapterPlayerView: View {
                         isCurrentGroup && item.chunkIndex == highlightedChunkIndex
                             && item.wordIndexInChunk == highlightedWordIndex
                     Text(item.text)
-                        .font(fontSize.font)
+                        .font(fontSize.font(family: fontFamily))
                         .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
@@ -801,8 +1073,10 @@ struct ChapterPlayerView: View {
     }
 
     private func wordItems(for group: [Int]) -> [FlowWordItem] {
+        let texts = visibleChunkTexts
         var items: [FlowWordItem] = []
         for (positionInGroup, chunkIndex) in group.enumerated() {
+            guard texts.indices.contains(chunkIndex) else { continue }
             // Newlines at the END of the previous chunk's text would
             // otherwise be lost entirely: splitPreservingSeparators only
             // reports whitespace that *precedes* a word, so a chunk ending
@@ -811,11 +1085,12 @@ struct ChapterPlayerView: View {
             // this — it's already some word's own precedingSeparator.)
             let carriedBreaks =
                 positionInGroup == 0
-                ? 0 : trailingNewlineCount(of: chapterPlayer.chunkTexts[group[positionInGroup - 1]])
-            let timings = chapterPlayer.wordTimings(forChunk: chunkIndex)
+                ? 0 : trailingNewlineCount(of: texts[group[positionInGroup - 1]])
+            let timings = isCurrentKokoroPageActive
+                ? chapterPlayer.wordTimings(forChunk: chunkIndex) : []
             let tokens: [(word: String, precedingSeparator: String, wordIndexInChunk: Int?)]
             if timings.isEmpty {
-                tokens = WordTimingDeriver.splitPreservingSeparators(chapterPlayer.chunkTexts[chunkIndex])
+                tokens = WordTimingDeriver.splitPreservingSeparators(texts[chunkIndex])
                     .map { ($0.word, $0.precedingSeparator, nil) }
             } else {
                 tokens = timings.enumerated().map { ($1.word, $1.precedingSeparator, $0) }
@@ -856,6 +1131,7 @@ struct ChapterPlayerView: View {
     }
 
     private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {
+        guard isCurrentKokoroPageActive else { return }
         let target: Int
         if group.count > 1 {
             let height = groupHeightsBox.heights[groupIndex] ?? 0
@@ -873,7 +1149,8 @@ struct ChapterPlayerView: View {
     // exact (assumes fairly even text density), but far more useful on a
     // couple-of-pages paragraph than always seeking to its start.
     private func estimatedChunk(inGroup group: [Int], atProportion proportion: Double) -> Int {
-        let lengths = group.map { Double(chapterPlayer.chunkTexts[$0].count) }
+        let texts = visibleChunkTexts
+        let lengths = group.map { texts.indices.contains($0) ? Double(texts[$0].count) : 0 }
         let total = lengths.reduce(0, +)
         guard total > 0 else { return group.first ?? 0 }
         let target = proportion * total

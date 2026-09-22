@@ -141,7 +141,9 @@ final class PDFImportManager: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             guard let projectID = library.saveImportedPDF(
-                title: result.title, chapters: result.chapters, engine: job.engine, voiceName: job.voiceName
+                title: result.title, pagesDirectory: result.pagesDirectory,
+                pageCount: result.pageCount, coverURL: result.coverURL,
+                engine: job.engine, voiceName: job.voiceName
             ) else {
                 throw PDFImportError.noReadableContent
             }

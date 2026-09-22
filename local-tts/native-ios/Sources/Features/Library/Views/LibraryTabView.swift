@@ -1,17 +1,13 @@
 import LucideSwift
 import SwiftUI
 
-/// The Library tab: every past "Generate" tap's original text, split into
-/// chapters. Tapping a row (any engine) opens `ChaptersListView` for that
-/// project. Swipe for Delete or the pen icon (view the original text,
-/// read-only, regardless of engine).
+/// The Library tab. Tapping a project resumes its saved reader page.
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
-    // Only handed onward to ChaptersListView (which observes them itself),
+    // Only handed onward to ChapterPlayerView (which observes them itself),
     // never read here — so they arrive in one non-observable container
     // rather than as three separate parameters. See AppEnvironment.
     let app: AppEnvironment
-    @State private var viewingGeneration: SavedGeneration?
     @State private var openProject: SavedGeneration?
     @State private var sortNewestFirst = true
 
@@ -36,12 +32,6 @@ struct LibraryTabView: View {
                                     } label: {
                                         Label(title: { Text("Delete") }, icon: { LucideIcon(.trash) })
                                     }
-                                    Button {
-                                        viewingGeneration = viewModel.project(for: generation.id)
-                                    } label: {
-                                        Label(title: { Text("View Text") }, icon: { LucideIcon(.pencil) })
-                                    }
-                                    .tint(.blue)
                                 }
                         }
                         .listRowBackground(Color.appSecondaryBackground)
@@ -65,8 +55,10 @@ struct LibraryTabView: View {
                 }
             }
             .navigationDestination(item: $openProject) { project in
-                ChaptersListView(
-                    project: project, chapterPlayer: app.chapterPlayer,
+                ChapterPlayerView(
+                    project: project, library: viewModel,
+                    voiceCloneViewModel: app.voiceClone,
+                    chapterPlayer: app.chapterPlayer,
                     generationStore: app.generationStore, viewModel: app.tts)
             }
             // Root tab bar/floating "+" button only at this screen's own
@@ -74,9 +66,6 @@ struct LibraryTabView: View {
             .tabRootChrome(app.navigationChrome, isPushed: openProject != nil)
         }
         .preferredColorScheme(.dark)
-        .sheet(item: $viewingGeneration) { generation in
-            GenerationTextSheet(generation: generation)
-        }
     }
 
     private var emptyState: some View {
@@ -96,9 +85,10 @@ struct LibraryTabView: View {
         GenerationRow(
             icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
             iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
+            coverURL: generation.coverURL,
             title: generation.title,
             subtitle:
-                "\(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
+                "\(generation.pageCountLabel) · \(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
             onTap: { open(generation) }
         )
     }

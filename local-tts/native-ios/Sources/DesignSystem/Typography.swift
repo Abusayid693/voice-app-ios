@@ -17,11 +17,50 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
         }
     }
 
-    var font: Font {
+    var pointSize: CGFloat {
         switch self {
-        case .small: return .system(size: 15, weight: .regular)
-        case .medium: return .system(size: 17, weight: .regular)
-        case .large: return .system(size: 21, weight: .regular)
+        case .small: return 15
+        case .medium: return 17
+        case .large: return 21
+        }
+    }
+
+    func font(family: ReaderFontFamily) -> Font {
+        family.font(size: pointSize)
+    }
+}
+
+/// Persistable typefaces used only by the chapter reader's long-form text.
+/// App chrome and every other screen continue to use `AppTextStyle`.
+enum ReaderFontFamily: String, CaseIterable, Identifiable {
+    case sfProText
+    case newYork
+    case georgia
+    case avenirNext
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sfProText: return "SF Pro Text"
+        case .newYork: return "New York"
+        case .georgia: return "Georgia"
+        case .avenirNext: return "Avenir Next"
+        }
+    }
+
+    func font(size: CGFloat) -> Font {
+        switch self {
+        case .sfProText:
+            return .system(size: size, weight: .regular, design: .default)
+        case .newYork:
+            // The system serif design resolves to Apple's New York family
+            // and follows the platform's optical-size behavior.
+            return .system(size: size, weight: .regular, design: .serif)
+        case .georgia:
+            return .custom("Georgia", size: size)
+        case .avenirNext:
+            return .custom("AvenirNext-Regular", size: size)
         }
     }
 }

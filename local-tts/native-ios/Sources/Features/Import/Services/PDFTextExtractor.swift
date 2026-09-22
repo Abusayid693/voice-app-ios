@@ -2,11 +2,10 @@ import PDFKit
 import UIKit
 
 /// Small seam around extraction. PDFKit is the v1 implementation, but the
-/// import pipeline only consumes these app-owned line and outline values, so
+/// import pipeline only consumes these app-owned line values, so
 /// a commercial extractor can replace it later without changing jobs or UI.
 protocol PDFTextExtractor {
     func extractPage(_ page: PDFPage, index: Int) -> PDFPageContent
-    func outlineEntries(in document: PDFDocument) -> [PDFOutlineEntry]
 }
 
 struct PDFKitTextExtractor: PDFTextExtractor {
@@ -34,46 +33,6 @@ struct PDFKitTextExtractor: PDFTextExtractor {
                 pageIndex: index, pageWidth: visualSize.width, pageHeight: visualSize.height,
                 lines: order(lines: lines, pageWidth: visualSize.width))
         }
-    }
-
-    func outlineEntries(in document: PDFDocument) -> [PDFOutlineEntry] {
-        guard let root = document.outlineRoot else { return [] }
-        var entries: [PDFOutlineEntry] = []
-
-        func visit(_ outline: PDFOutline, depth: Int) {
-            if let destination = destination(for: outline), let page = destination.page {
-                let index = document.index(for: page)
-                if index != NSNotFound {
-                    let cropBox = page.bounds(for: .cropBox)
-                    let pointBounds = CGRect(origin: destination.point, size: .zero)
-                    let top = normalizedBounds(
-                        pointBounds, cropBox: cropBox, rotation: page.rotation).y
-                    let title = outline.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    if !title.isEmpty {
-                        entries.append(PDFOutlineEntry(title: title, pageIndex: index, top: top, depth: depth))
-                    }
-                }
-            }
-            for childIndex in 0..<outline.numberOfChildren {
-                if let child = outline.child(at: childIndex) {
-                    visit(child, depth: depth + 1)
-                }
-            }
-        }
-
-        // `outlineRoot` itself is a container rather than a user-visible
-        // bookmark, hence its children begin at depth 0.
-        for childIndex in 0..<root.numberOfChildren {
-            if let child = root.child(at: childIndex) {
-                visit(child, depth: 0)
-            }
-        }
-        return entries
-    }
-
-    private func destination(for outline: PDFOutline) -> PDFDestination? {
-        if let destination = outline.destination { return destination }
-        return (outline.action as? PDFActionGoTo)?.destination
     }
 
     private func attributes(for attributedText: NSAttributedString?) -> (

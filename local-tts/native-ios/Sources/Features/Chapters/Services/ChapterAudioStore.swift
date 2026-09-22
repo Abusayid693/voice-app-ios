@@ -11,19 +11,21 @@ import Foundation
 /// Errors are thrown, not swallowed with `try?` the way the old
 /// `attachAudio` did — a 30+MB chapter write can genuinely fail (full
 /// disk), and the caller needs to know.
-enum ChapterAudioStore {
+enum PageAudioStore {
     // MARK: - Final (merged) chapter audio
 
-    static func isGenerated(_ ref: ChapterRef, project: SavedGeneration) -> Bool {
-        project.hasGeneratedAudio(chapterIndex: ref.chapterIndex)
+    static func isGenerated(_ ref: ReaderPageRef, project: SavedGeneration) -> Bool {
+        project.hasGeneratedAudio(pageIndex: ref.pageIndex)
+            && FileManager.default.fileExists(
+                atPath: project.pageSidecarFileURL(index: ref.pageIndex).path)
     }
 
-    static func loadAudio(_ ref: ChapterRef, project: SavedGeneration) -> Data? {
-        try? Data(contentsOf: project.chapterAudioFileURL(index: ref.chapterIndex))
+    static func loadAudio(_ ref: ReaderPageRef, project: SavedGeneration) -> Data? {
+        try? Data(contentsOf: project.pageAudioFileURL(index: ref.pageIndex))
     }
 
-    static func loadManifest(_ ref: ChapterRef, project: SavedGeneration) -> ChapterAudioManifest? {
-        guard let data = try? Data(contentsOf: project.chapterSidecarFileURL(index: ref.chapterIndex))
+    static func loadManifest(_ ref: ReaderPageRef, project: SavedGeneration) -> ChapterAudioManifest? {
+        guard let data = try? Data(contentsOf: project.pageSidecarFileURL(index: ref.pageIndex))
         else { return nil }
         return try? JSONDecoder().decode(ChapterAudioManifest.self, from: data)
     }
@@ -32,19 +34,19 @@ enum ChapterAudioStore {
     /// files for this chapter — called once, after `WavConcatenator.merge`
     /// succeeds.
     static func saveFinal(
-        audio: Data, manifest: ChapterAudioManifest, ref: ChapterRef, project: SavedGeneration
+        audio: Data, manifest: ChapterAudioManifest, ref: ReaderPageRef, project: SavedGeneration
     ) throws {
         try FileManager.default.createDirectory(
             at: project.audioDirectory, withIntermediateDirectories: true)
-        try audio.write(to: project.chapterAudioFileURL(index: ref.chapterIndex))
+        try audio.write(to: project.pageAudioFileURL(index: ref.pageIndex))
         let manifestData = try JSONEncoder().encode(manifest)
-        try manifestData.write(to: project.chapterSidecarFileURL(index: ref.chapterIndex))
+        try manifestData.write(to: project.pageSidecarFileURL(index: ref.pageIndex))
         clearStaging(ref, project: project)
     }
 
-    static func deleteGeneratedAudio(_ ref: ChapterRef, project: SavedGeneration) {
-        try? FileManager.default.removeItem(at: project.chapterAudioFileURL(index: ref.chapterIndex))
-        try? FileManager.default.removeItem(at: project.chapterSidecarFileURL(index: ref.chapterIndex))
+    static func deleteGeneratedAudio(_ ref: ReaderPageRef, project: SavedGeneration) {
+        try? FileManager.default.removeItem(at: project.pageAudioFileURL(index: ref.pageIndex))
+        try? FileManager.default.removeItem(at: project.pageSidecarFileURL(index: ref.pageIndex))
     }
 
     // MARK: - Staging (in-progress synthesis)
@@ -53,17 +55,17 @@ enum ChapterAudioStore {
     /// killed app or a cancelled Generate can resume from where it left
     /// off instead of restarting, and the merge step doesn't need every
     /// chunk held in memory at once.
-    static func stagingDirectory(_ ref: ChapterRef, project: SavedGeneration) -> URL {
-        project.audioDirectory.appendingPathComponent(".staging_\(ref.chapterIndex)", isDirectory: true)
+    static func stagingDirectory(_ ref: ReaderPageRef, project: SavedGeneration) -> URL {
+        project.audioDirectory.appendingPathComponent(".staging_\(ref.pageIndex)", isDirectory: true)
     }
 
-    private static func stagedChunkURL(_ ref: ChapterRef, project: SavedGeneration, chunkIndex: Int) -> URL {
+    private static func stagedChunkURL(_ ref: ReaderPageRef, project: SavedGeneration, chunkIndex: Int) -> URL {
         stagingDirectory(ref, project: project).appendingPathComponent("chunk_\(chunkIndex).wav")
     }
 
     /// Staged chunks already on disk, in order — stops at the first
     /// missing index, so a partial write doesn't return a gappy array.
-    static func loadStagedChunks(_ ref: ChapterRef, project: SavedGeneration) -> [Data] {
+    static func loadStagedChunks(_ ref: ReaderPageRef, project: SavedGeneration) -> [Data] {
         var chunks: [Data] = []
         while let data = try? Data(contentsOf: stagedChunkURL(ref, project: project, chunkIndex: chunks.count)) {
             chunks.append(data)
@@ -71,20 +73,22 @@ enum ChapterAudioStore {
         return chunks
     }
 
-    static func saveStagedChunk(_ data: Data, ref: ChapterRef, project: SavedGeneration, chunkIndex: Int) throws {
+    static func saveStagedChunk(
+        _ data: Data, ref: ReaderPageRef, project: SavedGeneration, chunkIndex: Int
+    ) throws {
         let directory = stagingDirectory(ref, project: project)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: stagedChunkURL(ref, project: project, chunkIndex: chunkIndex))
     }
 
-    static func clearStaging(_ ref: ChapterRef, project: SavedGeneration) {
+    static func clearStaging(_ ref: ReaderPageRef, project: SavedGeneration) {
         try? FileManager.default.removeItem(at: stagingDirectory(ref, project: project))
     }
 
     // MARK: - Staged word timings
 
     private static func stagedWordTimingsURL(
-        _ ref: ChapterRef, project: SavedGeneration, chunkIndex: Int
+        _ ref: ReaderPageRef, project: SavedGeneration, chunkIndex: Int
     ) -> URL {
         stagingDirectory(ref, project: project).appendingPathComponent("chunk_\(chunkIndex).words.json")
     }
@@ -97,7 +101,7 @@ enum ChapterAudioStore {
     /// so a crash between writing the two files on a prior run can't
     /// desync this array's length from `loadStagedChunks`'.
     static func loadStagedWordTimings(
-        _ ref: ChapterRef, project: SavedGeneration, count: Int
+        _ ref: ReaderPageRef, project: SavedGeneration, count: Int
     ) -> [[WordTiming]] {
         (0..<count).map { index in
             guard
@@ -110,7 +114,7 @@ enum ChapterAudioStore {
     }
 
     static func saveStagedWordTimings(
-        _ timings: [WordTiming], ref: ChapterRef, project: SavedGeneration, chunkIndex: Int
+        _ timings: [WordTiming], ref: ReaderPageRef, project: SavedGeneration, chunkIndex: Int
     ) throws {
         let directory = stagingDirectory(ref, project: project)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -1,6 +1,7 @@
 import Hugeicons
 import LucideSwift
 import SwiftUI
+import UIKit
 
 /// One saved generation's row — an engine-icon avatar, its text, and a
 /// trailing play icon (decorative; the whole row is the real tap target,
@@ -14,22 +15,23 @@ import SwiftUI
 struct GenerationRow: View {
     let icon: LucideIconName
     var iconStyle: LucideIconStyle = .stroked
+    var coverURL: URL?
     let title: String
     let subtitle: String
     let onTap: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color.appSecondaryBackground)
-                .frame(width: 40, height: 40)
-                .overlay {
-                    LucideIcon(icon, style: iconStyle, size: 16, color: Color.appPrimaryText)
-                }
+            if let coverURL {
+                ProjectCoverThumbnail(
+                    url: coverURL, icon: icon, iconStyle: iconStyle)
+            } else {
+                fallbackIcon
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).appText(.rowTitle)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 Text(subtitle).appText(.label)
             }
 
@@ -45,5 +47,48 @@ struct GenerationRow: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+    }
+
+    private var fallbackIcon: some View {
+        Circle()
+            .fill(Color.appSecondaryBackground)
+            .frame(width: 40, height: 40)
+            .overlay {
+                LucideIcon(icon, style: iconStyle, size: 16, color: Color.appPrimaryText)
+            }
+    }
+}
+
+/// Decodes only the small persisted PDF cover for a visible row. If a file is
+/// missing or corrupt, this deliberately preserves GenerationRow's existing
+/// engine-icon fallback rather than leaving an empty thumbnail.
+private struct ProjectCoverThumbnail: View {
+    private static let size = CGSize(width: 44, height: 66)
+    private static let cornerRadius: CGFloat = 3
+
+    let url: URL
+    let icon: LucideIconName
+    let iconStyle: LucideIconStyle
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                RoundedRectangle(cornerRadius: Self.cornerRadius)
+                    .fill(Color.appSecondaryBackground)
+                    .overlay {
+                        LucideIcon(icon, style: iconStyle, size: 16, color: Color.appPrimaryText)
+                    }
+            }
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .task(id: url) {
+            image = UIImage(contentsOfFile: url.path)
+        }
     }
 }

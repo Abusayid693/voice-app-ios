@@ -9,7 +9,7 @@ struct KokoroAneTestApp: App {
     private let libraryViewModel: LibraryViewModel
     private let pdfImportManager: PDFImportManager
     private let previewPlayer = VoicePreviewPlayer()
-    // Chapters flow (issue: split Generate into save-then-chapters):
+    // Page reader audio dependencies:
     // ChapterSynthesisService needs viewModel.kokoroServices, so these are
     // built after viewModel rather than as bare property initializers.
     private let chapterSynthesisService: ChapterSynthesisService

@@ -64,7 +64,7 @@ final class ChapterSynthesisService {
     /// sidecar manifest. `onProgress(done, total)` fires after every chunk,
     /// including ones already staged from a prior attempt.
     func generateAndSave(
-        ref: ChapterRef, project: SavedGeneration, chapter: Chapter, voice: String,
+        ref: ReaderPageRef, project: SavedGeneration, page: ReaderPage, voice: String,
         onProgress: @escaping (Int, Int) -> Void
     ) async throws {
         try await runSerially {
@@ -72,9 +72,9 @@ final class ChapterSynthesisService {
             let service = try self.service(forVoice: voice)
             try await service.ensureReady(voice: voice)
 
-            let chunkTexts = KokoroTextChunker.chunk(chapter.text)
-            var stagedChunks = ChapterAudioStore.loadStagedChunks(ref, project: project)
-            var stagedWordTimings = ChapterAudioStore.loadStagedWordTimings(
+            let chunkTexts = KokoroTextChunker.chunk(page.text)
+            var stagedChunks = PageAudioStore.loadStagedChunks(ref, project: project)
+            var stagedWordTimings = PageAudioStore.loadStagedWordTimings(
                 ref, project: project, count: stagedChunks.count)
             onProgress(stagedChunks.count, chunkTexts.count)
 
@@ -82,8 +82,8 @@ final class ChapterSynthesisService {
                 try Task.checkCancellation()
                 let (data, wordTimings, _) = try await Self.synthesizeOneChunk(
                     chunkText: chunkTexts[index], voice: voice, service: service)
-                try ChapterAudioStore.saveStagedChunk(data, ref: ref, project: project, chunkIndex: index)
-                try ChapterAudioStore.saveStagedWordTimings(
+                try PageAudioStore.saveStagedChunk(data, ref: ref, project: project, chunkIndex: index)
+                try PageAudioStore.saveStagedWordTimings(
                     wordTimings, ref: ref, project: project, chunkIndex: index)
                 stagedChunks.append(data)
                 stagedWordTimings.append(wordTimings)
@@ -98,7 +98,7 @@ final class ChapterSynthesisService {
                 sampleRate: mergedPlayer?.format.sampleRate ?? 24_000,
                 totalDuration: mergedPlayer?.duration ?? 0, chunkTexts: chunkTexts,
                 chunkStarts: chunkStarts, wordTimings: stagedWordTimings)
-            try ChapterAudioStore.saveFinal(audio: merged, manifest: manifest, ref: ref, project: project)
+            try PageAudioStore.saveFinal(audio: merged, manifest: manifest, ref: ref, project: project)
         }
     }
 

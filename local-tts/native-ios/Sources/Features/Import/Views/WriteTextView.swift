@@ -2,10 +2,8 @@ import LucideSwift
 import SwiftUI
 
 /// Full-screen text entry reached from Import's "Write text" card. Generate
-/// no longer synthesizes anything here — it only saves the text, split into
-/// chapters (`LibraryViewModel.save`), and hands the new project's id up via
-/// `onGenerated` so the caller can push `ChaptersListView`. Per-chapter
-/// audio (streamed or, for Kokoro, generated-and-saved) happens there.
+/// no longer synthesizes anything here — it saves the text as reader pages
+/// of at most 2,000 words and hands the project id up so page 1 opens.
 struct WriteTextView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
@@ -91,7 +89,7 @@ struct WriteTextView: View {
         .padding()
     }
 
-    // Saves the text (split into chapters) and hands the new project's id
+    // Saves the text (split into reader pages) and hands the new project's id
     // to the caller — no audio is synthesized here anymore (see this
     // file's doc comment).
     private func generate() {
