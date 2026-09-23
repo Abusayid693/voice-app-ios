@@ -99,8 +99,7 @@ actor PDFProcessingActor {
         await progress(PDFProcessingProgress(
             phase: .finalizing, totalPages: pageCount, completedPages: pageCount))
         return PDFImportResult(
-            title: job.sourceFileName.replacingOccurrences(
-                of: ".pdf", with: "", options: [.caseInsensitive]),
+            title: job.sourceFileName,
             pagesDirectory: job.readerPagesDirectory,
             pageCount: pageCount,
             coverURL: coverURL)

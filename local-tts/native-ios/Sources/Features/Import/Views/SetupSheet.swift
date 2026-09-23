@@ -1,37 +1,27 @@
 import LucideSwift
 import SwiftUI
 
-/// Modal for downloading the two voice packs up front. Always reachable
-/// from Import's "Setup" button — an already-downloaded pack simply shows
-/// as done instead of offering a download button again.
-struct SetupSheet: View {
+/// Download controls presented from Settings. This remains a plain navigation
+/// destination so the Settings stack owns its Back affordance and dismissal.
+struct SetupView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(VoicePack.allCases) { pack in
-                        packRow(for: pack)
-                    }
-                    .listRowBackground(Color.appSecondaryBackground)
-                } footer: {
-                    Text("Download each voice pack to make its voices available when writing.")
-                        .appText(.body)
+        List {
+            Section {
+                ForEach(VoicePack.allCases) { pack in
+                    packRow(for: pack)
                 }
-            }
-            .scrollContentBackground(.hidden)
-            .background(Color.appBackground)
-            .navigationTitle("Setup")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+                .listRowBackground(Color.appSecondaryBackground)
+            } footer: {
+                Text("Download each voice pack to make its voices available when writing.")
+                    .appText(.body)
             }
         }
-        .preferredColorScheme(.dark)
+        .scrollContentBackground(.hidden)
+        .background(Color.appBackground)
+        .navigationTitle("Setup")
     }
 
     @ViewBuilder
@@ -93,5 +83,5 @@ struct SetupSheet: View {
 
 #Preview {
     let viewModel = TTSViewModel(dependencies: DependencyContainer())
-    SetupSheet(viewModel: viewModel, packs: viewModel.packs)
+    SetupView(viewModel: viewModel, packs: viewModel.packs)
 }

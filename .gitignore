@@ -8,5 +8,10 @@ DerivedData/
 # docs/adr/0002-custom-kokoro-model-bundle.md for the exact recipe.
 local-tts/native-ios/CustomKokoroModel/
 
+# Throwaway validation experiments (e.g. inflect-v2-test) — not shipped
+# code, not meant to live in repo history. See each experiment's own
+# README for how to regenerate/rebuild it locally.
+experiments/
+
 # macOS
 .DS_Store

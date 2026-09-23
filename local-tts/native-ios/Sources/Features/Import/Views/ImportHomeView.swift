@@ -3,41 +3,6 @@ import LucideSwift
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Reports whether a ScrollView is parked at (or within `threshold` of) its
-/// top, so ImportHomeView can fade the Setup pointer out as soon as the user
-/// scrolls away from it.
-///
-/// Uses `.onScrollGeometryChange` (iOS 18+) rather than the older
-/// GeometryReader-in-the-content's-`.background` + PreferenceKey recipe. That
-/// recipe silently stopped working: modern ScrollView doesn't re-evaluate a
-/// background GeometryReader on every scroll tick, so the preference never
-/// fired and the "at top" flag was stuck at `true` forever no matter which
-/// coordinate space it measured against.
-///
-/// On iOS 17 there is no equivalent API, so the pointer simply stays put
-/// until the packs finish downloading — it's a decorative onboarding hint,
-/// and that degradation is preferable to reinstating the broken recipe.
-private struct ScrolledToTopObserver: ViewModifier {
-    @Binding var isAtTop: Bool
-    var threshold: CGFloat = 10
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: Bool.self) { geometry in
-                // At rest contentOffset.y == -contentInsets.top (the nav bar
-                // and large title are part of the top inset), so the sum —
-                // not contentOffset alone — is the real distance scrolled.
-                geometry.contentOffset.y + geometry.contentInsets.top <= threshold
-            } action: { _, atTop in
-                guard atTop != isAtTop else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { isAtTop = atTop }
-            }
-        } else {
-            content
-        }
-    }
-}
-
 /// The two pages of Home's top action row — "Listen to text" (get
 /// existing text into the app) vs. "Make audio" (create new voice/audio
 /// content).
@@ -72,6 +37,7 @@ struct ImportHomeView: View {
     // container rather than as four separate parameters, so none of it
     // subscribes this view to anything. See AppEnvironment.
     let app: AppEnvironment
+    @Binding var homeMode: HomeMode
     // Owned here (not TTSViewModel) — book browsing is a separate concern
     // from TTS orchestration, and outlives this view's re-renders as long
     // as the Import tab stays alive.
@@ -94,19 +60,13 @@ struct ImportHomeView: View {
     // own onDismiss fires — setting both isWriteTextPresented = false and
     // openProjectID in the same runloop can drop the subsequent push.
     @State private var pendingProjectID: UUID?
-    // Setup pointer only makes sense while its target is still visible at
-    // the top of the screen — hide it the moment the user scrolls away
-    // from the top, rather than have it float over unrelated content.
-    // Driven by ScrolledToTopObserver above.
-    @State private var isScrolledToTop = true
     // Which page of the action tabs is showing — tapping a tab and
     // swiping the TabView both write to this same binding, so either one
     // keeps the other in sync.
     @State private var selectedHomeTab: HomeTab = .listen
-
-    private var isFullyDownloaded: Bool {
-        packs.isKokoroPackReady && packs.isPocketPackDownloaded && packs.isSupertonic3Downloaded
-    }
+    // BookShelfView owns the selected book and its shelf-to-modal hero animation;
+    // Home only needs this state to keep its mode selector out of the modal.
+    @State private var isBookDetailPresented = false
 
     private var selectedVoiceName: String {
         switch viewModel.engine {
@@ -117,34 +77,121 @@ struct ImportHomeView: View {
     }
 
     var body: some View {
-        // The pointer is a sibling of the *whole* NavigationStack, not a
-        // layer inside it. Anything placed inside the stack is positioned
-        // relative to the stack's content area, and that area moves: when
-        // the large "Import" title collapses into the inline bar on scroll,
-        // the content area's origin rises by the title's height, dragging
-        // any inner overlay up with it (which is what made the pointer look
-        // like it scrolled, then "stuck" once the collapse finished). Out
-        // here the coordinate space is the screen's safe area, which never
-        // changes — and that's the same space the toolbar button lives in.
-        ZStack(alignment: .topTrailing) {
-            navigationContent
-
-            if isScrolledToTop {
-                setupPointer
-                    // 40pt down clears the 44pt nav bar; 100pt in from the
-                    // trailing edge lands under "Setup" rather than the cog.
-                    .padding(.top, 50)
-                    .padding(.trailing, 100)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
-        .preferredColorScheme(.dark)
+        navigationContent
     }
 
     private var navigationContent: some View {
         NavigationStack {
-            ScrollView {
+            ZStack {
+                studioContent
+                    .opacity(homeMode == .studio ? 1 : 0)
+                    .allowsHitTesting(homeMode == .studio)
+                    .accessibilityHidden(homeMode != .studio)
+
+                BookShelfView(
+                    library: libraryViewModel,
+                    isDetailPresented: $isBookDetailPresented,
+                    onAddBooks: { pdfImports.requestDocumentPicker() }
+                ) { book in
+                    openProject = libraryViewModel.project(for: book.id)
+                }
+                .opacity(homeMode == .reading ? 1 : 0)
+                .allowsHitTesting(homeMode == .reading)
+                .accessibilityHidden(homeMode != .reading)
+            }
+            .background(homeMode.background.ignoresSafeArea())
+            .animation(.easeInOut(duration: 0.24), value: homeMode)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HomeModeSwitcher(selection: $homeMode)
+                        .opacity(isBookDetailPresented ? 0.42 : 1)
+                        .blur(radius: isBookDetailPresented ? 1.5 : 0)
+                        .allowsHitTesting(!isBookDetailPresented)
+                        .accessibilityHidden(isBookDetailPresented)
+                }
+                if homeMode == .studio {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        settingsButton
+                    }
+                }
+            }
+            .tint(homeMode.primaryText)
+            .preferredColorScheme(homeMode.colorScheme)
+            .onChange(of: homeMode) { _, mode in
+                if mode != .reading {
+                    isBookDetailPresented = false
+                }
+            }
+            .task { await openLibraryBooksViewModel.loadIfNeeded() }
+            .navigationDestination(item: $voiceCloneRoute) { route in
+                switch route {
+                case .instantClone:
+                    InstantCloneView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
+                case .upload:
+                    UploadVoiceView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
+                }
+            }
+            .navigationDestination(item: $openProject) { project in
+                ChapterPlayerView(
+                    project: project, library: libraryViewModel,
+                    voiceCloneViewModel: app.voiceClone,
+                    chapterPlayer: app.chapterPlayer,
+                    generationStore: app.generationStore,
+                    viewModel: viewModel,
+                    previewPlayer: app.previewPlayer)
+            }
+            // The root tab bar/floating "+" button should only show at
+            // this screen's own root, not on anything pushed above it.
+            .tabRootChrome(
+                app.navigationChrome,
+                isPushed: openProject != nil || voiceCloneRoute != nil)
+        }
+        .sheet(isPresented: $isSettingsPresented) {
+            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
+        }
+        .fullScreenCover(
+            isPresented: $viewModel.isWriteTextPresented,
+            onDismiss: {
+                if let pendingProjectID {
+                    openProject = libraryViewModel.project(for: pendingProjectID)
+                    self.pendingProjectID = nil
+                }
+            }
+        ) {
+            WriteTextView(
+                viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
+                libraryViewModel: libraryViewModel, packs: packs,
+                previewPlayer: app.previewPlayer,
+                onGenerated: { projectID in
+                    pendingProjectID = projectID
+                    viewModel.isWriteTextPresented = false
+                })
+        }
+        .sheet(isPresented: $isCreateVoicePresented) {
+            CreateVoiceSheet { route in
+                isCreateVoicePresented = false
+                voiceCloneRoute = route
+            }
+        }
+        .sheet(item: $selectedVoiceTile) { tile in
+            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: app.previewPlayer)
+        }
+        .fileImporter(
+            isPresented: $pdfImports.isDocumentPickerPresented,
+            allowedContentTypes: [.pdf], allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first else { return }
+            Task {
+                await pdfImports.importPDF(
+                    from: url, engine: viewModel.engine, voiceName: selectedVoiceName)
+            }
+        }
+    }
+
+    private var studioContent: some View {
+        ScrollView {
                 // 4 top-level groups (buttons, Trending voices, Read
                 // Anything, Projects) at AppSpacing.betweenGroups; within a
                 // multi-part group, siblings sit at the tighter
@@ -171,115 +218,22 @@ struct ImportHomeView: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
-            .modifier(ScrolledToTopObserver(isAtTop: $isScrolledToTop))
             .background(Color.appBackground.ignoresSafeArea())
-            .navigationTitle("Home")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    setupButton
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    settingsButton
-                }
-            }
-            .task { await openLibraryBooksViewModel.loadIfNeeded() }
-            .navigationDestination(item: $voiceCloneRoute) { route in
-                switch route {
-                case .instantClone:
-                    InstantCloneView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
-                case .upload:
-                    UploadVoiceView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
-                }
-            }
-            .navigationDestination(item: $openProject) { project in
-                ChapterPlayerView(
-                    project: project, library: libraryViewModel,
-                    voiceCloneViewModel: app.voiceClone,
-                    chapterPlayer: app.chapterPlayer,
-                    generationStore: app.generationStore, viewModel: viewModel)
-            }
-            // The root tab bar/floating "+" button should only show at
-            // this screen's own root, not on anything pushed above it —
-            // see NavigationChromeVisibility. Two triggers, either one
-            // non-nil means something's pushed.
-            .tabRootChrome(app.navigationChrome, isPushed: openProject != nil || voiceCloneRoute != nil)
-        }
-        .sheet(isPresented: $viewModel.isSetupPresented) {
-            SetupSheet(viewModel: viewModel, packs: packs)
-        }
-        .fullScreenCover(
-            isPresented: $viewModel.isWriteTextPresented,
-            onDismiss: {
-                if let pendingProjectID {
-                    openProject = libraryViewModel.project(for: pendingProjectID)
-                    self.pendingProjectID = nil
-                }
-            }
-        ) {
-            WriteTextView(
-                viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
-                libraryViewModel: libraryViewModel, packs: packs,
-                onGenerated: { projectID in
-                    pendingProjectID = projectID
-                    viewModel.isWriteTextPresented = false
-                })
-        }
-        .sheet(isPresented: $isCreateVoicePresented) {
-            CreateVoiceSheet { route in
-                isCreateVoicePresented = false
-                voiceCloneRoute = route
-            }
-        }
-        .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: app.previewPlayer)
-        }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
-        }
-        .fileImporter(
-            isPresented: $pdfImports.isDocumentPickerPresented,
-            allowedContentTypes: [.pdf], allowsMultipleSelection: false
-        ) { result in
-            guard case let .success(urls) = result, let url = urls.first else { return }
-            Task {
-                await pdfImports.importPDF(
-                    from: url, engine: viewModel.engine, voiceName: selectedVoiceName)
-            }
-        }
-    }
-
-    private var setupButton: some View {
-        Button {
-            viewModel.isSetupPresented = true
-        } label: {
-            Label(
-                title: { Text("Setup") },
-                icon: {
-                    LucideIcon(isFullyDownloaded ? .circleCheck : .circleArrowDown)
-                })
-        }
-    }
-
-    // Floats in screen space outside the NavigationStack (see body) so it
-    // stays pinned under the Setup toolbar button no matter how far the
-    // page scrolls or whether the large title has collapsed. Never attached
-    // to the button itself — that would make it participate in the
-    // toolbar's own layout and push the other item around.
-    private var setupPointer: some View {
-        Image("SetupPointer")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 28.8, height: 48)
-            .allowsHitTesting(false)
-            .transition(.opacity)
     }
 
     private var settingsButton: some View {
         Button {
             isSettingsPresented = true
         } label: {
-            LucideIcon(.cog)
+            Hugeicons.menu01.image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .frame(width: 44, height: 44)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
     }
 
     // Tab switcher + swipeable pages, both driving the same
@@ -663,5 +617,5 @@ struct VoiceTile: Identifiable {
     let app = AppEnvironment.preview()
     return ImportHomeView(
         viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
-        packs: app.tts.packs, app: app)
+        packs: app.tts.packs, app: app, homeMode: .constant(.studio))
 }

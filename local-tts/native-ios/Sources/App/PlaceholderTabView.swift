@@ -5,6 +5,7 @@ import SwiftUI
 /// Library, Voices) — reused rather than one near-identical file per tab.
 struct PlaceholderTabView: View {
     let title: String
+    @Binding var homeMode: HomeMode
 
     var body: some View {
         NavigationStack {
@@ -15,11 +16,20 @@ struct PlaceholderTabView: View {
                     .font(AppTextStyle.sectionTitle.font)
                     .foregroundStyle(.secondary)
             }
-            .navigationTitle(title)
+            .navigationTitle("")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HomeModeSwitcher(
+                        selection: $homeMode,
+                        foreground: .appPrimaryText,
+                        selectedBackground: .appSecondaryBackground,
+                        trackBackground: Color.appPrimaryText.opacity(0.12))
+                }
+            }
         }
     }
 }
 
 #Preview {
-    PlaceholderTabView(title: "Explore")
+    PlaceholderTabView(title: "Explore", homeMode: .constant(.studio))
 }

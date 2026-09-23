@@ -9,6 +9,7 @@ struct WriteTextView: View {
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
     @ObservedObject var packs: VoicePackStore
+    let previewPlayer: VoicePreviewPlayer
     let onGenerated: (UUID) -> Void
 
     var body: some View {
@@ -50,7 +51,10 @@ struct WriteTextView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
             VoiceSettingsSheet(
-                viewModel: viewModel, packs: packs, voiceCloneViewModel: voiceCloneViewModel)
+                viewModel: viewModel,
+                packs: packs,
+                voiceCloneViewModel: voiceCloneViewModel,
+                previewPlayer: previewPlayer)
         }
     }
 
@@ -116,5 +120,8 @@ struct WriteTextView: View {
     WriteTextView(
         viewModel: viewModel,
         voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel(), packs: viewModel.packs, onGenerated: { _ in })
+        libraryViewModel: LibraryViewModel(),
+        packs: viewModel.packs,
+        previewPlayer: VoicePreviewPlayer(),
+        onGenerated: { _ in })
 }

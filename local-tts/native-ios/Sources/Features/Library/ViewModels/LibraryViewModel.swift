@@ -31,7 +31,7 @@ final class LibraryViewModel: ObservableObject {
         let id = UUID()
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: Date(), pageCount: pageCount)
+            createdAt: Date(), pageCount: pageCount, source: .pdf)
         let destination = SavedGeneration.projectPagesDirectory(id: id)
 
         do {
@@ -95,6 +95,30 @@ final class LibraryViewModel: ObservableObject {
         try? data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
     }
 
+    /// Changes the project-wide voice and removes audio synthesized with the
+    /// previous voice so saved playback can never use stale narration.
+    @discardableResult
+    func updateVoice(_ voiceName: String, for projectID: UUID) -> Bool {
+        guard var project = project(for: projectID) else { return false }
+        guard project.voiceName != voiceName else { return true }
+        project.voiceName = voiceName
+        guard let data = try? JSONEncoder().encode(project) else { return false }
+
+        do {
+            if FileManager.default.fileExists(atPath: project.audioDirectory.path) {
+                try FileManager.default.removeItem(at: project.audioDirectory)
+            }
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[index] = project.summary
+                Self.persistIndex(savedGenerations)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func delete(_ generation: SavedGenerationSummary) {
         savedGenerations.removeAll { $0.id == generation.id }
         Self.persistIndex(savedGenerations)
@@ -111,7 +135,7 @@ final class LibraryViewModel: ObservableObject {
         let id = UUID()
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: Date(), pageCount: pages.count)
+            createdAt: Date(), pageCount: pages.count, source: .enteredText)
         let directory = SavedGeneration.projectPagesDirectory(id: id)
 
         do {

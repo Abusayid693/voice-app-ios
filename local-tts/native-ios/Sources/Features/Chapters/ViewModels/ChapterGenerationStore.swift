@@ -57,4 +57,11 @@ final class ChapterGenerationStore: ObservableObject {
         tasks[ref] = nil
         states[ref] = nil
     }
+
+    func cancelAll(for projectID: UUID) {
+        let refs = tasks.keys.filter { $0.projectID == projectID }
+        for ref in refs {
+            cancel(ref)
+        }
+    }
 }

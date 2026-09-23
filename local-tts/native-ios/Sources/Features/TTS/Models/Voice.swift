@@ -29,11 +29,16 @@ struct Voice: Identifiable, Hashable, Sendable {
     /// language you pass alongside it. Set this instead of inventing a fake
     /// prefix for a convention those codes don't follow.
     var flagOverride: String?
+    /// Overrides `VoiceCode`'s prefix-stripped code as the display name —
+    /// for a voice whose raw code (`hf_alpha`, `hm_omega`) reads as a
+    /// placeholder rather than a real name. Set this instead of inventing
+    /// a fake code, same reasoning as `flagOverride`.
+    var displayNameOverride: String?
 
     var id: String { code }
 
     /// `af_alloy` -> `Alloy`, `bill_boerst` -> `Bill Boerst`.
-    var displayName: String { VoiceCode.displayName(for: code) }
+    var displayName: String { displayNameOverride ?? VoiceCode.displayName(for: code) }
     var flag: String { flagOverride ?? VoiceCode.flag(for: code) }
     var avatarAssetName: String? { hasAvatar ? "VoiceAvatar_\(code)" : nil }
 }
@@ -49,6 +54,12 @@ enum VoiceCode {
         "bf_": "🇬🇧", "bm_": "🇬🇧",
         "zf_": "🇨🇳", "zm_": "🇨🇳",
         "jf_": "🇯🇵", "jm_": "🇯🇵",
+        // hf_/hm_ are Hindi-*named* voice timbres in Kokoro's own v1.0 pack,
+        // but they still speak English phonemes here, same as every other
+        // non-English-prefixed pack (see VoiceCatalog.kokoroEnglish) — the
+        // flag identifies the voice's character, not a language this app
+        // can actually synthesize with it.
+        "hf_": "🇮🇳", "hm_": "🇮🇳",
     ]
 
     /// Pocket TTS voices are named after audiobook narrators with no locale

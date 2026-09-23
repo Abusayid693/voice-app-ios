@@ -1,6 +1,6 @@
 import Foundation
 
-/// The independently-downloadable voice packs shown in `SetupSheet` — one
+/// The independently-downloadable voice packs shown in `SetupView` — one
 /// Kokoro pack per variant (English bundled, Mandarin/Japanese downloaded),
 /// one Pocket TTS pack per supported language, and one Supertonic-3 pack
 /// (unlike the other two, it has no per-variant/per-language axis: its

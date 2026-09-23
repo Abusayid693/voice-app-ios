@@ -22,6 +22,82 @@ private struct ReaderScrollVisibilityObserver: ViewModifier {
     }
 }
 
+private struct ReaderScrollContentReporter: View {
+    let onUpdate: (CGRect) -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .named("reader-scroll"))
+            Color.clear
+                .onAppear { onUpdate(frame) }
+                .onChange(of: frame) { _, newFrame in onUpdate(newFrame) }
+        }
+    }
+}
+
+private enum ReaderPageNumberTransitionDirection: Equatable {
+    case forward
+    case backward
+}
+
+private struct VerticalNumberSlider: View {
+    let value: Int
+    let direction: ReaderPageNumberTransitionDirection
+    let width: CGFloat
+    @State private var displayedValue: Int
+    @State private var outgoingValue: Int?
+    @State private var progress: CGFloat = 1
+
+    init(value: Int, direction: ReaderPageNumberTransitionDirection, width: CGFloat) {
+        self.value = value
+        self.direction = direction
+        self.width = width
+        _displayedValue = State(initialValue: value)
+    }
+
+    var body: some View {
+        ZStack {
+            if let outgoingValue {
+                Text("\(outgoingValue)")
+                    .offset(y: outgoingOffset)
+            }
+
+            Text("\(displayedValue)")
+                .offset(y: incomingOffset)
+        }
+        .frame(width: width, height: 24)
+        .clipped()
+        .onChange(of: value) { _, newValue in
+            animate(to: newValue)
+        }
+    }
+
+    private var travelDistance: CGFloat { 28 }
+
+    private var outgoingOffset: CGFloat {
+        let multiplier: CGFloat = direction == .forward ? -1 : 1
+        return multiplier * travelDistance * progress
+    }
+
+    private var incomingOffset: CGFloat {
+        let multiplier: CGFloat = direction == .forward ? 1 : -1
+        return multiplier * travelDistance * (1 - progress)
+    }
+
+    private func animate(to newValue: Int) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            outgoingValue = displayedValue
+            displayedValue = newValue
+            progress = 0
+        }
+        withAnimation(.easeInOut(duration: 0.28)) {
+            progress = 1
+        }
+    }
+}
+
 /// The page reader: one persisted page is visible at a time, with the
 /// read-along transport floating above Previous/Next page navigation.
 /// text, with a compact, translucent transport bar floating over its
@@ -49,6 +125,7 @@ struct ChapterPlayerView: View {
     let project: SavedGeneration
     let library: LibraryViewModel
     let voiceCloneViewModel: VoiceCloneViewModel
+    let previewPlayer: VoicePreviewPlayer
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
     @ObservedObject var generationStore: ChapterGenerationStore
     @ObservedObject var viewModel: TTSViewModel
@@ -56,6 +133,8 @@ struct ChapterPlayerView: View {
     @State private var currentPageIndex: Int
     @State private var currentPage: ReaderPage?
     @State private var idleChunkTexts: [String] = []
+    @State private var selectedVoiceName: String
+    @State private var pageNumberTransitionDirection: ReaderPageNumberTransitionDirection = .forward
 
     @State private var isAutoScrollPaused = false
     // Reference type, not @State, for the same reason as groupHeightsBox
@@ -70,6 +149,26 @@ struct ChapterPlayerView: View {
         var indices: Set<Int> = []
     }
     @State private var visibleParagraphsBox = VisibleParagraphsBox()
+    private final class ReaderScrollMetricsBox {
+        var contentFrame = CGRect.zero
+        var viewportHeight: CGFloat = 0
+
+        var topPullDistance: CGFloat {
+            max(contentFrame.minY, 0)
+        }
+
+        var bottomPullDistance: CGFloat {
+            let restingBottom = min(viewportHeight, contentFrame.height)
+            return max(restingBottom - contentFrame.maxY, 0)
+        }
+    }
+    private final class PageTurnGestureBox {
+        var hasTurnedPage = false
+    }
+    // Scroll metrics and gesture bookkeeping stay reference-backed so they
+    // do not invalidate the full read-along layout at drag-frame frequency.
+    @State private var scrollMetricsBox = ReaderScrollMetricsBox()
+    @State private var pageTurnGestureBox = PageTurnGestureBox()
     // Fixed once, so the TimelineViews below get a stable schedule value
     // instead of a fresh one built from `.now` on every body pass.
     @State private var pollAnchor = Date()
@@ -131,6 +230,8 @@ struct ChapterPlayerView: View {
     @State private var isPulsingPlayButton = false
     @State private var isOptionsSheetPresented = false
     @State private var isPagePickerPresented = false
+    @State private var isVoiceSelectionPresented = false
+    @State private var isVoiceChangeErrorPresented = false
     // Persisted across sessions — set once, stays that way for every chapter
     // opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
     @AppStorage("chapterPlayerKeepScreenOn") private var keepScreenOn = false
@@ -147,11 +248,14 @@ struct ChapterPlayerView: View {
         project: SavedGeneration, initialPageIndex: Int? = nil,
         library: LibraryViewModel, voiceCloneViewModel: VoiceCloneViewModel,
         chapterPlayer: ChapterAudioPlayer,
-        generationStore: ChapterGenerationStore, viewModel: TTSViewModel
+        generationStore: ChapterGenerationStore,
+        viewModel: TTSViewModel,
+        previewPlayer: VoicePreviewPlayer
     ) {
         self.project = project
         self.library = library
         self.voiceCloneViewModel = voiceCloneViewModel
+        self.previewPlayer = previewPlayer
         _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
         _generationStore = ObservedObject(wrappedValue: generationStore)
         _viewModel = ObservedObject(wrappedValue: viewModel)
@@ -160,6 +264,7 @@ struct ChapterPlayerView: View {
             && (0..<project.pageCount).contains(requestedIndex)
         let boundedIndex = hasValidRequestedIndex ? requestedIndex : 0
         _currentPageIndex = State(initialValue: boundedIndex)
+        _selectedVoiceName = State(initialValue: project.voiceName)
     }
 
     private var pageRef: ReaderPageRef {
@@ -190,17 +295,19 @@ struct ChapterPlayerView: View {
         ZStack(alignment: .bottom) {
             readAlong
             if showFloatingPlayer, hasReadableText {
-                // Expanded is 15pt lower than the prior placement; the
-                // compact pill sits another 15pt lower (30pt total) while
-                // remaining clear of the page-navigation bar.
-                floatingPlayer.padding(.bottom, isPlayerCollapsed ? 3 : 18)
+                // Keep the compact pill 30pt lower than its prior placement
+                // without moving the expanded transport card.
+                floatingPlayer.padding(.bottom, isPlayerCollapsed ? -27 : 18)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
         .background(readerTheme.background.ignoresSafeArea())
-        .navigationTitle("Page \(currentPageIndex + 1) of \(project.pageCount)")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                animatedPageTitle
+            }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 if project.engine == .kokoroAne {
                     generationToolbarControl
@@ -226,7 +333,22 @@ struct ChapterPlayerView: View {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
                 theme: readerTheme,
-                onSelect: { currentPageIndex = $0 })
+                onSelect: selectPage)
+        }
+        .sheet(isPresented: $isVoiceSelectionPresented) {
+            VoiceSettingsSheet(
+                viewModel: viewModel,
+                packs: viewModel.packs,
+                voiceCloneViewModel: voiceCloneViewModel,
+                previewPlayer: previewPlayer,
+                restrictedEngine: project.engine,
+                selectedVoiceName: selectedVoiceName,
+                onVoiceSelected: changeVoice)
+        }
+        .alert("Voice Couldn’t Be Changed", isPresented: $isVoiceChangeErrorPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The project could not be updated. Your previous voice is still selected.")
         }
         .preferredColorScheme(readerTheme.colorScheme)
         .onChange(of: keepScreenOn) { _, newValue in
@@ -301,7 +423,7 @@ struct ChapterPlayerView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    currentPageIndex -= 1
+                    selectPage(currentPageIndex - 1)
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
@@ -318,7 +440,7 @@ struct ChapterPlayerView: View {
                 .accessibilityLabel("Previous page")
 
                 Button {
-                    currentPageIndex += 1
+                    selectPage(currentPageIndex + 1)
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
@@ -347,6 +469,37 @@ struct ChapterPlayerView: View {
                         endPoint: .bottom)
                 }
                 .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private var animatedPageTitle: some View {
+        HStack(spacing: 4) {
+            Text("Page")
+
+            VerticalNumberSlider(
+                value: currentPageIndex + 1,
+                direction: pageNumberTransitionDirection,
+                width: pageNumberWidth)
+
+            Text("of \(project.pageCount)")
+        }
+        .font(.subheadline.weight(.semibold))
+        .monospacedDigit()
+        .foregroundStyle(readerTheme.primaryText)
+        .frame(height: 24)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Page \(currentPageIndex + 1) of \(project.pageCount)")
+    }
+
+    private var pageNumberWidth: CGFloat {
+        max(24, CGFloat(String(max(project.pageCount, 1)).count) * 10)
+    }
+
+    private func selectPage(_ index: Int) {
+        guard index != currentPageIndex, (0..<project.pageCount).contains(index) else { return }
+        pageNumberTransitionDirection = index > currentPageIndex ? .forward : .backward
+        withAnimation(.easeInOut(duration: 0.24)) {
+            currentPageIndex = index
         }
     }
 
@@ -384,7 +537,25 @@ struct ChapterPlayerView: View {
 
     private func generate(_ page: ReaderPage) {
         generationStore.generate(
-            ref: pageRef, project: project, page: page, voice: project.voiceName)
+            ref: pageRef, project: project, page: page, voice: selectedVoiceName)
+    }
+
+    private func changeVoice(_ voiceName: String) {
+        guard voiceName != selectedVoiceName else { return }
+
+        chapterPlayer.stop()
+        viewModel.stopEnginePlayback()
+        generationStore.cancelAll(for: project.id)
+        playPauseAnimationTask?.cancel()
+        displayedIsPlaying = false
+        playPauseScale = 1
+        isPulsingPlayButton = false
+
+        guard library.updateVoice(voiceName, for: project.id) else {
+            isVoiceChangeErrorPresented = true
+            return
+        }
+        selectedVoiceName = voiceName
     }
 
     @discardableResult
@@ -398,6 +569,7 @@ struct ChapterPlayerView: View {
         isPulsingPlayButton = false
         isAutoScrollPaused = false
         visibleParagraphsBox = VisibleParagraphsBox()
+        scrollMetricsBox = ReaderScrollMetricsBox()
         groupHeightsBox = GroupHeightsBox()
 
         currentPage = page
@@ -697,7 +869,7 @@ struct ChapterPlayerView: View {
         } else if PageAudioStore.isGenerated(pageRef, project: project) {
             chapterPlayer.playSaved(pageRef, project: project)
         } else {
-            chapterPlayer.stream(pageRef, page: page, voice: project.voiceName)
+            chapterPlayer.stream(pageRef, page: page, voice: selectedVoiceName)
         }
     }
 
@@ -708,8 +880,8 @@ struct ChapterPlayerView: View {
             viewModel.stopEnginePlayback()
         } else {
             viewModel.speakPage(
-                text: page.text, engine: project.engine, voiceName: project.voiceName,
-                clonedVoice: voiceCloneViewModel.clonedVoices.first { $0.name == project.voiceName })
+                text: page.text, engine: project.engine, voiceName: selectedVoiceName,
+                clonedVoice: voiceCloneViewModel.clonedVoices.first { $0.name == selectedVoiceName })
         }
     }
 
@@ -740,11 +912,29 @@ struct ChapterPlayerView: View {
     }
 
     private var avatar: some View {
-        Image(VoiceCoverArt.assetName(for: project.voiceName))
-            .resizable()
-            .scaledToFill()
-            .frame(width: 44, height: 44)
-            .clipShape(Circle())
+        Button {
+            presentVoiceSelection()
+        } label: {
+            Image(VoiceCoverArt.assetName(for: selectedVoiceName))
+                .resizable()
+                .scaledToFill()
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Change voice, currently \(selectedVoiceName)")
+    }
+
+    private func presentVoiceSelection() {
+        if chapterPlayer.isActive(pageRef), chapterPlayer.isPlaying {
+            chapterPlayer.togglePlayPause()
+        } else if viewModel.isReaderPlaybackActive {
+            // Pocket and Supertonic expose stop rather than a resumable
+            // pause transport, so silence them before presenting voices.
+            viewModel.stopEnginePlayback()
+        }
+        isVoiceSelectionPresented = true
     }
 
     // A plain rotate-arrow icon reads as "skip back/forward" once paired
@@ -775,63 +965,78 @@ struct ChapterPlayerView: View {
     private var readAlong: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                if currentPage == nil {
-                    ProgressView()
-                        .tint(readerTheme.primaryText)
-                        .frame(maxWidth: .infinity, minHeight: 240)
-                } else if !hasReadableText {
-                    VStack(spacing: 10) {
-                        LucideIcon(.fileText, size: 32, color: readerTheme.secondaryText)
-                        Text("This page has no selectable text.")
-                            .appText(.body)
-                            .foregroundStyle(readerTheme.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 240)
-                    .padding()
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
-                            let group = effectiveGroups[groupIndex]
-                            paragraphRowView(groupIndex: groupIndex)
-                                .id(groupIndex)
-                                .background(
-                                    GeometryReader { geo in
-                                        Color.clear
-                                            .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
-                                            .onChange(of: geo.size.height) { _, newValue in
-                                                groupHeightsBox.heights[groupIndex] = newValue
-                                            }
-                                    }
-                                )
-                                .gesture(
-                                    SpatialTapGesture().onEnded { value in
-                                        handleParagraphTap(
-                                            group: group, groupIndex: groupIndex,
-                                            localY: value.location.y)
-                                    }
-                                )
-                                .modifier(
-                                    ReaderScrollVisibilityObserver { isVisible in
-                                        if isVisible {
-                                            visibleParagraphsBox.indices.insert(groupIndex)
-                                        } else {
-                                            visibleParagraphsBox.indices.remove(groupIndex)
-                                        }
-                                    })
+                Group {
+                    if currentPage == nil {
+                        ProgressView()
+                            .tint(readerTheme.primaryText)
+                            .frame(maxWidth: .infinity, minHeight: 240)
+                    } else if !hasReadableText {
+                        VStack(spacing: 10) {
+                            LucideIcon(.fileText, size: 32, color: readerTheme.secondaryText)
+                            Text("This page has no selectable text.")
+                                .appText(.body)
+                                .foregroundStyle(readerTheme.secondaryText)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 240)
+                        .padding()
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 16) {
+                            ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
+                                let group = effectiveGroups[groupIndex]
+                                paragraphRowView(groupIndex: groupIndex)
+                                    .id(groupIndex)
+                                    .background(
+                                        GeometryReader { geo in
+                                            Color.clear
+                                                .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
+                                                .onChange(of: geo.size.height) { _, newValue in
+                                                    groupHeightsBox.heights[groupIndex] = newValue
+                                                }
+                                        }
+                                    )
+                                    .gesture(
+                                        SpatialTapGesture().onEnded { value in
+                                            handleParagraphTap(
+                                                group: group, groupIndex: groupIndex,
+                                                localY: value.location.y)
+                                        }
+                                    )
+                                    .modifier(
+                                        ReaderScrollVisibilityObserver { isVisible in
+                                            if isVisible {
+                                                visibleParagraphsBox.indices.insert(groupIndex)
+                                            } else {
+                                                visibleParagraphsBox.indices.remove(groupIndex)
+                                            }
+                                        })
+                            }
+                        }
+                        .padding()
+                        .padding(
+                            .bottom,
+                            showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
                     }
-                    .padding()
-                    .padding(
-                        .bottom,
-                        showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
                 }
+                .background(
+                    ReaderScrollContentReporter { frame in
+                        scrollMetricsBox.contentFrame = frame
+                    })
             }
+            .coordinateSpace(name: "reader-scroll")
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { scrollMetricsBox.viewportHeight = proxy.size.height }
+                        .onChange(of: proxy.size.height) { _, height in
+                            scrollMetricsBox.viewportHeight = height
+                        }
+                }
+            )
             .id(currentPageIndex)
             .simultaneousGesture(
-                DragGesture().onChanged { _ in
-                    guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
-                    isAutoScrollPaused = true
-                }
+                DragGesture(minimumDistance: 10)
+                    .onChanged(handleReaderDragChanged)
+                    .onEnded(handleReaderDragEnded)
             )
             .onChange(of: chapterPlayer.currentChunkIndex) { _, chunkIndex in
                 guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
@@ -861,6 +1066,39 @@ struct ChapterPlayerView: View {
                 }
             }
         }
+    }
+
+    private func handleReaderDragChanged(_ value: DragGesture.Value) {
+        if abs(value.translation.height) < 12 {
+            pageTurnGestureBox.hasTurnedPage = false
+        }
+
+        if isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused {
+            isAutoScrollPaused = true
+        }
+
+        guard !pageTurnGestureBox.hasTurnedPage else { return }
+
+        let translation = value.translation
+        guard abs(translation.height) > abs(translation.width) * 1.25 else { return }
+
+        if translation.height < 0,
+           scrollMetricsBox.bottomPullDistance >= 56,
+           currentPageIndex < project.pageCount - 1
+        {
+            pageTurnGestureBox.hasTurnedPage = true
+            selectPage(currentPageIndex + 1)
+        } else if translation.height > 0,
+                  scrollMetricsBox.topPullDistance >= 56,
+                  currentPageIndex > 0
+        {
+            pageTurnGestureBox.hasTurnedPage = true
+            selectPage(currentPageIndex - 1)
+        }
+    }
+
+    private func handleReaderDragEnded(_: DragGesture.Value) {
+        pageTurnGestureBox.hasTurnedPage = false
     }
 
     private var isCurrentParagraphOffscreen: Bool {

@@ -31,7 +31,7 @@ final class PDFImportManager: ObservableObject {
     /// SwiftUI's main actor.
     func importPDF(from url: URL, engine: Engine, voiceName: String) async {
         let job = PDFImportJob(
-            sourceFileName: url.deletingPathExtension().lastPathComponent,
+            sourceFileName: FileNameFormatter.displayTitle(from: url.lastPathComponent),
             engine: engine, voiceName: voiceName)
         let accessed = url.startAccessingSecurityScopedResource()
         defer {

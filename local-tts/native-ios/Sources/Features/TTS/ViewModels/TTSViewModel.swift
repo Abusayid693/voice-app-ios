@@ -108,7 +108,6 @@ final class TTSViewModel: ObservableObject {
     /// ObservableObject changes don't reach a parent's objectWillChange.
     let packs: VoicePackStore
 
-    @Published var isSetupPresented = false
     @Published var isWriteTextPresented = false
     @Published var isVoiceSettingsPresented = false
 

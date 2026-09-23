@@ -4,8 +4,8 @@ import SwiftUI
 /// supplied mockup) — not theme-adaptive, used deliberately regardless of
 /// system light/dark mode.
 extension Color {
-    static let appBackground = Color(hex: 0x191A1C)
-    static let appSecondaryBackground = Color(hex: 0x1F2024)
+    static let appBackground = Color(hex: 0x111111)
+    static let appSecondaryBackground = Color(hex: 0x222222)
     static let appPrimaryText = Color(hex: 0xEEEEEE)
     static let appSecondaryText = Color(hex: 0x949599)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
@@ -13,6 +13,9 @@ extension Color {
     // finest metadata tier (timestamps, file sizes) reads as its own
     // color, not just a dimmer tertiary.
     static let appMetaText = Color(hex: 0x5F5F5F)
+
+    /// Warm-neutral paper surface for the dedicated Book Shelf reading mode.
+    static let whitePaper = Color(hex: 0xF6F6F6)
 
     // Filled CTA — light background, near-black label.
     static let primaryButtonBackground = Color(hex: 0xEEEEEE)
@@ -46,6 +49,31 @@ extension Color {
             green: Double((hex >> 8) & 0xFF) / 255,
             blue: Double(hex & 0xFF) / 255,
             opacity: 1)
+    }
+}
+
+/// Presentation values for the app-wide Home modes. Keeping these in the
+/// design system leaves `HomeMode` as persistable, UI-independent data.
+extension HomeMode {
+    var background: Color {
+        switch self {
+        case .studio: .appBackground
+        case .reading: .whitePaper
+        }
+    }
+
+    var primaryText: Color {
+        switch self {
+        case .studio: .appPrimaryText
+        case .reading: Color(hex: 0x171715)
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .studio: .dark
+        case .reading: .light
+        }
     }
 }
 
