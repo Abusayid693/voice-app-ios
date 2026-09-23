@@ -64,6 +64,9 @@ struct ImportHomeView: View {
     // swiping the TabView both write to this same binding, so either one
     // keeps the other in sync.
     @State private var selectedHomeTab: HomeTab = .listen
+    // BookShelfView owns the selected book and its shelf-to-modal hero animation;
+    // Home only needs this state to keep its mode selector out of the modal.
+    @State private var isBookDetailPresented = false
 
     private var selectedVoiceName: String {
         switch viewModel.engine {
@@ -87,6 +90,7 @@ struct ImportHomeView: View {
 
                 BookShelfView(
                     library: libraryViewModel,
+                    isDetailPresented: $isBookDetailPresented,
                     onAddBooks: { pdfImports.requestDocumentPicker() }
                 ) { book in
                     openProject = libraryViewModel.project(for: book.id)
@@ -102,6 +106,10 @@ struct ImportHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HomeModeSwitcher(selection: $homeMode)
+                        .opacity(isBookDetailPresented ? 0.42 : 1)
+                        .blur(radius: isBookDetailPresented ? 1.5 : 0)
+                        .allowsHitTesting(!isBookDetailPresented)
+                        .accessibilityHidden(isBookDetailPresented)
                 }
                 if homeMode == .studio {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -111,6 +119,11 @@ struct ImportHomeView: View {
             }
             .tint(homeMode.primaryText)
             .preferredColorScheme(homeMode.colorScheme)
+            .onChange(of: homeMode) { _, mode in
+                if mode != .reading {
+                    isBookDetailPresented = false
+                }
+            }
             .task { await openLibraryBooksViewModel.loadIfNeeded() }
             .navigationDestination(item: $voiceCloneRoute) { route in
                 switch route {

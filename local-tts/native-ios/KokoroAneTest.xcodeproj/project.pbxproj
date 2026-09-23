@@ -137,7 +137,7 @@
 		11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackDelegate.swift; sourceTree = "<group>"; };
 		1B2C23E5CF54502D181EC953 /* PDFImportManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFImportManager.swift; sourceTree = "<group>"; };
 		1D605BFDEFA4C5DF953B9A1E /* FileNameFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNameFormatter.swift; sourceTree = "<group>"; };
-		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E5DB33D71EB722FB72EABA3 /* KokoroAneTest.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = KokoroAneTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		226B8BED92895B71E466C73E /* OpenSourceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceCard.swift; sourceTree = "<group>"; };
 		2389628AEB7E25A7E7CBA303 /* TTSViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSViewModel.swift; sourceTree = "<group>"; };
 		251025C4FD0961EB5F194C37 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -181,7 +181,7 @@
 		7B2FABBC8995E7ADBD280F33 /* PageSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageSplitter.swift; sourceTree = "<group>"; };
 		7DDF8AA86179AB03C2E238CB /* ImportHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHomeView.swift; sourceTree = "<group>"; };
 		7E8AE9A818412F4DB2C97203 /* CreateVoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateVoiceSheet.swift; sourceTree = "<group>"; };
-		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		814DDF8A9256B53F6A22111C /* LICENSE */ = {isa = PBXFileReference; path = LICENSE; sourceTree = "<group>"; };
 		83247F6E3B113FE5D6C0D79C /* CustomTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomTabBar.swift; sourceTree = "<group>"; };
 		851CC1471E60AC39DADD12C6 /* VoicePack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePack.swift; sourceTree = "<group>"; };
 		85A6B5526525DF0D3D3DA19B /* ChapterPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerView.swift; sourceTree = "<group>"; };
@@ -711,6 +711,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B0366D163CF4607245152559 = {
+						DevelopmentTeam = Q2F3H94YUP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -879,7 +880,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -954,7 +955,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = V667L4VT6C;
+				DEVELOPMENT_TEAM = Q2F3H94YUP;
 				INFOPLIST_FILE = Sources/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
