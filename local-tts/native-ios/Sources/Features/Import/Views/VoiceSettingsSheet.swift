@@ -308,7 +308,11 @@ struct VoiceSettingsSheet: View {
             }
 
         case .supertonic3:
-            guard let voice = SupertonicVoice(rawValue: tile.name) else { return }
+            // tile.name is the catalogue's uppercase code ("F1"), but
+            // SupertonicVoice's raw values are lowercase — matching case-
+            // sensitively here always failed, silently returning before
+            // finishSelection ever ran (the "Use Voice" button did nothing).
+            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return }
             viewModel.engine = .supertonic3
             viewModel.supertonicVoice = voice
             viewModel.selectedClonedVoice = nil
@@ -319,7 +323,7 @@ struct VoiceSettingsSheet: View {
 
     private func persistedVoiceName(for tile: VoiceTile) -> String {
         guard tile.engine == .supertonic3,
-              let voice = SupertonicVoice(rawValue: tile.name)
+              let voice = SupertonicVoice(rawValue: tile.name.lowercased())
         else { return tile.name }
         return voice.displayName
     }
@@ -340,9 +344,8 @@ struct VoiceSettingsSheet: View {
                 && viewModel.selectedClonedVoice == nil
                 && viewModel.pocketVoice == tile.name
         case .supertonic3:
-            return viewModel.engine == .supertonic3
-                && (viewModel.supertonicVoice.rawValue == tile.name
-                    || viewModel.supertonicVoice.displayName == tile.name)
+            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return false }
+            return viewModel.engine == .supertonic3 && viewModel.supertonicVoice == voice
         }
     }
 
