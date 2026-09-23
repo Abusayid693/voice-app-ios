@@ -52,6 +52,11 @@ struct ImportHomeView: View {
     @State private var isCreateVoicePresented = false
     @State private var voiceCloneRoute: VoiceCloneRoute?
     @State private var isSettingsPresented = false
+    // Reading mode's trailing nav-bar avatar clip — mirrors Studio's
+    // leading settingsButton, just the opposite mode/side.
+    @AppStorage("bookShelf.selectedAvatar") private var selectedAvatarRawValue = ShelfAvatar.first.rawValue
+    @State private var isAvatarPickerPresented = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Set when tapping a Projects entry (any engine) — opens page 1.
     // for that saved project.
     @State private var openProject: SavedGeneration?
@@ -116,6 +121,14 @@ struct ImportHomeView: View {
                         settingsButton
                     }
                 }
+                if homeMode == .reading {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        shelfAvatarButton
+                    }
+                }
+            }
+            .sheet(isPresented: $isAvatarPickerPresented) {
+                ShelfAvatarPickerSheet(selection: selectedAvatarBinding)
             }
             .tint(homeMode.primaryText)
             .preferredColorScheme(homeMode.colorScheme)
@@ -229,11 +242,41 @@ struct ImportHomeView: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 22, height: 22)
+                .frame(width: 25.3, height: 25.3)
                 .frame(width: 44, height: 44)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Settings")
+    }
+
+    private var selectedAvatar: ShelfAvatar {
+        ShelfAvatar(rawValue: selectedAvatarRawValue) ?? .first
+    }
+
+    private var selectedAvatarBinding: Binding<ShelfAvatar> {
+        Binding(
+            get: { selectedAvatar },
+            set: { selectedAvatarRawValue = $0.rawValue })
+    }
+
+    // Reading mode's trailing nav-bar counterpart to settingsButton — a
+    // silent looping clip of the current avatar. Tapping it opens
+    // ShelfAvatarPickerSheet to switch which one plays here.
+    @ViewBuilder
+    private var shelfAvatarButton: some View {
+        if let url = selectedAvatar.videoURL {
+            Button {
+                isAvatarPickerPresented = true
+            } label: {
+                LoopingVideoPlayerView(url: url, isPaused: reduceMotion)
+                    .frame(width: 36.8, height: 36.8)
+                    .clipShape(Circle())
+                    .background(BookShelfPalette.background, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change avatar")
+            .accessibilityHint("Opens a list of avatars to choose from")
+        }
     }
 
     // Tab switcher + swipeable pages, both driving the same
