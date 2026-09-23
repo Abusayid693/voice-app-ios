@@ -79,7 +79,14 @@ struct BookShelfView: View {
                     .allowsHitTesting(false)
 
                 Button(action: onAddBooks) {
-                    Label("Add books", systemImage: "plus")
+                    HStack(spacing: 6) {
+                        // .secondary applies Color.secondaryButtonText via
+                        // .foregroundStyle to the whole label, which Text
+                        // picks up ambiently — LucideIcon needs it passed
+                        // explicitly to match, same as every other call site.
+                        LucideIcon(.plus, size: 16, color: Color.secondaryButtonText)
+                        Text("Add books")
+                    }
                 }
                 .buttonStyle(.secondary)
                 .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
