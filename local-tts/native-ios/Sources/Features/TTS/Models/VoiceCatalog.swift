@@ -47,7 +47,7 @@ enum VoiceCatalog {
 
     static func variant(forCode code: String) -> KokoroVariant? { variantByCode[code] }
 
-    // MARK: - Kokoro-ANE (English, 28) — bundled, see ADR 2
+    // MARK: - Kokoro-ANE (English, 32) — bundled, see ADR 2
 
     static let kokoroEnglish: [Voice] = [
         Voice(
@@ -209,6 +209,27 @@ enum VoiceCatalog {
             longDescription: "Friendly and approachable, with a warm, easy-going British manner.",
             previewLine:
                 "The mechanic wiped his hands on a rag, satisfied that the engine finally sounded right after hours of careful work."),
+        // hf_/hm_ — Hindi-named voice timbres from the same v1.0 pack every
+        // other non-English-prefixed voice above/below already draws from;
+        // they speak English phonemes here (see VoiceCode.flagsByPrefix's
+        // comment), not Hindi. No bundled avatar/preview clip exists for
+        // these yet, unlike most af_/bf_ entries above.
+        Voice(
+            code: "hf_alpha", tagline: "Clear and composed",
+            longDescription: "Clear and composed, with a steady, articulate delivery.",
+            displayNameOverride: "Anika"),
+        Voice(
+            code: "hf_beta", tagline: "Warm and measured",
+            longDescription: "Warm and measured, with an even, reassuring pace.",
+            displayNameOverride: "Meera"),
+        Voice(
+            code: "hm_omega", tagline: "Deep and grounded",
+            longDescription: "Deep and grounded, with a calm, authoritative tone.",
+            displayNameOverride: "Arjun"),
+        Voice(
+            code: "hm_psi", tagline: "Smooth and confident",
+            longDescription: "Smooth and confident, with an easy, assured cadence.",
+            displayNameOverride: "Vikram"),
     ]
 
     // MARK: - Kokoro-ANE (Mandarin, 10)
