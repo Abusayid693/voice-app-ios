@@ -23,6 +23,12 @@ struct BookShelfView: View {
     @State private var showsModalDetails = false
     @State private var isShelfCoverHidden = false
     @State private var isDismissingDetail = false
+    // A short vertical hop (0 to -liftDistance) played just before the book
+    // translates toward the center, and just after it translates back — so
+    // the cover visibly lifts off/settles onto the shelf's glass lip instead
+    // of appearing to pass straight through it.
+    @State private var liftOffset: CGFloat = 0
+    private let liftDistance: CGFloat = 15
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var books: [SavedGenerationSummary] {
@@ -72,21 +78,25 @@ struct BookShelfView: View {
                     .ignoresSafeArea(edges: .bottom)
                     .allowsHitTesting(false)
 
-                if selectedBook == nil {
-                    Button(action: onAddBooks) {
-                        Label("Add books", systemImage: "plus")
-                    }
-                    .buttonStyle(.secondary)
-                    .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-                    .padding(.bottom, 18)
-                    .accessibilityLabel("Add books")
+                Button(action: onAddBooks) {
+                    Label("Add books", systemImage: "plus")
                 }
+                .buttonStyle(.secondary)
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+                .padding(.bottom, 18)
+                .accessibilityLabel("Add books")
+                // Stays in place, dimmed behind the modal's backdrop, rather
+                // than disappearing outright while the book detail is open.
+                .allowsHitTesting(selectedBook == nil)
+                .accessibilityHidden(selectedBook != nil)
 
                 if let selectedBook {
                     BookShelfDetailModal(
                         book: selectedBook,
                         sourceFrame: selectedCoverFrame,
                         phase: modalPhase,
+                        liftOffset: liftOffset,
+                        showsCover: isShelfCoverHidden,
                         showsDetails: showsModalDetails,
                         onDismiss: { dismissDetail() },
                         onRead: openSelectedBook)
@@ -152,7 +162,16 @@ struct BookShelfView: View {
                     spacing: coverSpacing,
                     shelfWidth: shelfWidth,
                     leadingContentInset: index == 0 ? 30 : 16,
-                    hiddenBookID: isShelfCoverHidden ? selectedBook?.id : nil
+                    hiddenBookID: isShelfCoverHidden ? selectedBook?.id : nil,
+                    // While the traveling overlay hasn't taken over yet, the
+                    // real cover itself carries the lift — it stays in its
+                    // native position beneath the glass shelf strip, so it
+                    // visibly rises out from behind the glass instead of the
+                    // overlay popping directly on top of it.
+                    liftedBookID: isShelfCoverHidden ? nil : selectedBook?.id,
+                    liftOffset: liftOffset,
+                    liftAnimation: shelfLiftAnimation,
+                    liftDistance: liftDistance
                 ) { book in
                     presentDetail(for: book)
                 }
@@ -178,12 +197,30 @@ struct BookShelfView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // Whole open/close choreography tuned faster than the original pass,
+    // then nudged back up 10% from that.
     private var translateAnimation: Animation {
-        .spring(response: 0.30, dampingFraction: 0.94)
+        .spring(response: 0.23, dampingFraction: 0.94)
     }
 
     private var expandAnimation: Animation {
-        .spring(response: 0.36, dampingFraction: 0.92)
+        .spring(response: 0.28, dampingFraction: 0.92)
+    }
+
+    private var liftAnimation: Animation {
+        .easeOut(duration: 0.20)
+    }
+
+    private var settleAnimation: Animation {
+        .easeIn(duration: 0.20)
+    }
+
+    // Drives the real shelf cover's own offset (see BookShelfRow) — kept in
+    // sync with liftAnimation/settleAnimation's duration above so the
+    // sequenced steps that follow (translate, completeShelfReturn) don't
+    // fire before the lift/settle has visually finished.
+    private var shelfLiftAnimation: Animation {
+        .easeInOut(duration: 0.20)
     }
 
     private func presentDetail(for book: SavedGenerationSummary) {
@@ -194,9 +231,13 @@ struct BookShelfView: View {
         var selectionTransaction = Transaction(animation: nil)
         selectionTransaction.disablesAnimations = true
         withTransaction(selectionTransaction) {
-            isShelfCoverHidden = true
+            // reduceMotion has no lift step, so the overlay takes over
+            // immediately, same as before; otherwise the real shelf cover
+            // keeps the visible artwork until the lift finishes.
+            isShelfCoverHidden = reduceMotion
             selectedBook = book
             isDetailPresented = true
+            liftOffset = 0
         }
 
         if reduceMotion {
@@ -208,16 +249,33 @@ struct BookShelfView: View {
             // intrinsic height while it is still exactly over the source book.
             try? await Task.sleep(nanoseconds: 20_000_000)
             guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-            withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
-                modalPhase = 1
+            // Lift the real shelf cover clear of the glass lip first — it
+            // stays in its native position beneath the glass strip, so it
+            // visibly rises from behind the glass instead of the traveling
+            // overlay popping directly on top of it.
+            withAnimation(liftAnimation, completionCriteria: .logicallyComplete) {
+                liftOffset = -liftDistance
             } completion: {
                 guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                withAnimation(expandAnimation, completionCriteria: .logicallyComplete) {
-                    modalPhase = 2
+                // Hand off to the traveling overlay now that it's clear of
+                // the shelf — both sit at the identical lifted position, so
+                // the swap itself is invisible.
+                var handoff = Transaction(animation: nil)
+                handoff.disablesAnimations = true
+                withTransaction(handoff) {
+                    isShelfCoverHidden = true
+                }
+                withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
+                    modalPhase = 1
                 } completion: {
                     guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        showsModalDetails = true
+                    withAnimation(expandAnimation, completionCriteria: .logicallyComplete) {
+                        modalPhase = 2
+                    } completion: {
+                        guard selectedBook?.id == book.id, !isDismissingDetail else { return }
+                        withAnimation(.easeOut(duration: 0.14)) {
+                            showsModalDetails = true
+                        }
                     }
                 }
             }
@@ -228,16 +286,16 @@ struct BookShelfView: View {
         guard selectedBook != nil, !isDismissingDetail else { return }
         isDismissingDetail = true
 
-        withAnimation(.easeOut(duration: 0.14)) {
+        withAnimation(.easeOut(duration: 0.11)) {
             showsModalDetails = false
         }
 
         Task { @MainActor in
             try? await Task.sleep(
-                nanoseconds: reduceMotion ? 100_000_000 : 140_000_000)
+                nanoseconds: reduceMotion ? 77_000_000 : 108_000_000)
 
             if reduceMotion {
-                withAnimation(.easeOut(duration: 0.18), completionCriteria: .logicallyComplete) {
+                withAnimation(.easeOut(duration: 0.14), completionCriteria: .logicallyComplete) {
                     modalPhase = 0
                 } completion: {
                     completeShelfReturn(afterDismiss)
@@ -251,7 +309,21 @@ struct BookShelfView: View {
                 withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
                     modalPhase = 0
                 } completion: {
-                    completeShelfReturn(afterDismiss)
+                    // Translate stops lifted just above the shelf slot (liftOffset
+                    // is still -liftDistance here). Hand off back to the real
+                    // shelf cover — still at the identical lifted position, so
+                    // invisibly — then let it carry the settle down through the
+                    // glass lip, rather than the overlay cutting through it.
+                    var handoff = Transaction(animation: nil)
+                    handoff.disablesAnimations = true
+                    withTransaction(handoff) {
+                        isShelfCoverHidden = false
+                    }
+                    withAnimation(settleAnimation, completionCriteria: .logicallyComplete) {
+                        liftOffset = 0
+                    } completion: {
+                        completeShelfReturn(afterDismiss)
+                    }
                 }
             }
         }
@@ -277,6 +349,7 @@ struct BookShelfView: View {
     private func finishDismissal(_ completion: (() -> Void)?) {
         selectedCoverFrame = nil
         modalPhase = 0
+        liftOffset = 0
         showsModalDetails = false
         isShelfCoverHidden = false
         isDismissingDetail = false
@@ -353,6 +426,10 @@ private struct BookShelfRow: View {
     let shelfWidth: CGFloat
     let leadingContentInset: CGFloat
     let hiddenBookID: UUID?
+    let liftedBookID: UUID?
+    let liftOffset: CGFloat
+    let liftAnimation: Animation
+    let liftDistance: CGFloat
     let onSelect: (SavedGenerationSummary) -> Void
 
     var body: some View {
@@ -383,7 +460,11 @@ private struct BookShelfRow: View {
                         }
                     }
                 }
-                .padding(.top, 12)
+                // Extra headroom above the covers equal to liftDistance —
+                // ScrollView clips to its own bounds, and without this the
+                // lifted cover's top edge crosses that clip line and gets
+                // visibly cut off/jittery right at the peak of the lift.
+                .padding(.top, 12 + liftDistance)
                 .padding(.bottom, 10)
             }
             .scrollIndicators(.hidden)
@@ -399,7 +480,10 @@ private struct BookShelfRow: View {
                     height: 18)
                 .allowsHitTesting(false)
         }
-        .frame(height: coverSize.height + 22)
+        // Bottom-aligned, so the extra liftDistance headroom is added above
+        // the covers only — the shelf/glass strip's own bottom position is
+        // unaffected.
+        .frame(height: coverSize.height + 22 + liftDistance)
     }
 
     private func shelfCover(for book: SavedGenerationSummary) -> some View {
@@ -409,6 +493,13 @@ private struct BookShelfRow: View {
             size: coverSize)
             .opacity(hiddenBookID == book.id ? 0 : 1)
             .animation(.linear(duration: 0.001), value: hiddenBookID)
+            .offset(y: liftedBookID == book.id ? liftOffset : 0)
+            // Nested inside the enclosing Button's own .transaction{nil}
+            // override the same way the opacity animation above is — an
+            // explicit .animation(_:value:) here is confirmed to win over
+            // that override; a trailing one chained onto the Button itself
+            // was not.
+            .animation(liftAnimation, value: liftOffset)
     }
 }
 
@@ -416,12 +507,23 @@ private struct BookShelfDetailModal: View {
     let book: SavedGenerationSummary
     let sourceFrame: CGRect?
     let phase: CGFloat
+    // Extra vertical offset applied only at the shelf end of the translate
+    // (see BookShelfView's lift/settle steps) — animates 0 -> -10 before the
+    // cover starts moving, and -10 -> 0 after it arrives back, so it clears
+    // the glass shelf's lip instead of appearing to cut through it.
+    let liftOffset: CGFloat
+    // False while the real shelf cover still owns the visible artwork
+    // (during the pre-translate lift / post-translate settle) — the card and
+    // traveling cover stay invisible until that handoff happens, so they
+    // never sit exactly on top of the real cover across the glass boundary.
+    let showsCover: Bool
     let showsDetails: Bool
     let onDismiss: () -> Void
     let onRead: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var modalCardSize: CGSize = .zero
+    private let dismissDragThreshold: CGFloat = 80
 
     var body: some View {
         GeometryReader { geometry in
@@ -456,7 +558,9 @@ private struct BookShelfDetailModal: View {
                         color: .black.opacity(0.22 * metrics.expansionProgress),
                         radius: 24 * metrics.expansionProgress,
                         y: 12 * metrics.expansionProgress)
+                    .opacity(showsCover ? 1 : 0)
                     .transition(reduceMotion ? .opacity : .identity)
+                    .gesture(dragToDismissGesture)
                     .accessibilityElement(children: .contain)
 
                 SavedProjectCover(
@@ -469,11 +573,29 @@ private struct BookShelfDetailModal: View {
                         color: .black.opacity(0.16 * metrics.expansionProgress),
                         radius: 12 * metrics.expansionProgress,
                         y: 6 * metrics.expansionProgress)
+                    .opacity(showsCover ? 1 : 0)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    // Detection-only swipe-down-to-dismiss once the card is fully expanded —
+    // the card doesn't follow the finger, it just triggers the normal
+    // dismiss animation once the swipe clears the threshold on release.
+    private var dragToDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onEnded { value in
+                guard showsDetails else { return }
+                let isDownwardSwipe = value.translation.height > 0
+                    && abs(value.translation.height) > abs(value.translation.width)
+                guard isDownwardSwipe else { return }
+                if value.translation.height > dismissDragThreshold
+                    || value.predictedEndTranslation.height > 220 {
+                    onDismiss()
+                }
+            }
     }
 
     private func detailCard(
@@ -523,18 +645,27 @@ private struct BookShelfDetailModal: View {
         let screenCenter = CGPoint(
             x: geometry.size.width / 2,
             y: geometry.size.height / 2)
+        // liftOffset only has weight near the shelf end (translationProgress
+        // near 0); once fully translated to the center it contributes
+        // nothing, since progress = 1 discards the "from" term entirely.
+        let liftedSourceMidY = resolvedSourceFrame.midY + (reduceMotion ? 0 : liftOffset)
         let cardCenter = CGPoint(
             x: interpolate(
                 from: resolvedSourceFrame.midX,
                 to: screenCenter.x,
                 progress: translationProgress),
             y: interpolate(
-                from: resolvedSourceFrame.midY,
+                from: liftedSourceMidY,
                 to: screenCenter.y,
                 progress: translationProgress))
+        // 52 top padding + the progress bar's own 3pt height + the 18pt
+        // VStack spacing above it, then half the 252pt cover placeholder —
+        // matches modalContent's real layout so the absolutely-positioned
+        // cover art lands exactly over its reserved Color.clear spacer
+        // instead of overlapping the progress bar above it.
         let finalCoverCenter = CGPoint(
             x: screenCenter.x,
-            y: screenCenter.y - targetHeight / 2 + 52 + 126)
+            y: screenCenter.y - targetHeight / 2 + 52 + 3 + 18 + 126)
         let translatedCoverCenter = cardCenter
         let coverCenter = CGPoint(
             x: interpolate(
@@ -576,6 +707,9 @@ private struct BookShelfDetailModal: View {
 
     private var modalContent: some View {
         VStack(spacing: 18) {
+            coverProgressBar
+                .opacity(showsDetails ? 1 : 0)
+
             Color.clear
                 .frame(width: 168, height: 252)
 
@@ -611,6 +745,24 @@ private struct BookShelfDetailModal: View {
         .padding(.horizontal, 28)
         .padding(.top, 52)
         .padding(.bottom, 20)
+    }
+
+    // Placeholder reading-progress indicator — no real progress data wired
+    // up yet, matches the expanded cover's own 168pt width.
+    private var coverProgressBar: some View {
+        let progress: CGFloat = 0.42
+        return ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.white)
+                .overlay {
+                    Capsule().strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                }
+            Capsule()
+                .fill(Color.black)
+                .frame(width: 168 * progress)
+        }
+        .frame(width: 168, height: 3)
+        .accessibilityHidden(true)
     }
 
     private func interpolate(
