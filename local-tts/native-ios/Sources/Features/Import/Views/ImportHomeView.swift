@@ -85,7 +85,10 @@ struct ImportHomeView: View {
                     .allowsHitTesting(homeMode == .studio)
                     .accessibilityHidden(homeMode != .studio)
 
-                BookShelfView(library: libraryViewModel) { book in
+                BookShelfView(
+                    library: libraryViewModel,
+                    onAddBooks: { pdfImports.requestDocumentPicker() }
+                ) { book in
                     openProject = libraryViewModel.project(for: book.id)
                 }
                 .opacity(homeMode == .reading ? 1 : 0)
@@ -96,14 +99,12 @@ struct ImportHomeView: View {
             .animation(.easeInOut(duration: 0.24), value: homeMode)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(homeMode.background, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HomeModeSwitcher(selection: $homeMode)
                 }
                 if homeMode == .studio {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .navigationBarLeading) {
                         settingsButton
                     }
                 }
@@ -183,10 +184,7 @@ struct ImportHomeView: View {
                 // multi-part group, siblings sit at the tighter
                 // AppSpacing.betweenSections instead.
                 VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
-                    VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
-                        Text("Home").appText(.sectionTitle)
-                        actionTabsSection
-                    }
+                    actionTabsSection
 
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
                         trendingVoicesSection
@@ -214,8 +212,15 @@ struct ImportHomeView: View {
         Button {
             isSettingsPresented = true
         } label: {
-            LucideIcon(.cog)
+            Hugeicons.menu01.image()
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .frame(width: 44, height: 44)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
     }
 
     // Tab switcher + swipeable pages, both driving the same

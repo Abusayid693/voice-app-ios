@@ -31,6 +31,14 @@ struct HomeModeSwitcher: View {
     }
 
     var body: some View {
+        switcherContent
+            .padding(2)
+            .modeSwitcherBackground(trackColor: trackColor)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Home mode")
+    }
+
+    private var switcherContent: some View {
         HStack(spacing: 2) {
             ForEach(HomeMode.allCases, id: \.self) { mode in
                 Button {
@@ -44,10 +52,7 @@ struct HomeModeSwitcher: View {
                         .frame(width: 78, height: 32)
                         .background {
                             if mode == selection {
-                                Capsule()
-                                    .fill(pillColor)
-                                    .matchedGeometryEffect(id: "home-mode-selection", in: selectionNamespace)
-                                    .shadow(color: .black.opacity(selection == .studio ? 0.14 : 0.08), radius: 3, y: 1)
+                                selectedPill
                             }
                         }
                 }
@@ -56,16 +61,39 @@ struct HomeModeSwitcher: View {
                 .accessibilityAddTraits(mode == selection ? .isSelected : [])
             }
         }
-        .padding(2)
-        .background(trackColor, in: Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Home mode")
+    }
+
+    @ViewBuilder
+    private var selectedPill: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular.tint(pillColor), in: Capsule())
+                .matchedGeometryEffect(id: "home-mode-selection", in: selectionNamespace)
+        } else {
+            Capsule()
+                .fill(pillColor)
+                .matchedGeometryEffect(id: "home-mode-selection", in: selectionNamespace)
+                .shadow(color: .black.opacity(selection == .studio ? 0.14 : 0.08), radius: 3, y: 1)
+        }
     }
 
     private func title(for mode: HomeMode) -> String {
         switch mode {
         case .studio: "Studio"
         case .reading: "Reading"
+        }
+    }
+}
+
+private extension View {
+    /// Native Liquid Glass for iOS 26, while iOS 17–25 retain the existing
+    /// translucent capsule instead of changing the Studio/Reading control.
+    @ViewBuilder
+    func modeSwitcherBackground(trackColor: Color) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.tint(trackColor), in: Capsule())
+        } else {
+            self.background(trackColor, in: Capsule())
         }
     }
 }

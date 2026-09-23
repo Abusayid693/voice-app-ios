@@ -913,7 +913,7 @@ struct ChapterPlayerView: View {
 
     private var avatar: some View {
         Button {
-            isVoiceSelectionPresented = true
+            presentVoiceSelection()
         } label: {
             Image(VoiceCoverArt.assetName(for: selectedVoiceName))
                 .resizable()
@@ -924,6 +924,17 @@ struct ChapterPlayerView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Change voice, currently \(selectedVoiceName)")
+    }
+
+    private func presentVoiceSelection() {
+        if chapterPlayer.isActive(pageRef), chapterPlayer.isPlaying {
+            chapterPlayer.togglePlayPause()
+        } else if viewModel.isReaderPlaybackActive {
+            // Pocket and Supertonic expose stop rather than a resumable
+            // pause transport, so silence them before presenting voices.
+            viewModel.stopEnginePlayback()
+        }
+        isVoiceSelectionPresented = true
     }
 
     // A plain rotate-arrow icon reads as "skip back/forward" once paired

@@ -2,7 +2,7 @@ import LucideSwift
 import SwiftUI
 
 enum BookShelfPalette {
-    static let background = Color(hex: 0xF5F3ED)
+    static let background = Color.whitePaper
     static let primaryText = Color(hex: 0x171715)
     static let secondaryText = Color(hex: 0x686761)
 }
@@ -12,6 +12,7 @@ enum BookShelfPalette {
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
+    let onAddBooks: () -> Void
     let onOpenBook: (SavedGenerationSummary) -> Void
 
     private var books: [SavedGenerationSummary] {
@@ -30,38 +31,70 @@ struct BookShelfView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 0) {
-                    shelfHeader
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        shelfHeader
 
-                    if books.isEmpty {
-                        emptyState
-                            .frame(minHeight: max(0, geometry.size.height - 100))
-                    } else {
-                        shelf(for: geometry.size.width)
+                        if books.isEmpty {
+                            emptyState
+                                .frame(minHeight: max(0, geometry.size.height - 100))
+                        } else {
+                            shelf(for: geometry.size.width)
+                        }
                     }
+                    // Keep only a small trailing inset so shelves can pass
+                    // underneath the progressive blur and Add Books action.
+                    .padding(.bottom, 24)
                 }
+                .scrollIndicators(.hidden)
+
+                ShelfBottomBlur()
+                    // The GeometryReader ends at the content safe area;
+                    // extend and move the blur through the remaining inset
+                    // so it reaches the physical bottom edge of the screen.
+                    .frame(height: 96 + geometry.safeAreaInsets.bottom)
+                    .frame(maxWidth: .infinity)
+                    .offset(y: geometry.safeAreaInsets.bottom)
+                    .ignoresSafeArea(edges: .bottom)
+                    .allowsHitTesting(false)
+
+                Button(action: onAddBooks) {
+                    Label("Add books", systemImage: "plus")
+                }
+                .buttonStyle(.secondary)
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+                .padding(.bottom, 18)
+                .accessibilityLabel("Add books")
             }
-            .scrollIndicators(.hidden)
             .accessibilityLabel("PDF book shelves")
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
     }
 
     private var shelfHeader: some View {
-        VStack(spacing: 3) {
-            Text("My Shelf")
-                .font(.custom("Didot-Bold", size: 30, relativeTo: .title))
-                .foregroundStyle(BookShelfPalette.primaryText)
-                .accessibilityAddTraits(.isHeader)
+        ZStack {
+            ShelfHeaderBackdrop(books: Array(books.prefix(3)))
+                // The decorative canvas is intentionally larger than the
+                // header's layout footprint, so its soft colour can extend
+                // behind the shelf without moving the title or shelf rows.
+                .frame(height: 160)
+                .clipped()
 
-            Text("\(books.count) \(books.count == 1 ? "book" : "books")")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(BookShelfPalette.secondaryText)
+            VStack(spacing: 3) {
+                Text("My Shelf")
+                    .font(.custom("Didot-Bold", size: 30, relativeTo: .title))
+                    .foregroundStyle(BookShelfPalette.primaryText)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text("\(books.count) \(books.count == 1 ? "book" : "books")")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(BookShelfPalette.secondaryText)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 18)
-        .padding(.bottom, 8)
+        .frame(height: 116)
+        .padding(.bottom, 4)
     }
 
     private func shelf(for availableWidth: CGFloat) -> some View {
@@ -102,6 +135,61 @@ struct BookShelfView: View {
                 .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Mirrors the reader's navigation chrome at the bottom edge without adding
+/// a solid bar: the material begins clear and gradually gains blur near the
+/// safe area.
+private struct ShelfBottomBlur: View {
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.55), .black],
+                    startPoint: .top,
+                    endPoint: .bottom)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// A restrained, decorative echo of the newest covers. It is deliberately
+/// blurred enough to read as colour and depth behind the Shelf title rather
+/// than as another actionable set of books.
+private struct ShelfHeaderBackdrop: View {
+    let books: [SavedGenerationSummary]
+
+    // Fits inside the compact decorative canvas even after the outer covers'
+    // rotation, so the blurred artwork does not clip at either edge.
+    private let coverSize = CGSize(width: 64, height: 96)
+    private let positions: [CGFloat] = [0.30, 0.5, 0.70]
+    private let angles: [Double] = [-11, 0, 11]
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(Array(books.enumerated()), id: \.element.id) { index, book in
+                    SavedProjectCover(
+                        coverURL: book.coverURL,
+                        title: book.title,
+                        size: coverSize,
+                        cornerRadius: 8)
+                    .saturation(1.25)
+                    .blur(radius: 8)
+                    .opacity(0.22)
+                    .rotationEffect(.degrees(angles[index]))
+                    .position(
+                        x: geometry.size.width * positions[index],
+                        y: geometry.size.height * 0.5)
+                    .accessibilityHidden(true)
+                }
+            }
+            .compositingGroup()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -179,6 +267,6 @@ private struct GlassBookShelf: View {
 #Preview {
     let app = AppEnvironment.preview()
     return NavigationStack {
-        BookShelfView(library: app.library, onOpenBook: { _ in })
+        BookShelfView(library: app.library, onAddBooks: {}, onOpenBook: { _ in })
     }
 }
