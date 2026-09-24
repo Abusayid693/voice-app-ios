@@ -28,6 +28,7 @@ struct AppEnvironment {
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
     let generationStore: ChapterGenerationStore
+    let readingStats: ReadingStatsStore
     // Not "pass-through" like the others above — a live flag tab roots
     // write to and RootTabView observes, so RootTabView's custom bottom
     // bar (tabs + "+", all in one row — see CustomTabBar) can hide itself
@@ -42,14 +43,16 @@ extension AppEnvironment {
     @MainActor
     static func preview() -> AppEnvironment {
         let dependencies = DependencyContainer()
+        let statsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         let tts = TTSViewModel(dependencies: dependencies)
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
         let library = LibraryViewModel()
         return AppEnvironment(
             tts: tts, voiceClone: VoiceCloneViewModel(dependencies: dependencies),
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
-            chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis),
+            chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis, statsTracker: statsTracker),
             generationStore: ChapterGenerationStore(synthesisService: synthesis),
+            readingStats: dependencies.readingStatsStore,
             navigationChrome: NavigationChromeVisibility())
     }
 }

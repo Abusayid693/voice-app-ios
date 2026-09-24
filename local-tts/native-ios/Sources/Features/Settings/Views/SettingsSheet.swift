@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
+    let readingStats: ReadingStatsStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -29,6 +30,11 @@ struct SettingsSheet: View {
                             packs: viewModel.packs)
                     } label: {
                         row(title: "Storage", icon: .hardDrive)
+                    }
+                    NavigationLink {
+                        ReadingStatsView(readingStats: readingStats)
+                    } label: {
+                        row(title: "Reading Stats", icon: .chartColumn)
                     }
                     NavigationLink {
                         AboutView()
@@ -69,5 +75,6 @@ struct SettingsSheet: View {
     let dependencies = DependencyContainer()
     SettingsSheet(
         viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies))
+        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
+        readingStats: dependencies.readingStatsStore)
 }

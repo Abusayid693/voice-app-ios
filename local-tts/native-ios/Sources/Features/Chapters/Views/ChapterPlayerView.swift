@@ -126,6 +126,7 @@ struct ChapterPlayerView: View {
     let library: LibraryViewModel
     let voiceCloneViewModel: VoiceCloneViewModel
     let previewPlayer: VoicePreviewPlayer
+    let readingStats: ReadingStatsStore
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
     @ObservedObject var generationStore: ChapterGenerationStore
     @ObservedObject var viewModel: TTSViewModel
@@ -135,6 +136,11 @@ struct ChapterPlayerView: View {
     @State private var idleChunkTexts: [String] = []
     @State private var selectedVoiceName: String
     @State private var pageNumberTransitionDirection: ReaderPageNumberTransitionDirection = .forward
+    // Distinct pages with at least one completed listen, for this project —
+    // feeds the page-picker tick and this header's own tick. Fetched off-
+    // main via ReadingStatsStore, never a synchronous call; see
+    // refreshCompletedPages().
+    @State private var completedPageIndices: Set<Int> = []
 
     @State private var isAutoScrollPaused = false
     // Reference type, not @State, for the same reason as groupHeightsBox
@@ -250,12 +256,14 @@ struct ChapterPlayerView: View {
         chapterPlayer: ChapterAudioPlayer,
         generationStore: ChapterGenerationStore,
         viewModel: TTSViewModel,
-        previewPlayer: VoicePreviewPlayer
+        previewPlayer: VoicePreviewPlayer,
+        readingStats: ReadingStatsStore
     ) {
         self.project = project
         self.library = library
         self.voiceCloneViewModel = voiceCloneViewModel
         self.previewPlayer = previewPlayer
+        self.readingStats = readingStats
         _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
         _generationStore = ObservedObject(wrappedValue: generationStore)
         _viewModel = ObservedObject(wrappedValue: viewModel)
@@ -332,7 +340,7 @@ struct ChapterPlayerView: View {
         .sheet(isPresented: $isPagePickerPresented) {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
-                theme: readerTheme,
+                theme: readerTheme, completedPageIndices: completedPageIndices,
                 onSelect: selectPage)
         }
         .sheet(isPresented: $isVoiceSelectionPresented) {
@@ -386,9 +394,18 @@ struct ChapterPlayerView: View {
             }
             library.recordLastReadPage(index: newValue, for: project.id)
         }
+        // ChapterAudioPlayer doesn't get a new @Published "just completed"
+        // signal (would re-render every visible ParagraphRow on every
+        // change) — reacting to isPlaying turning false already covers
+        // every real stop, natural finish included, at no extra publish
+        // cost.
+        .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
+            if !isPlaying { refreshCompletedPages() }
+        }
         .onAppear {
             isAutoScrollPaused = false
             isPlayerCollapsed = false
+            refreshCompletedPages()
             displayedIsPlaying = false
             playPauseScale = 1
             _ = moveToPage(currentPageIndex)
@@ -397,7 +414,6 @@ struct ChapterPlayerView: View {
         .onDisappear {
             playPauseAnimationTask?.cancel()
             chapterPlayer.stop()
-            viewModel.stopEnginePlayback()
             // Unconditional, not just "if keepScreenOn" — this is a
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
@@ -408,6 +424,7 @@ struct ChapterPlayerView: View {
     private var pageNavigator: some View {
         HStack(spacing: 12) {
             Button {
+                refreshCompletedPages()
                 isPagePickerPresented = true
             } label: {
                 Label("Pages", systemImage: "list.bullet")
@@ -482,17 +499,30 @@ struct ChapterPlayerView: View {
                 width: pageNumberWidth)
 
             Text("of \(project.pageCount)")
+
+            if completedPageIndices.contains(currentPageIndex) {
+                LucideIcon(.check, size: 13, color: readerTheme.primaryText)
+                    .accessibilityHidden(true)
+            }
         }
         .font(.subheadline.weight(.semibold))
         .monospacedDigit()
         .foregroundStyle(readerTheme.primaryText)
         .frame(height: 24)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Page \(currentPageIndex + 1) of \(project.pageCount)")
+        .accessibilityLabel(
+            "Page \(currentPageIndex + 1) of \(project.pageCount)"
+                + (completedPageIndices.contains(currentPageIndex) ? ", completed" : ""))
     }
 
     private var pageNumberWidth: CGFloat {
         max(24, CGFloat(String(max(project.pageCount, 1)).count) * 10)
+    }
+
+    private func refreshCompletedPages() {
+        Task {
+            completedPageIndices = await readingStats.completedPageIndices(forProject: project.id)
+        }
     }
 
     private func selectPage(_ index: Int) {
@@ -544,7 +574,6 @@ struct ChapterPlayerView: View {
         guard voiceName != selectedVoiceName else { return }
 
         chapterPlayer.stop()
-        viewModel.stopEnginePlayback()
         generationStore.cancelAll(for: project.id)
         playPauseAnimationTask?.cancel()
         displayedIsPlaying = false
@@ -562,7 +591,6 @@ struct ChapterPlayerView: View {
     private func moveToPage(_ index: Int) -> Bool {
         guard let page = library.page(for: project, index: index) else { return false }
         chapterPlayer.stop()
-        viewModel.stopEnginePlayback()
         playPauseAnimationTask?.cancel()
         displayedIsPlaying = false
         playPauseScale = 1
@@ -695,9 +723,10 @@ struct ChapterPlayerView: View {
             .padding(.horizontal)
             .padding(.bottom, 8)
             .offset(y: 25)
-        } else {
-            nonKokoroPlayer
         }
+        // Kokoro is the only engine that reaches the reader — a legacy
+        // project whose persisted engine is still .pocketTts (Pocket is
+        // Studio-only now) simply shows no floating player.
     }
 
     private var expandedPlayer: some View {
@@ -835,53 +864,15 @@ struct ChapterPlayerView: View {
         .matchedGeometryEffect(id: "playPauseButton", in: floatingPlayerNamespace)
     }
 
-    private var nonKokoroPlayer: some View {
-        HStack(spacing: 14) {
-            avatar
-            Text(project.engine.rawValue)
-                .appText(.label)
-                .foregroundStyle(readerTheme.primaryText)
-            Spacer()
-            Button {
-                toggleNonKokoroPlayback()
-            } label: {
-                Image(systemName: viewModel.isReaderPlaybackActive ? "stop.fill" : "play.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(readerTheme.primaryText)
-                    .frame(width: 56, height: 56)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(viewModel.isReaderPlaybackActive ? "Stop" : "Play")
-        }
-        .padding(.leading, 12)
-        .padding(.trailing, 8)
-        .background { playerBackground(cornerRadius: 20) }
-        .padding(.horizontal)
-        .offset(y: 17)
-    }
-
     private func toggleKokoroPlayback() {
         guard let page = currentPage, hasReadableText else { return }
-        viewModel.stopEnginePlayback()
         if chapterPlayer.isActive(pageRef) {
             chapterPlayer.togglePlayPause()
         } else if PageAudioStore.isGenerated(pageRef, project: project) {
-            chapterPlayer.playSaved(pageRef, project: project)
+            chapterPlayer.playSaved(pageRef, project: project, voice: selectedVoiceName)
         } else {
-            chapterPlayer.stream(pageRef, page: page, voice: selectedVoiceName)
-        }
-    }
-
-    private func toggleNonKokoroPlayback() {
-        guard let page = currentPage, hasReadableText else { return }
-        chapterPlayer.stop()
-        if viewModel.isReaderPlaybackActive {
-            viewModel.stopEnginePlayback()
-        } else {
-            viewModel.speakPage(
-                text: page.text, engine: project.engine, voiceName: selectedVoiceName,
-                clonedVoice: voiceCloneViewModel.clonedVoices.first { $0.name == selectedVoiceName })
+            chapterPlayer.stream(
+                pageRef, page: page, voice: selectedVoiceName, bookTitle: project.title)
         }
     }
 
@@ -929,10 +920,6 @@ struct ChapterPlayerView: View {
     private func presentVoiceSelection() {
         if chapterPlayer.isActive(pageRef), chapterPlayer.isPlaying {
             chapterPlayer.togglePlayPause()
-        } else if viewModel.isReaderPlaybackActive {
-            // Pocket and Supertonic expose stop rather than a resumable
-            // pause transport, so silence them before presenting voices.
-            viewModel.stopEnginePlayback()
         }
         isVoiceSelectionPresented = true
     }

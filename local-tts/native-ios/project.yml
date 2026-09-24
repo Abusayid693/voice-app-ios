@@ -1,7 +1,7 @@
 name: KokoroAneTest
 options:
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
   bundleIdPrefix: com.rehanchoudhury.kokoroanetest
 packages:
   # Pinned past the latest tagged release (v0.15.7, 2026-09-10) to a

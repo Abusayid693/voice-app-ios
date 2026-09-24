@@ -128,16 +128,8 @@ final class DependencyContainer {
         channels: 1,
         interleaved: false)!
 
-    // Which VectorEstimator build to download and run. The SDK's own
-    // recommended iOS default (ANE-bucketed int4). Whoever builds
-    // `Supertonic3EngineService` must hand it this same value — it derives
-    // the download variant from it, and the two must request the same files.
-    static let supertonic3VectorEstimator: Supertonic3VectorEstimator = .default
-
-    // A single instance, unlike the per-variant/per-language Kokoro/Pocket
-    // managers above — Supertonic-3's language and voice style are both
-    // passed per `synthesize()` call, not fixed at init, so one manager
-    // serves every language/voice combination.
-    let supertonic3Manager = Supertonic3Manager(
-        vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
+    // Lazy so opening/creating the SwiftData store doesn't tax cold
+    // launch — only constructed on first actual use (the reader's first
+    // playback of this app run). See ReadingStatsStore's own doc comment.
+    lazy var readingStatsStore = ReadingStatsStore()
 }

@@ -12,11 +12,17 @@ enum BookShelfPalette {
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
+    let readingStats: ReadingStatsStore
     @Binding var isDetailPresented: Bool
     let onAddBooks: () -> Void
     let onOpenBook: (SavedGenerationSummary) -> Void
 
     @State private var selectedBook: SavedGenerationSummary?
+    // Fraction of pages completed for the currently-open book's detail
+    // modal — fetched once when it's presented (see presentDetail), not
+    // observed reactively; a one-shot read matches this app's convention
+    // for state a view merely reads on demand.
+    @State private var selectedBookProgress: Double = 0
     @State private var selectedCoverFrame: CGRect?
     @State private var coverFrames: [UUID: CGRect] = [:]
     @State private var modalPhase: CGFloat = 0
@@ -105,6 +111,7 @@ struct BookShelfView: View {
                         liftOffset: liftOffset,
                         showsCover: isShelfCoverHidden,
                         showsDetails: showsModalDetails,
+                        progress: selectedBookProgress,
                         onDismiss: { dismissDetail() },
                         onRead: openSelectedBook)
                     .zIndex(1)
@@ -235,6 +242,12 @@ struct BookShelfView: View {
         selectedCoverFrame = coverFrames[book.id]
         modalPhase = reduceMotion ? 2 : 0
         showsModalDetails = reduceMotion
+        selectedBookProgress = 0
+        Task {
+            let completed = await readingStats.completedPageIndices(forProject: book.id)
+            guard selectedBook?.id == book.id else { return }
+            selectedBookProgress = Double(completed.count) / Double(max(book.pageCount, 1))
+        }
         var selectionTransaction = Transaction(animation: nil)
         selectionTransaction.disablesAnimations = true
         withTransaction(selectionTransaction) {
@@ -525,6 +538,9 @@ private struct BookShelfDetailModal: View {
     // never sit exactly on top of the real cover across the glass boundary.
     let showsCover: Bool
     let showsDetails: Bool
+    // Fraction of pages completed, 0...1 — fetched once by BookShelfView
+    // when this modal is presented; see coverProgressBar.
+    let progress: Double
     let onDismiss: () -> Void
     let onRead: () -> Void
 
@@ -754,11 +770,10 @@ private struct BookShelfDetailModal: View {
         .padding(.bottom, 20)
     }
 
-    // Placeholder reading-progress indicator — no real progress data wired
-    // up yet, matches the expanded cover's own 168pt width.
+    // Real completed-pages fraction (see `progress`), matches the expanded
+    // cover's own 168pt width.
     private var coverProgressBar: some View {
-        let progress: CGFloat = 0.42
-        return ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
             Capsule()
                 .fill(Color.white)
                 .overlay {
@@ -766,7 +781,7 @@ private struct BookShelfDetailModal: View {
                 }
             Capsule()
                 .fill(Color.black)
-                .frame(width: 168 * progress)
+                .frame(width: 168 * CGFloat(min(max(progress, 0), 1)))
         }
         .frame(width: 168, height: 3)
         .accessibilityHidden(true)
@@ -859,6 +874,7 @@ private struct GlassBookShelf: View {
     return NavigationStack {
         BookShelfView(
             library: app.library,
+            readingStats: app.readingStats,
             isDetailPresented: .constant(false),
             onAddBooks: {},
             onOpenBook: { _ in })

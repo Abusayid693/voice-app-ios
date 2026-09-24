@@ -24,10 +24,8 @@ struct Voice: Identifiable, Hashable, Sendable {
     var previewLine: String?
     /// Overrides `VoiceCode`'s prefix-based flag lookup. `VoiceCode` assumes
     /// a code's prefix names one locale (`af_` = American, `zf_` = Mandarin);
-    /// Supertonic-3's `F1`/`M1`-style codes carry no such prefix and aren't
-    /// tied to one language at all — the same voice speaks whichever
-    /// language you pass alongside it. Set this instead of inventing a fake
-    /// prefix for a convention those codes don't follow.
+    /// set this instead of inventing a fake prefix for a voice whose code
+    /// doesn't follow that convention.
     var flagOverride: String?
     /// Overrides `VoiceCode`'s prefix-stripped code as the display name —
     /// for a voice whose raw code (`hf_alpha`, `hm_omega`) reads as a

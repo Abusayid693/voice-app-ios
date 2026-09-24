@@ -77,7 +77,6 @@ struct ImportHomeView: View {
         switch viewModel.engine {
         case .kokoroAne: return viewModel.kokoroVoice
         case .pocketTts: return viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
-        case .supertonic3: return viewModel.supertonicVoice.displayName
         }
     }
 
@@ -95,6 +94,7 @@ struct ImportHomeView: View {
 
                 BookShelfView(
                     library: libraryViewModel,
+                    readingStats: app.readingStats,
                     isDetailPresented: $isBookDetailPresented,
                     onAddBooks: { pdfImports.requestDocumentPicker() }
                 ) { book in
@@ -153,7 +153,8 @@ struct ImportHomeView: View {
                     chapterPlayer: app.chapterPlayer,
                     generationStore: app.generationStore,
                     viewModel: viewModel,
-                    previewPlayer: app.previewPlayer)
+                    previewPlayer: app.previewPlayer,
+                    readingStats: app.readingStats)
             }
             // The root tab bar/floating "+" button should only show at
             // this screen's own root, not on anything pushed above it.
@@ -162,7 +163,9 @@ struct ImportHomeView: View {
                 isPushed: openProject != nil || voiceCloneRoute != nil)
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
+            SettingsSheet(
+                viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
+                readingStats: app.readingStats)
         }
         .fullScreenCover(
             isPresented: $viewModel.isWriteTextPresented,
@@ -375,12 +378,7 @@ struct ImportHomeView: View {
                 id: "pocket-\(voice.code)", voice: voice, engine: .pocketTts,
                 engineLabel: "Pocket TTS", isAvailable: packs.isPocketPackDownloaded)
         }
-        let supertonic3 = VoiceCatalog.supertonic3.map { voice in
-            VoiceTile(
-                id: "supertonic3-\(voice.code)", voice: voice, engine: .supertonic3,
-                engineLabel: "Supertonic-3", isAvailable: packs.isSupertonic3Downloaded)
-        }
-        return kokoro + pocket + supertonic3
+        return kokoro + pocket
     }
 
     private var trendingVoicesSection: some View {

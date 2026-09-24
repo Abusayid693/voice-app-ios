@@ -7,11 +7,31 @@ import Foundation
 /// frames back as they're generated. This service owns audio playback —
 /// unlike Kokoro's one-shot WAV, PocketTTS's frame-by-frame output needs a
 /// persistent engine/node pair kept alive across the whole synthesis.
+/// `@MainActor` (constructed once in TTSViewModel.init, shared with
+/// VoiceCloneViewModel, both `@MainActor` — same reasoning as
+/// `KokoroEngineService`) — needed here specifically so the playback-
+/// completion bookkeeping below (mutated both from ordinary calls and from
+/// an AVFoundation completion handler that fires off-main) has one
+/// well-defined isolation domain instead of being a real data race.
+@MainActor
 final class PocketEngineService {
     private let manager: PocketTtsManager
     private let audioEngine: AVAudioEngine
     private let playerNode: AVAudioPlayerNode
     private let streamFormat: AVAudioFormat
+
+    // MARK: - Playback completion (see `schedule`)
+    //
+    // PocketTTS has no single "finished" signal from the SDK: synthesis
+    // exhausting its stream just means no more frames are coming, but
+    // AVAudioPlayerNode keeps draining already-scheduled buffers afterwards.
+    // Real completion is "synthesis produced its last frame AND every
+    // scheduled buffer has actually finished playing" — both halves are
+    // required, since outstandingScheduledBufferCount can transiently hit
+    // zero *between* two frames arriving, well before the utterance is over.
+    private var outstandingScheduledBufferCount = 0
+    private var isSynthesisComplete = false
+    private var playbackFinishedHandler: (() -> Void)?
 
     init(
         manager: PocketTtsManager, audioEngine: AVAudioEngine, playerNode: AVAudioPlayerNode,
@@ -51,6 +71,39 @@ final class PocketEngineService {
 
     func stopPlayback() {
         playerNode.stop()
+    }
+
+    /// Call once before starting a new streaming run — clears state left
+    /// over from a previous page/utterance so it can't leak a stale
+    /// completion into this one.
+    func resetPlaybackCompletionTracking() {
+        outstandingScheduledBufferCount = 0
+        isSynthesisComplete = false
+        playbackFinishedHandler = nil
+    }
+
+    /// Registers the closure to call once real audio completion has
+    /// happened — see the state block above. Overwrites any previous
+    /// handler; callers register this once per run, right before consuming
+    /// the synthesis stream.
+    func onPlaybackFinished(_ handler: @escaping () -> Void) {
+        playbackFinishedHandler = handler
+    }
+
+    /// Call once the synthesis stream has been fully consumed (the
+    /// `for try await frame in stream` loop exited normally). This is the
+    /// "no more frames are coming" half of completion; `schedule`'s
+    /// completion callback supplies the other half.
+    func markSynthesisComplete() {
+        isSynthesisComplete = true
+        checkPlaybackCompletion()
+    }
+
+    private func checkPlaybackCompletion() {
+        guard isSynthesisComplete, outstandingScheduledBufferCount == 0 else { return }
+        let handler = playbackFinishedHandler
+        playbackFinishedHandler = nil
+        handler?()
     }
 
     /// Normalizes text (numbers/dates/currency — PocketTTS has no built-in
@@ -118,6 +171,17 @@ final class PocketEngineService {
         frame.samples.withUnsafeBufferPointer { src in
             buffer.floatChannelData![0].update(from: src.baseAddress!, count: src.count)
         }
-        playerNode.scheduleBuffer(buffer)
+        outstandingScheduledBufferCount += 1
+        // completionCallbackType: .dataPlayedBack fires once this buffer has
+        // actually been rendered, not just dequeued — AVFoundation invokes
+        // it on an internal audio thread, so every touch of this actor's
+        // state below has to hop back via Task { @MainActor in }.
+        playerNode.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.outstandingScheduledBufferCount -= 1
+                self.checkPlaybackCompletion()
+            }
+        }
     }
 }

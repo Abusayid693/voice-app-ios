@@ -66,7 +66,6 @@ struct SetupView: View {
         switch pack {
         case .kokoro(let variant): return packs.isKokoroPackReady(variant)
         case .pocket(let language): return packs.isPocketPackDownloaded(language)
-        case .supertonic3: return packs.isSupertonic3Downloaded
         }
     }
 
@@ -75,13 +74,13 @@ struct SetupView: View {
             switch pack {
             case .kokoro(let variant): await viewModel.downloadKokoroPackIfNeeded(variant: variant)
             case .pocket(let language): await viewModel.downloadPocketPackIfNeeded(language: language)
-            case .supertonic3: await viewModel.downloadSupertonic3PackIfNeeded()
             }
         }
     }
 }
 
 #Preview {
-    let viewModel = TTSViewModel(dependencies: DependencyContainer())
+    let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     SetupView(viewModel: viewModel, packs: viewModel.packs)
 }

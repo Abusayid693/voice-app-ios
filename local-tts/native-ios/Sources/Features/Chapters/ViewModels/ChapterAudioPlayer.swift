@@ -61,16 +61,18 @@ final class ChapterAudioPlayer: ObservableObject {
     private var playbackWaitingForIndex: Int?
 
     private let synthesisService: ChapterSynthesisService
+    private let statsTracker: ReadingStatsTracker
 
-    init(synthesisService: ChapterSynthesisService) {
+    init(synthesisService: ChapterSynthesisService, statsTracker: ReadingStatsTracker) {
         self.synthesisService = synthesisService
+        self.statsTracker = statsTracker
     }
 
     func isActive(_ ref: ReaderPageRef) -> Bool { activeRef == ref }
 
     // MARK: - Saved playback (real duration, scrubbing)
 
-    func playSaved(_ ref: ReaderPageRef, project: SavedGeneration) {
+    func playSaved(_ ref: ReaderPageRef, project: SavedGeneration, voice: String) {
         stop()
         guard let audio = PageAudioStore.loadAudio(ref, project: project),
             let manifest = PageAudioStore.loadManifest(ref, project: project)
@@ -93,6 +95,8 @@ final class ChapterAudioPlayer: ObservableObject {
             isPlaying = true
             newPlayer.play()
             startTicker()
+            statsTracker.beginListening(
+                ref: ref, bookTitle: project.title, voice: voice, engine: .kokoroAne)
         } catch {
             resetState()
         }
@@ -102,6 +106,7 @@ final class ChapterAudioPlayer: ObservableObject {
         isPlaying = false
         elapsed = duration
         currentChunkIndex = max(0, chunkTexts.count - 1)
+        statsTracker.endListening(pageCompleted: true)
     }
 
     /// Where a given chunk starts — the merged file's own offset when
@@ -209,7 +214,7 @@ final class ChapterAudioPlayer: ObservableObject {
 
     // MARK: - Streaming playback (synthesize-and-play, chunk by chunk)
 
-    func stream(_ ref: ReaderPageRef, page: ReaderPage, voice: String) {
+    func stream(_ ref: ReaderPageRef, page: ReaderPage, voice: String, bookTitle: String) {
         stop()
         activeRef = ref
         mode = .streaming
@@ -217,6 +222,7 @@ final class ChapterAudioPlayer: ObservableObject {
         isBuffering = true
         playbackWaitingForIndex = chunkTexts.isEmpty ? nil : 0
         startTicker()
+        statsTracker.beginListening(ref: ref, bookTitle: bookTitle, voice: voice, engine: .kokoroAne)
 
         let chunks = chunkTexts
         streamTask = Task { [weak self] in
@@ -304,6 +310,9 @@ final class ChapterAudioPlayer: ObservableObject {
         guard nextIndex < chunkTexts.count else {
             isPlaying = false
             isBuffering = false
+            // Only this branch is a real finish — the one below just
+            // advances to the next chunk (mid-page, not done).
+            statsTracker.endListening(pageCompleted: true)
             return
         }
         if streamingChunkAudio.indices.contains(nextIndex) {
@@ -321,9 +330,11 @@ final class ChapterAudioPlayer: ObservableObject {
         if isPlaying {
             player.pause()
             isPlaying = false
+            statsTracker.pauseListening()
         } else {
             player.play()
             isPlaying = true
+            statsTracker.resumeListening()
         }
     }
 
@@ -335,6 +346,10 @@ final class ChapterAudioPlayer: ObservableObject {
         player?.stop()
         player = nil
         delegate = nil
+        // Explicit stop / page change — not a natural finish. No-ops if
+        // nothing was active (also covers the natural-finish paths above,
+        // which already ended their own session before this ever runs).
+        statsTracker.endListening(pageCompleted: false)
         resetState()
     }
 

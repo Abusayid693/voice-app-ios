@@ -18,68 +18,35 @@ final class TTSViewModel: ObservableObject {
     }
 
     @Published var engine: Engine = .kokoroAne
-    // Changing voice mid-session would otherwise leave stale playback
-    // running under the old voice. `kokoroModelsReady` is reset here too
-    // (not just in stopEnginePlayback, which other engines' didSets also
-    // call) — a new voice genuinely needs its own pack preloaded.
+    // Changing voice mid-session invalidates whichever model was preloaded
+    // — a new voice genuinely needs its own pack preloaded.
     @Published var kokoroVoice = "af_heart" {
         didSet {
             guard oldValue != kokoroVoice else { return }
-            stopEnginePlayback()
             kokoroModelsReady = false
         }
     }
     // Which Kokoro variant to use — one `KokoroAneManager` per variant (the
     // SDK's chain/vocab differ per variant, same reasoning as
-    // `pocketLanguage`). Same stop-in-flight-playback guard.
+    // `pocketLanguage`).
     @Published var kokoroVariant: KokoroVariant = .english {
         didSet {
             guard oldValue != kokoroVariant else { return }
-            stopEnginePlayback()
             kokoroModelsReady = false
         }
     }
     @Published var pocketVoice = "alba"
     // Which Pocket TTS language pack to use — one `PocketTtsManager` per
-    // language (the SDK fixes `language` at init), so changing this
-    // switches which manager/service `runPocketTts()` routes to. Same
-    // stop-in-flight-playback guard as `kokoroVoice`'s didSet.
-    @Published var pocketLanguage: PocketLanguage = .english {
-        didSet {
-            guard oldValue != pocketLanguage else { return }
-            stopEnginePlayback()
-        }
-    }
-    // Independent of each other, unlike Kokoro's variant (= language) or
-    // Pocket's language (= manager) — the same voice speaks any language,
-    // chosen separately. Same stop-in-flight-playback guard as the others.
-    @Published var supertonicLanguage: SupertonicLanguage = .default {
-        didSet {
-            guard oldValue != supertonicLanguage else { return }
-            stopEnginePlayback()
-        }
-    }
-    @Published var supertonicVoice: SupertonicVoice = .default {
-        didSet {
-            guard oldValue != supertonicVoice else { return }
-            stopEnginePlayback()
-        }
-    }
+    // language (the SDK fixes `language` at init).
+    @Published var pocketLanguage: PocketLanguage = .english
     // Set by VoiceSettingsSheet's "My Voices" section — when non-nil (and
-    // engine == .pocketTts), runPocketTts() synthesizes with this cloned
-    // voice's conditioning data instead of the named `pocketVoice` preset.
-    // Picking any normal voice clears this back to nil.
+    // engine == .pocketTts), a cloned voice's conditioning data is used
+    // instead of the named `pocketVoice` preset. Picking any normal voice
+    // clears this back to nil.
     @Published var selectedClonedVoice: ClonedVoice?
     @Published var text = "Hello from FluidAudio!"
     @Published var status = "Idle"
     @Published var isBusy = false
-    @Published private(set) var isReaderPlaybackActive = false
-    @Published var initSeconds: TimeInterval?
-    @Published var synthSeconds: TimeInterval?
-    @Published var isWarmInit = false
-
-    @Published var timeToFirstAudio: TimeInterval?
-    @Published var streamChunkProgress: String?
 
     // MARK: - Cold-start notice (issue #4)
 
@@ -96,10 +63,6 @@ final class TTSViewModel: ObservableObject {
     // every change — that re-init is warm and fast, and shouldn't
     // re-announce itself.
     private var noticedKokoroVariants: Set<KokoroVariant> = []
-    private var noticedPocketLanguages: Set<PocketLanguage> = []
-    private var noticedSupertonic3 = false
-    private var readerPlaybackTask: Task<Void, Never>?
-    private var readerPlaybackID: UUID?
 
     // MARK: - Import screen: voice-pack setup + new sheet flags
 
@@ -134,12 +97,6 @@ final class TTSViewModel: ObservableObject {
     private let pocketServices: [PocketLanguage: PocketEngineService]
     private var pocketService: PocketEngineService { pocketServices[pocketLanguage]! }
 
-    // A single service, unlike the per-variant/per-language dictionaries
-    // above — see DependencyContainer.supertonic3Manager's doc comment.
-    private let supertonicService: Supertonic3EngineService
-    private var supertonicPlayer: AVAudioPlayer?
-    private var supertonicPlayerDelegate: AudioPlaybackDelegate?
-
     init(dependencies: DependencyContainer) {
         kokoroServices = Dictionary(
             uniqueKeysWithValues: KokoroVariant.allCases.map { variant in
@@ -169,43 +126,9 @@ final class TTSViewModel: ObservableObject {
                         streamFormat: dependencies.streamFormat)
                 )
             })
-        supertonicService = Supertonic3EngineService(
-            manager: dependencies.supertonic3Manager, directory: nil,
-            vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
         packs = VoicePackStore(
             kokoroModelDirectory: dependencies.kokoroModelDirectory,
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
-    }
-
-    /// Plays a saved reader page with the engine and voice captured when the
-    /// project was created, rather than whichever engine is selected now.
-    func speakPage(
-        text: String, engine pageEngine: Engine, voiceName: String,
-        clonedVoice: ClonedVoice? = nil
-    ) {
-        engine = pageEngine
-        switch pageEngine {
-        case .kokoroAne:
-            break
-        case .pocketTts:
-            if let clonedVoice {
-                selectedClonedVoice = clonedVoice
-                pocketLanguage = clonedVoice.language
-            } else {
-                selectedClonedVoice = nil
-                pocketVoice = voiceName
-            }
-            runPocketTts(text: text)
-            isReaderPlaybackActive = true
-        case .supertonic3:
-            if let voice = SupertonicVoice.allCases.first(where: {
-                $0.rawValue == voiceName || $0.displayName == voiceName
-            }) {
-                supertonicVoice = voice
-            }
-            runSupertonicTts(text: text)
-            isReaderPlaybackActive = true
-        }
     }
 
     /// Hides the "Initializing model…" notice early. Preparation itself
@@ -219,8 +142,8 @@ final class TTSViewModel: ObservableObject {
     /// taps Generate — rather than making them wait for it afterwards.
     ///
     /// Only warms the *selected* engine's model: Kokoro is the default, but
-    /// warming it for someone who's switched to Pocket/Supertonic-3 would
-    /// load the wrong one and pay the cost twice.
+    /// warming it for someone who's switched to Pocket would load the wrong
+    /// one and pay the cost twice.
     func prepareKokoroModelIfNeeded() {
         guard engine == .kokoroAne, !kokoroModelsReady, kokoroWarmUpTask == nil else { return }
 
@@ -323,233 +246,4 @@ final class TTSViewModel: ObservableObject {
         }
     }
 
-    /// Unlike the other two, there's exactly one Supertonic-3 pack — no
-    /// per-variant/per-language argument (see `VoicePack.supertonic3`).
-    func downloadSupertonic3PackIfNeeded() async {
-        guard !packs.isSupertonic3Downloaded else { return }
-        status = "Downloading Supertonic-3 pack…"
-        isBusy = true
-        packs.beginDownload(packID: VoicePack.supertonic3.id)
-        defer {
-            isBusy = false
-            packs.endDownload()
-        }
-        do {
-            let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
-                [weak self] progress in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.status = self.packs.apply(
-                        progress, phaseWeight: 1.0,
-                        fetchTotal: { await VoicePackSizeService.supertonic3TotalBytes() })
-                }
-            })
-            packs.noteSupertonic3ModelDirectory(resolvedDirectory)
-            try await supertonicService.initialize()
-            packs.markSupertonic3Downloaded()
-            status = "Idle"
-        } catch {
-            status = "Supertonic-3 pack download failed: \(error.localizedDescription)"
-        }
-    }
-
-    private func resetRunState() {
-        stopEnginePlayback()
-        isBusy = true
-        packs.resetProgress()
-        initSeconds = nil
-        synthSeconds = nil
-        timeToFirstAudio = nil
-        streamChunkProgress = nil
-    }
-
-    // Stops Pocket/Supertonic-3 playback and cancels the active reader task.
-    // Kokoro page playback lives entirely on `ChapterAudioPlayer`; app-level
-    // background Generate jobs are intentionally unaffected.
-    func stopEnginePlayback() {
-        readerPlaybackTask?.cancel()
-        readerPlaybackTask = nil
-        readerPlaybackID = nil
-        isReaderPlaybackActive = false
-        supertonicPlayer?.stop()
-        supertonicPlayer = nil
-        supertonicPlayerDelegate = nil
-        // Stop every language's service, not just the current
-        // `pocketLanguage` — this can run from that same property's
-        // didSet, which fires *after* the value already changed, so
-        // reading the (now computed-current) `pocketService` here would
-        // stop the new language's idle service instead of the old one
-        // that's actually still streaming. Only one is ever really
-        // active, so stopping all of them is harmless and avoids the
-        // ordering problem entirely.
-        for service in pocketServices.values { service.stopPlayback() }
-    }
-
-    // `text` defaults to the ViewModel's editor value; the page reader passes
-    // the selected page explicitly.
-    private func runPocketTts(text overrideText: String? = nil) {
-        resetRunState()
-        let voice = pocketVoice
-        let clonedVoice = selectedClonedVoice
-        let inputText = overrideText ?? text
-        // Snapshot which language's service this run uses at the moment
-        // Generate is tapped — pocketLanguage changing mid-run already
-        // triggers stopEnginePlayback() via its own didSet, but pinning the
-        // local reference too keeps this whole closure self-consistent
-        // regardless of timing (a cloned voice's own language is set on
-        // `pocketLanguage` at selection time in VoiceSettingsSheet, so this
-        // is correct for cloned voices as well as named presets).
-        let pocketService = pocketServices[pocketLanguage]!
-        let language = pocketLanguage
-
-        let playbackID = UUID()
-        readerPlaybackID = playbackID
-        readerPlaybackTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback)
-                try AVAudioSession.sharedInstance().setActive(true)
-
-                status = "Checking cache…"
-                let initStart = Date()
-                isPreparingModel = !noticedPocketLanguages.contains(language)
-                try await pocketService.ensureModels(progressHandler: { progress in
-                    Task { @MainActor in
-                        self.status = self.packs.apply(
-                            progress, phaseWeight: 1.0,
-                            fetchTotal: { await VoicePackSizeService.pocketTotalBytes(language: language) })
-                    }
-                })
-                isWarmInit = !packs.didDownload
-
-                status = "Loading models…"
-                try await pocketService.initialize()
-                initSeconds = Date().timeIntervalSince(initStart)
-                noticedPocketLanguages.insert(language)
-                isPreparingModel = false
-
-                status = "Synthesizing (streaming)…"
-                try pocketService.preparePlayback()
-
-                let synthStart = Date()
-                let stream: AsyncThrowingStream<PocketTtsSynthesizer.AudioFrame, Error>
-                if let clonedVoice {
-                    let voiceData = try pocketService.loadClonedVoice(from: clonedVoice.fileURL)
-                    stream = try await pocketService.synthesizeStreaming(text: inputText, voiceData: voiceData)
-                } else {
-                    stream = try await pocketService.synthesizeStreaming(text: inputText, voice: voice)
-                }
-                var receivedFirstFrame = false
-                for try await frame in stream {
-                    try Task.checkCancellation()
-                    if !receivedFirstFrame {
-                        receivedFirstFrame = true
-                        timeToFirstAudio = Date().timeIntervalSince(synthStart)
-                        status = "Playing (streaming)…"
-                    }
-                    streamChunkProgress = "\(frame.chunkIndex + 1) / \(frame.chunkCount)"
-                    pocketService.schedule(frame)
-                }
-                synthSeconds = Date().timeIntervalSince(synthStart)
-                status = "Idle"
-            } catch is CancellationError {
-                status = "Idle"
-            } catch {
-                status = "Error: \(error.localizedDescription)"
-                if readerPlaybackID == playbackID {
-                    isReaderPlaybackActive = false
-                }
-            }
-            isBusy = false
-            // The notice has no
-            // auto-dismiss, so every exit path has to clear it.
-            isPreparingModel = false
-            if readerPlaybackID == playbackID {
-                readerPlaybackTask = nil
-            }
-        }
-    }
-
-    /// Single-shot generate-then-play, closer to `runPocketTts()`'s overall
-    /// shape than Kokoro's persistent-worker pattern: Supertonic-3 has no
-    /// background queue, one call returns one complete clip. Unlike Kokoro,
-    /// text isn't pre-chunked here — the SDK chunks internally and the app
-    /// has no visibility into where, so there's no per-chunk read-along for
-    /// this engine; it plays back as one track, same UX tier as Pocket.
-    private func runSupertonicTts(text overrideText: String? = nil) {
-        resetRunState()
-        let inputText = overrideText ?? text
-        let language = supertonicLanguage
-        let voice = supertonicVoice
-
-        let playbackID = UUID()
-        readerPlaybackID = playbackID
-        readerPlaybackTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback)
-                try AVAudioSession.sharedInstance().setActive(true)
-
-                status = "Checking cache…"
-                let initStart = Date()
-                isPreparingModel = !noticedSupertonic3
-                let resolvedDirectory = try await supertonicService.ensureModels(progressHandler: {
-                    [weak self] progress in
-                    Task { @MainActor in
-                        guard let self else { return }
-                        self.status = self.packs.apply(
-                            progress, phaseWeight: 1.0,
-                            fetchTotal: { await VoicePackSizeService.supertonic3TotalBytes() })
-                    }
-                })
-                packs.noteSupertonic3ModelDirectory(resolvedDirectory)
-                isWarmInit = !packs.didDownload
-
-                status = "Loading models…"
-                try await supertonicService.initialize()
-                initSeconds = Date().timeIntervalSince(initStart)
-                noticedSupertonic3 = true
-                isPreparingModel = false
-
-                status = "Synthesizing…"
-                let synthStart = Date()
-                let data = try await supertonicService.synthesize(
-                    text: inputText, language: language.code, voice: voice)
-                try Task.checkCancellation()
-                synthSeconds = Date().timeIntervalSince(synthStart)
-
-                let player = try AVAudioPlayer(data: data)
-                let delegate = AudioPlaybackDelegate { [weak self] in
-                    Task { @MainActor in
-                        guard self?.readerPlaybackID == playbackID else { return }
-                        self?.supertonicPlayer = nil
-                        self?.supertonicPlayerDelegate = nil
-                        self?.isReaderPlaybackActive = false
-                        self?.readerPlaybackTask = nil
-                        self?.readerPlaybackID = nil
-                    }
-                }
-                player.delegate = delegate
-                supertonicPlayerDelegate = delegate
-                supertonicPlayer = player
-                player.play()
-
-                status = "Idle"
-            } catch is CancellationError {
-                status = "Idle"
-            } catch {
-                status = "Error: \(error.localizedDescription)"
-                if readerPlaybackID == playbackID {
-                    isReaderPlaybackActive = false
-                }
-            }
-            isBusy = false
-            // The notice has no
-            // auto-dismiss, so every exit path has to clear it.
-            isPreparingModel = false
-            if readerPlaybackID == playbackID, supertonicPlayer == nil {
-                readerPlaybackTask = nil
-            }
-        }
-    }
 }

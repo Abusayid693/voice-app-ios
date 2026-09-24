@@ -161,22 +161,6 @@ struct VoiceSettingsSheet: View {
                 }
             }
 
-            if shows(.supertonic3) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        sectionTitle("Supertonic-3")
-                        Spacer()
-                        Picker("Supertonic language", selection: $viewModel.supertonicLanguage) {
-                            ForEach(SupertonicLanguage.all) { language in
-                                Text(language.displayName).tag(language)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.appPrimaryText)
-                    }
-                    catalogueRows(supertonicTiles)
-                }
-            }
         }
     }
 
@@ -200,9 +184,6 @@ struct VoiceSettingsSheet: View {
         if shows(.pocketTts) {
             tiles += clonedVoiceTiles
             tiles += pocketTiles
-        }
-        if shows(.supertonic3) {
-            tiles += supertonicTiles
         }
         return tiles
     }
@@ -229,17 +210,6 @@ struct VoiceSettingsSheet: View {
                 engine: .pocketTts,
                 engineLabel: "Pocket TTS · \(viewModel.pocketLanguage.displayName)",
                 isAvailable: packs.isPocketPackDownloaded(viewModel.pocketLanguage))
-        }
-    }
-
-    private var supertonicTiles: [VoiceTile] {
-        VoiceCatalog.supertonic3.map { voice in
-            VoiceTile(
-                id: "supertonic3-\(voice.code)",
-                voice: voice,
-                engine: .supertonic3,
-                engineLabel: "Supertonic-3 · \(viewModel.supertonicLanguage.displayName)",
-                isAvailable: packs.isSupertonic3Downloaded)
         }
     }
 
@@ -306,31 +276,14 @@ struct VoiceSettingsSheet: View {
                 viewModel.pocketVoice = tile.name
                 viewModel.selectedClonedVoice = nil
             }
-
-        case .supertonic3:
-            // tile.name is the catalogue's uppercase code ("F1"), but
-            // SupertonicVoice's raw values are lowercase — matching case-
-            // sensitively here always failed, silently returning before
-            // finishSelection ever ran (the "Use Voice" button did nothing).
-            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return }
-            viewModel.engine = .supertonic3
-            viewModel.supertonicVoice = voice
-            viewModel.selectedClonedVoice = nil
         }
 
-        finishSelection(persistedVoiceName(for: tile))
-    }
-
-    private func persistedVoiceName(for tile: VoiceTile) -> String {
-        guard tile.engine == .supertonic3,
-              let voice = SupertonicVoice(rawValue: tile.name.lowercased())
-        else { return tile.name }
-        return voice.displayName
+        finishSelection(tile.name)
     }
 
     private func isSelected(_ tile: VoiceTile) -> Bool {
         if let selectedVoiceName {
-            return selectedVoiceName == persistedVoiceName(for: tile) || selectedVoiceName == tile.name
+            return selectedVoiceName == tile.name
         }
 
         switch tile.engine {
@@ -343,14 +296,16 @@ struct VoiceSettingsSheet: View {
             return viewModel.engine == .pocketTts
                 && viewModel.selectedClonedVoice == nil
                 && viewModel.pocketVoice == tile.name
-        case .supertonic3:
-            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return false }
-            return viewModel.engine == .supertonic3 && viewModel.supertonicVoice == voice
         }
     }
 
     private func shows(_ engine: Engine) -> Bool {
-        restrictedEngine == nil || restrictedEngine == engine
+        // Pocket TTS is Studio-only now (voice cloning preview) — it never
+        // produces or plays a reader page, so it's excluded here regardless
+        // of restriction: both the unrestricted case (Write Text, which
+        // also feeds the reader) and the reader's own restricted case.
+        guard engine != .pocketTts else { return false }
+        return restrictedEngine == nil || restrictedEngine == engine
     }
 
     private func finishSelection(_ voiceName: String) {

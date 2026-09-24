@@ -19,7 +19,7 @@ enum VoiceCatalog {
         }
     }
 
-    static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese + pocket + supertonic3
+    static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese + pocket
 
     /// Precomputed rather than scanned: cover-art resolution calls this
     /// once per visible tile while the Trending row scrolls, and a linear
@@ -364,23 +364,5 @@ enum VoiceCatalog {
             code: "stuart_bell",
             longDescription: "A crisp, articulate voice with a brisk, professional pace."),
         Voice(code: "vera", longDescription: "A soft, composed voice with a calm, reassuring tone."),
-    ]
-
-    // MARK: - Supertonic-3 (10 fixed speaker styles, all 31 languages — issue #27)
-
-    // No persona data (fixed presets, not sourced from a named narrator);
-    // no per-language flag makes sense, since the same voice speaks
-    // whichever `SupertonicLanguage` is picked — see Voice.flagOverride.
-    static let supertonic3: [Voice] = [
-        Voice(code: "F1", flagOverride: "🌐"),
-        Voice(code: "F2", flagOverride: "🌐"),
-        Voice(code: "F3", flagOverride: "🌐"),
-        Voice(code: "F4", flagOverride: "🌐"),
-        Voice(code: "F5", flagOverride: "🌐"),
-        Voice(code: "M1", flagOverride: "🌐"),
-        Voice(code: "M2", flagOverride: "🌐"),
-        Voice(code: "M3", flagOverride: "🌐"),
-        Voice(code: "M4", flagOverride: "🌐"),
-        Voice(code: "M5", flagOverride: "🌐"),
     ]
 }

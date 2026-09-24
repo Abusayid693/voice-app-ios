@@ -66,7 +66,6 @@ struct WriteTextView: View {
         case .kokoroAne: return VoiceCoverArt.assetName(for: viewModel.kokoroVoice)
         case .pocketTts:
             return VoiceCoverArt.assetName(for: viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice)
-        case .supertonic3: return VoiceCoverArt.assetName(for: viewModel.supertonicVoice.rawValue)
         }
     }
 
@@ -103,8 +102,6 @@ struct WriteTextView: View {
             voiceName = viewModel.kokoroVoice
         case .pocketTts:
             voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
-        case .supertonic3:
-            voiceName = viewModel.supertonicVoice.displayName
         }
         guard
             let savedID = libraryViewModel.save(

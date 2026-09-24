@@ -42,6 +42,17 @@ extension Color {
     static let chunkHighlightBackground = Color(hex: 0x0E2439)
     static let wordHighlightBackground = Color(hex: 0x1F5182)
 
+    // ReadingStatsView's contribution graph — a 5-step intensity ramp
+    // (0 = no activity that day) in the same blue family as the read-
+    // along's own chunk/word highlight pair above, for visual consistency
+    // with this app's other "listening activity" indicator rather than
+    // borrowing GitHub's green convention.
+    static let statsIntensity0 = Color(hex: 0x1A1A1A)
+    static let statsIntensity1 = Color(hex: 0x123049)
+    static let statsIntensity2 = Color(hex: 0x1A4A73)
+    static let statsIntensity3 = Color(hex: 0x1F6BA8)
+    static let statsIntensity4 = Color(hex: 0x3D9EF0)
+
     init(hex: UInt32) {
         self.init(
             .sRGB,
@@ -49,6 +60,17 @@ extension Color {
             green: Double((hex >> 8) & 0xFF) / 255,
             blue: Double(hex & 0xFF) / 255,
             opacity: 1)
+    }
+
+    /// `DayActivity.intensityLevel` (0...4) -> the matching ramp step.
+    static func statsIntensity(level: Int) -> Color {
+        switch level {
+        case ...0: return .statsIntensity0
+        case 1: return .statsIntensity1
+        case 2: return .statsIntensity2
+        case 3: return .statsIntensity3
+        default: return .statsIntensity4
+        }
     }
 }
 

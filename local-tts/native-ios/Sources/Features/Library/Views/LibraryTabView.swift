@@ -69,7 +69,8 @@ struct LibraryTabView: View {
                     chapterPlayer: app.chapterPlayer,
                     generationStore: app.generationStore,
                     viewModel: app.tts,
-                    previewPlayer: app.previewPlayer)
+                    previewPlayer: app.previewPlayer,
+                    readingStats: app.readingStats)
             }
             // Root tab bar/floating "+" button only at this screen's own
             // root — see NavigationChromeVisibility.
