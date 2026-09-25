@@ -11,7 +11,6 @@ final class PDFImportManager: ObservableObject {
     static let backgroundTaskIdentifier = "com.rehanchoudhury.kokoroanetest.pdf-import"
 
     @Published private(set) var jobs: [PDFImportJob] = []
-    @Published var isDocumentPickerPresented = false
 
     private let library: LibraryViewModel
     private var processingTasks: [UUID: Task<Void, Never>] = [:]
@@ -20,10 +19,6 @@ final class PDFImportManager: ObservableObject {
         self.library = library
         jobs = Self.loadJobs()
         Task { await resumeInterruptedJobs() }
-    }
-
-    func requestDocumentPicker() {
-        isDocumentPickerPresented = true
     }
 
     /// Copies the picked file while its security-scoped permission is active,

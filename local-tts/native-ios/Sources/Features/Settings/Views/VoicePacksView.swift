@@ -1,10 +1,10 @@
 import LucideSwift
 import SwiftUI
 
-/// Settings > Voice Packs — real download/size status for every engine's
-/// packs (see issue #9). Deletion isn't offered yet: Kokoro's pack is
-/// bundled with the app (nothing to re-download if removed), and Pocket
-/// has no re-download-on-demand path from here yet — flagged as a follow-up
+/// Settings > Voice Packs — real download/size status for each Kokoro pack
+/// (see issue #9). Deletion isn't offered yet: English's pack is bundled with
+/// the app (nothing to re-download if removed), and the downloaded variants
+/// have no re-download-on-demand path from here yet — flagged as a follow-up
 /// in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
 struct VoicePacksView: View {
     @ObservedObject var viewModel: TTSViewModel
@@ -22,10 +22,6 @@ struct VoicePacksView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
-    private var pocketSizeBytes: Int64 {
-        DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
-    }
-
     var body: some View {
         List {
             Section {
@@ -39,11 +35,6 @@ struct VoicePacksView: View {
                     subtitle: "\(TTSViewModel.mandarinVoices.count) Mandarin voices",
                     isReady: packs.isKokoroPackReady(.mandarin),
                     sizeBytes: packs.isKokoroPackReady(.mandarin) ? kokoroMandarinSizeBytes : nil)
-                packRow(
-                    title: "Pocket TTS",
-                    subtitle: "\(TTSViewModel.pocketVoices.count) English voices",
-                    isReady: packs.isPocketPackDownloaded,
-                    sizeBytes: packs.isPocketPackDownloaded ? pocketSizeBytes : nil)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }

@@ -1,9 +1,9 @@
-import AVFoundation
 import FluidAudio
+import Foundation
 
-/// Long-lived instances shared across the app's TTS engines — created once
-/// here (not per-View-init) so the CoreML managers and the AVAudioEngine
-/// graph aren't torn down and rebuilt on every SwiftUI re-render.
+/// Long-lived instances shared across the app's Kokoro engines — created
+/// once here (not per-View-init) so the CoreML managers aren't torn down
+/// and rebuilt on every SwiftUI re-render.
 final class DependencyContainer {
     // FluidAudio's own hosted ANE repo only publishes af_heart (a real
     // model-conversion constraint, not a missing download — see
@@ -89,8 +89,7 @@ final class DependencyContainer {
     // Mandarin/Japanese have no bundled fallback like English's
     // CustomKokoroModel/ — FluidAudio's own hosted ANE-zh/ANE-ja repos have
     // everything needed (7-stage chain + G2P frontend assets + voices), so
-    // these are real, network-downloaded managers, same shape as the
-    // Pocket managers below. `directory: nil` lets
+    // these are real, network-downloaded managers. `directory: nil` lets
     // KokoroAneResourceDownloader use its own default cache location.
     let kokoroMandarinManager = KokoroAneManager(variant: .mandarin, defaultVoice: "zf_001")
     // Japanese requires FluidAudio pinned past v0.15.7 (see project.yml) —
@@ -98,35 +97,6 @@ final class DependencyContainer {
     // variant before FluidInference/FluidAudio#915 added a real MeCab +
     // Cutlet text frontend.
     let kokoroJapaneseManager = KokoroAneManager(variant: .japanese, defaultVoice: "jf_alpha")
-
-    // One manager per language — PocketTtsManager.language is fixed at
-    // init ("to switch languages, create a new manager", per the SDK's own
-    // doc comment), so supporting multiple languages means multiple
-    // instances, not a mutable property on one. All share the audio
-    // engine/node below (that's output-only plumbing, not per-manager
-    // state — only one language ever generates/plays at a time).
-    //
-    // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
-    // (rank-4 flowlm_step_ane/cond_prefill_ane) instead of GPU — the SDK
-    // defaults to .gpu, but that default is benchmarked on M-series Macs;
-    // .ane is documented as the iOS-appropriate placement. Precision is
-    // ignored under .ane (those variants are fp16-only).
-    let pocketManagers: [PocketLanguage: PocketTtsManager] = Dictionary(
-        uniqueKeysWithValues: PocketLanguage.allCases.map {
-            ($0, PocketTtsManager(language: $0.sdkLanguage, placement: .ane))
-        })
-
-    // PocketTTS streams 80ms frames rather than one complete WAV, so
-    // playback goes through AVAudioEngine/AVAudioPlayerNode (which accepts
-    // buffers incrementally) instead of AVAudioPlayer (which needs the
-    // whole file up front).
-    let audioEngine = AVAudioEngine()
-    let playerNode = AVAudioPlayerNode()
-    let streamFormat = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32,
-        sampleRate: Double(PocketTtsConstants.audioSampleRate),
-        channels: 1,
-        interleaved: false)!
 
     // Lazy so opening/creating the SwiftData store doesn't tax cold
     // launch — only constructed on first actual use (the reader's first

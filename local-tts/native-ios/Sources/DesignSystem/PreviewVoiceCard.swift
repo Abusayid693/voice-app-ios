@@ -1,7 +1,7 @@
 import Hugeicons
 import SwiftUI
 
-/// One voice's row in Trending voices: cover image, name, a short persona
+/// One voice's row in VoicesTabView's grid: cover image, name, a short persona
 /// tagline, and a trailing play/pause indicator (reflects whether this
 /// voice's preview is the one currently playing, started from
 /// VoicePreviewSheet). The whole card is the tap target — tapping opens

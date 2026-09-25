@@ -7,14 +7,41 @@ enum BookShelfPalette {
     static let secondaryText = Color(hex: 0x686761)
 }
 
+/// Progressive blur under Home's floating header controls: one
+/// `.ultraThinMaterial` band whose gradient mask starts fading immediately,
+/// so the softening is strongest behind the icons and gone well before the
+/// shelf title. Deliberately a single light layer — stacked materials read
+/// as an opaque frosted panel rather than a gentle edge. Shelf content
+/// scrolls underneath it.
+struct ShelfTopBlur: View {
+    /// Roughly the status bar plus `BookShelfView.headerControlsInset`.
+    var height: CGFloat = 104
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask(
+                LinearGradient(
+                    colors: [.black, .black.opacity(0.35), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom))
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// A focused, cover-led view of newly imported PDF projects. It deliberately
 /// reads the existing LibraryViewModel index rather than maintaining another
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
+    // Passed through to a narrow child observer so per-page import progress
+    // does not invalidate the full shelf and its cover geometry.
+    let pdfImports: PDFImportManager
     let readingStats: ReadingStatsStore
     @Binding var isDetailPresented: Bool
-    let onAddBooks: () -> Void
     let onOpenBook: (SavedGenerationSummary) -> Void
 
     @State private var selectedBook: SavedGenerationSummary?
@@ -35,6 +62,9 @@ struct BookShelfView: View {
     // of appearing to pass straight through it.
     @State private var liftOffset: CGFloat = 0
     private let liftDistance: CGFloat = 15
+    /// Height of `ImportHomeView`'s floating header controls (4pt top pad +
+    /// a 44pt tap target), reserved at the top of the scroll content.
+    static let headerControlsInset: CGFloat = 48
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var books: [SavedGenerationSummary] {
@@ -53,10 +83,12 @@ struct BookShelfView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
+            ZStack {
                 ScrollView {
                     VStack(spacing: 0) {
                         shelfHeader
+
+                        ShelfImportJobsSection(manager: pdfImports)
 
                         if books.isEmpty {
                             emptyState
@@ -65,41 +97,17 @@ struct BookShelfView: View {
                             shelf(for: geometry.size.width)
                         }
                     }
+                    // Home draws its Settings/avatar controls as a floating
+                    // overlay rather than a navigation bar (see
+                    // ImportHomeView.headerControls), so the shelf reserves
+                    // that height itself instead of inheriting a bar inset.
+                    .padding(.top, Self.headerControlsInset)
                     // Keep only a small trailing inset so shelves can pass
                     // underneath the progressive blur and Add Books action.
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDisabled(selectedBook != nil)
-                .allowsHitTesting(selectedBook == nil)
-                .accessibilityHidden(selectedBook != nil)
-
-                ShelfBottomBlur()
-                    // The GeometryReader ends at the content safe area;
-                    // extend and move the blur through the remaining inset
-                    // so it reaches the physical bottom edge of the screen.
-                    .frame(height: 96 + geometry.safeAreaInsets.bottom)
-                    .frame(maxWidth: .infinity)
-                    .offset(y: geometry.safeAreaInsets.bottom)
-                    .ignoresSafeArea(edges: .bottom)
-                    .allowsHitTesting(false)
-
-                Button(action: onAddBooks) {
-                    HStack(spacing: 6) {
-                        // .secondary applies Color.secondaryButtonText via
-                        // .foregroundStyle to the whole label, which Text
-                        // picks up ambiently — LucideIcon needs it passed
-                        // explicitly to match, same as every other call site.
-                        LucideIcon(.plus, size: 16, color: Color.secondaryButtonText)
-                        Text("Add books")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-                .padding(.bottom, 18)
-                .accessibilityLabel("Add books")
-                // Stays in place, dimmed behind the modal's backdrop, rather
-                // than disappearing outright while the book detail is open.
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
 
@@ -202,7 +210,7 @@ struct BookShelfView: View {
             Text("No PDF books yet")
                 .font(AppTextStyle.body.font)
                 .foregroundStyle(BookShelfPalette.primaryText)
-            Text("Import a PDF from Home to add it to your shelf.")
+            Text("Tap Add Books below to add a PDF to your shelf.")
                 .font(AppTextStyle.label.font)
                 .foregroundStyle(BookShelfPalette.secondaryText)
                 .multilineTextAlignment(.center)
@@ -384,20 +392,26 @@ struct BookShelfView: View {
     }
 }
 
-/// Mirrors the reader's navigation chrome at the bottom edge without adding
-/// a solid bar: the material begins clear and gradually gains blur near the
-/// safe area.
-private struct ShelfBottomBlur: View {
+/// The import manager publishes page-by-page progress. Keeping that
+/// observation in this child avoids rebuilding the shelf's measured covers.
+private struct ShelfImportJobsSection: View {
+    @ObservedObject var manager: PDFImportManager
+
+    private var visibleJobs: [PDFImportJob] {
+        manager.jobs.filter { $0.phase != .completed && $0.phase != .cancelled }
+    }
+
+    @ViewBuilder
     var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .mask {
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.55), .black],
-                    startPoint: .top,
-                    endPoint: .bottom)
+        if !visibleJobs.isEmpty {
+            VStack(spacing: 10) {
+                ForEach(visibleJobs.prefix(2)) { job in
+                    PDFImportJobCard(job: job, manager: manager)
+                }
             }
-            .accessibilityHidden(true)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
     }
 }
 
@@ -874,9 +888,9 @@ private struct GlassBookShelf: View {
     return NavigationStack {
         BookShelfView(
             library: app.library,
+            pdfImports: app.pdfImports,
             readingStats: app.readingStats,
             isDetailPresented: .constant(false),
-            onAddBooks: {},
             onOpenBook: { _ in })
     }
 }

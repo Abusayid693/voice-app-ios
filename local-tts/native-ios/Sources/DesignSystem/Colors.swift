@@ -4,8 +4,8 @@ import SwiftUI
 /// supplied mockup) — not theme-adaptive, used deliberately regardless of
 /// system light/dark mode.
 extension Color {
-    static let appBackground = Color(hex: 0x111111)
-    static let appSecondaryBackground = Color(hex: 0x222222)
+    static let appBackground = Color(hex: 0x0A0A0A)
+    static let appSecondaryBackground = Color(hex: 0x1A1A1A)
     static let appPrimaryText = Color(hex: 0xEEEEEE)
     static let appSecondaryText = Color(hex: 0x949599)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
@@ -42,16 +42,19 @@ extension Color {
     static let chunkHighlightBackground = Color(hex: 0x0E2439)
     static let wordHighlightBackground = Color(hex: 0x1F5182)
 
-    // ReadingStatsView's contribution graph — a 5-step intensity ramp
-    // (0 = no activity that day) in the same blue family as the read-
-    // along's own chunk/word highlight pair above, for visual consistency
-    // with this app's other "listening activity" indicator rather than
-    // borrowing GitHub's green convention.
-    static let statsIntensity0 = Color(hex: 0x1A1A1A)
-    static let statsIntensity1 = Color(hex: 0x123049)
-    static let statsIntensity2 = Color(hex: 0x1A4A73)
-    static let statsIntensity3 = Color(hex: 0x1F6BA8)
-    static let statsIntensity4 = Color(hex: 0x3D9EF0)
+    // ReadingStatsView's contribution graph (and Book Shelf's own small
+    // teaser dots — see ImportHomeView.recentActivityDots) — a 5-step
+    // intensity ramp (0 = no activity that day) as increasing ink opacity
+    // over `BookShelfPalette`'s light background, rather than a hue ramp —
+    // reads as dots lighting up, not a GitHub-style color-coded heatmap.
+    // Ink-on-paper, not white-on-dark: Reading Stats is reached from the
+    // light Book Shelf page and themed to match it, not the rest of the
+    // app's dark chrome.
+    static let statsIntensity0 = BookShelfPalette.primaryText.opacity(0.08)
+    static let statsIntensity1 = BookShelfPalette.primaryText.opacity(0.32)
+    static let statsIntensity2 = BookShelfPalette.primaryText.opacity(0.55)
+    static let statsIntensity3 = BookShelfPalette.primaryText.opacity(0.78)
+    static let statsIntensity4 = BookShelfPalette.primaryText
 
     init(hex: UInt32) {
         self.init(
@@ -70,31 +73,6 @@ extension Color {
         case 2: return .statsIntensity2
         case 3: return .statsIntensity3
         default: return .statsIntensity4
-        }
-    }
-}
-
-/// Presentation values for the app-wide Home modes. Keeping these in the
-/// design system leaves `HomeMode` as persistable, UI-independent data.
-extension HomeMode {
-    var background: Color {
-        switch self {
-        case .studio: .appBackground
-        case .reading: .whitePaper
-        }
-    }
-
-    var primaryText: Color {
-        switch self {
-        case .studio: .appPrimaryText
-        case .reading: Color(hex: 0x171715)
-        }
-    }
-
-    var colorScheme: ColorScheme {
-        switch self {
-        case .studio: .dark
-        case .reading: .light
         }
     }
 }
@@ -226,8 +204,7 @@ extension LinearGradient {
     /// (a book id) — the same seed always yields the same colors, so a
     /// placeholder shown while real artwork loads doesn't flicker to a
     /// different color on every redraw. Voice cover art uses `OrbCoverArt`
-    /// instead (`DesignSystem/OrbCoverArt.swift`); this remains for
-    /// `OpenLibraryBookCard`'s book covers, which have no orb equivalent.
+    /// instead; this remains for saved projects without a rendered cover.
     static func stablePlaceholder(seed: String) -> LinearGradient {
         let pairs: [[Color]] = [
             [.pink, .purple], [.blue, .teal], [.orange, .red],

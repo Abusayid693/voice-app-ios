@@ -81,23 +81,16 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
 /// pre-existing hazard, not introduced here, and not addressed by this
 /// file.
 enum AppTextStyle {
-    /// In-content hero/sheet heading, e.g. a recording timer readout.
+    /// In-content hero/sheet heading.
     case title
     /// Same heading, over photographic imagery rather than appBackground.
     case titleOnImage
-    /// Long-form reading/editing text — read-along chunks, the write/edit
-    /// text areas, a saved generation's original text.
-    case reading
-    /// A read-along chunk that isn't the current one.
-    case readingMuted
     /// A section header sitting above a horizontally scrolling row.
     case sectionTitle
     /// A card's own title (voice tile, book cover, hero card).
     case cardTitle
     /// A list/row title — settings rows, project rows, action tiles.
     case rowTitle
-    /// The same row title, dimmed for an unavailable/disabled row.
-    case rowTitleMuted
     /// Secondary prose: a row's subtitle, a settings value, body copy
     /// under a heading.
     case body
@@ -112,12 +105,8 @@ enum AppTextStyle {
     case labelDim
     /// A compact card's own title, or a pill/badge label.
     case labelStrong
-    /// Inline error text at label size.
-    case labelError
     /// The finest tier: timestamps, file sizes, progress percentages.
     case meta
-    /// Inline error text at meta size.
-    case metaError
 
     var font: Font {
         switch self {
@@ -125,33 +114,29 @@ enum AppTextStyle {
             return .system(size: 32, weight: .medium)
         case .titleOnImage:
             return .system(size: 24, weight: .medium)
-        case .reading, .readingMuted:
-            return .system(size: 17, weight: .regular)
         case .sectionTitle:
             return .system(size: 18, weight: .medium)
-        case .cardTitle, .rowTitle, .rowTitleMuted, .body, .bodyStrong:
+        case .cardTitle, .rowTitle, .body, .bodyStrong:
             return .system(size: 16, weight: .medium)
         case .labelStrong:
             return .system(size: 14, weight: .medium)
-        case .label, .labelDim, .labelError:
+        case .label, .labelDim:
             return .system(size: 14, weight: .regular)
-        case .meta, .metaError:
+        case .meta:
             return .system(size: 12, weight: .medium)
         }
     }
 
     fileprivate var color: Color {
         switch self {
-        case .title, .reading, .sectionTitle, .cardTitle, .rowTitle, .bodyStrong, .labelStrong:
+        case .title, .sectionTitle, .cardTitle, .rowTitle, .bodyStrong, .labelStrong:
             return .appPrimaryText
         case .titleOnImage:
             return .white
-        case .readingMuted, .rowTitleMuted, .body, .label:
+        case .body, .label:
             return .appSecondaryText
         case .labelDim:
             return .appTertiaryText
-        case .labelError, .metaError:
-            return .red
         case .meta:
             return .appMetaText
         }

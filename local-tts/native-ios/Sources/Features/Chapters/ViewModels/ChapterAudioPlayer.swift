@@ -8,7 +8,7 @@ import Foundation
 /// `stop()` then start the new one — the same shape
 /// `VoicePreviewPlayer.toggle` already proves correct. Kept off
 /// `TTSViewModel` per this app's own re-render rule: the scrubber ticks
-/// ~4x/sec, and `TTSViewModel`-observing views (the Trending carousel,
+/// ~4x/sec, and `TTSViewModel`-observing views (VoicesTabView's grid,
 /// voice pickers) shouldn't re-render for that.
 ///
 /// Streaming has two independent cursors, not one: synthesis always marches

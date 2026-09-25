@@ -22,28 +22,4 @@ enum VoicePackSizeService {
                 "https://huggingface.co/api/models/FluidInference/kokoro-82m-coreml/tree/main/\(subdirectory)?recursive=true",
             matching: { _ in true })
     }
-
-    /// Same idea for a PocketTTS language pack — but that directory also holds
-    /// the GPU/int8 variants, the MLState package and the uncompiled
-    /// `.mlpackage` sources, none of which `ensureModels(placement: .ane)`
-    /// downloads. Filtering to the components it actually fetches keeps the
-    /// total honest.
-    static func pocketTotalBytes(language: PocketLanguage) async -> Int64? {
-        // `sdkLanguage.rawValue` matches the real v2.1/<name>/ folder name for
-        // every case — verified against the HuggingFace listing, not assumed.
-        // All five came back the same size (~527MB) under this filter, see
-        // docs/adr/0011-pocket-tts-language-packs.md.
-        let langPath = language.sdkLanguage.rawValue
-        let required = [
-            "v2.1/\(langPath)/cond_prefill_ane.mlmodelc/",
-            "v2.1/\(langPath)/flowlm_step_ane.mlmodelc/",
-            "v2.1/\(langPath)/flow_decoder_fused.mlmodelc/",
-            "v2.1/\(langPath)/mimi_decoder.mlmodelc/",
-            "v2.1/\(langPath)/constants_bin/",
-        ]
-        return await HuggingFaceTreeSizeFetcher.fetchTotalBytes(
-            url:
-                "https://huggingface.co/api/models/FluidInference/pocket-tts-coreml/tree/main/v2.1/\(langPath)?recursive=true",
-            matching: { path in required.contains { path.hasPrefix($0) } })
-    }
 }

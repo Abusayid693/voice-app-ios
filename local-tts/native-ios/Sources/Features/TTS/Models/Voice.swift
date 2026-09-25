@@ -9,8 +9,8 @@ import Foundation
 /// forget the rest.
 ///
 /// Everything optional is genuinely optional: a voice with no persona
-/// research behind it (Pocket TTS, Japanese) carries `nil` rather than an
-/// invented tagline.
+/// research behind it (Japanese) carries `nil` rather than an invented
+/// tagline.
 struct Voice: Identifiable, Hashable, Sendable {
     /// The exact code the engine expects (`af_heart`, `zf_xiaobei`, `alba`).
     let code: String
@@ -60,8 +60,7 @@ enum VoiceCode {
         "hf_": "🇮🇳", "hm_": "🇮🇳",
     ]
 
-    /// Pocket TTS voices are named after audiobook narrators with no locale
-    /// in the name at all — they fall back to US English. Flag this
+    /// A code with no recognized prefix falls back to US English. Flag this
     /// assumption if it turns out wrong for a specific voice.
     private static let defaultFlag = "🇺🇸"
 

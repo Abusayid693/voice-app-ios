@@ -5,7 +5,6 @@ struct KokoroAneTestApp: App {
     @Environment(\.scenePhase) private var scenePhase
     private let dependencies = DependencyContainer()
     private let viewModel: TTSViewModel
-    private let voiceCloneViewModel: VoiceCloneViewModel
     private let libraryViewModel: LibraryViewModel
     private let pdfImportManager: PDFImportManager
     private let previewPlayer = VoicePreviewPlayer()
@@ -26,7 +25,6 @@ struct KokoroAneTestApp: App {
         PDFImportManager.registerBackgroundTask(manager: pdfImportManager)
         readingStatsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         viewModel = TTSViewModel(dependencies: dependencies)
-        voiceCloneViewModel = VoiceCloneViewModel(dependencies: dependencies)
         chapterSynthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
         chapterGenerationStore = ChapterGenerationStore(synthesisService: chapterSynthesisService)
         chapterPlayer = ChapterAudioPlayer(
@@ -40,7 +38,7 @@ struct KokoroAneTestApp: App {
 
     private var appEnvironment: AppEnvironment {
         AppEnvironment(
-            tts: viewModel, voiceClone: voiceCloneViewModel, library: libraryViewModel,
+            tts: viewModel, library: libraryViewModel,
             pdfImports: pdfImportManager, previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
             generationStore: chapterGenerationStore, readingStats: dependencies.readingStatsStore,
             navigationChrome: navigationChrome)

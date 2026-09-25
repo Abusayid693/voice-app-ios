@@ -38,8 +38,8 @@ enum ShelfAvatar: String, CaseIterable, Identifiable {
 /// Reached by tapping ImportHomeView's navigation-bar looping avatar clip
 /// (Reading mode) — a plain list of the bundled avatar options, each with
 /// its own live looping preview. Styled after BookShelfPalette's light
-/// surface (not the app's global dark sheet palette CreateVoiceSheet uses),
-/// since this is reached from within Home's Reading mode, not Import/VoiceClone.
+/// surface (not the app's global dark sheet palette),
+/// since this is reached from within Home's Reading mode.
 struct ShelfAvatarPickerSheet: View {
     @Binding var selection: ShelfAvatar
     @Environment(\.dismiss) private var dismiss

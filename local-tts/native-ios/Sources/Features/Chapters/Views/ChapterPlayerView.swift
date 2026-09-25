@@ -124,7 +124,6 @@ private struct VerticalNumberSlider: View {
 struct ChapterPlayerView: View {
     let project: SavedGeneration
     let library: LibraryViewModel
-    let voiceCloneViewModel: VoiceCloneViewModel
     let previewPlayer: VoicePreviewPlayer
     let readingStats: ReadingStatsStore
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
@@ -252,7 +251,7 @@ struct ChapterPlayerView: View {
 
     init(
         project: SavedGeneration, initialPageIndex: Int? = nil,
-        library: LibraryViewModel, voiceCloneViewModel: VoiceCloneViewModel,
+        library: LibraryViewModel,
         chapterPlayer: ChapterAudioPlayer,
         generationStore: ChapterGenerationStore,
         viewModel: TTSViewModel,
@@ -261,7 +260,6 @@ struct ChapterPlayerView: View {
     ) {
         self.project = project
         self.library = library
-        self.voiceCloneViewModel = voiceCloneViewModel
         self.previewPlayer = previewPlayer
         self.readingStats = readingStats
         _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
@@ -284,7 +282,7 @@ struct ChapterPlayerView: View {
     }
 
     private var isCurrentKokoroPageActive: Bool {
-        project.engine == .kokoroAne && chapterPlayer.isActive(pageRef)
+        chapterPlayer.isActive(pageRef)
     }
 
     private var visibleChunkTexts: [String] {
@@ -317,9 +315,7 @@ struct ChapterPlayerView: View {
                 animatedPageTitle
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if project.engine == .kokoroAne {
-                    generationToolbarControl
-                }
+                generationToolbarControl
                 Button {
                     isOptionsSheetPresented = true
                 } label: {
@@ -347,7 +343,6 @@ struct ChapterPlayerView: View {
             VoiceSettingsSheet(
                 viewModel: viewModel,
                 packs: viewModel.packs,
-                voiceCloneViewModel: voiceCloneViewModel,
                 previewPlayer: previewPlayer,
                 restrictedEngine: project.engine,
                 selectedVoiceName: selectedVoiceName,
@@ -708,25 +703,19 @@ struct ChapterPlayerView: View {
 
     // MARK: - Floating player
 
-    @ViewBuilder
     private var floatingPlayer: some View {
-        if project.engine == .kokoroAne {
-            ZStack(alignment: .bottom) {
-                if isPlayerCollapsed {
-                    compactPlayer
-                        .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-                } else {
-                    expandedPlayer
-                        .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
-                }
+        ZStack(alignment: .bottom) {
+            if isPlayerCollapsed {
+                compactPlayer
+                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+            } else {
+                expandedPlayer
+                    .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
             }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-            .offset(y: 25)
         }
-        // Kokoro is the only engine that reaches the reader — a legacy
-        // project whose persisted engine is still .pocketTts (Pocket is
-        // Studio-only now) simply shows no floating player.
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+        .offset(y: 25)
     }
 
     private var expandedPlayer: some View {

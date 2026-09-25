@@ -4,10 +4,10 @@ import SwiftUI
 /// App settings — reached through Home's persistent trailing gear. Setup is
 /// a normal destination; Voice Packs / Storage remain read-only views of
 /// real on-disk state, and About reports the bundle version (see issue #9).
+/// Reading Stats moved out of here — it's now reached directly from Book
+/// Shelf's weekly activity dots (see `ImportHomeView`), not this sheet.
 struct SettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
-    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
-    let readingStats: ReadingStatsStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -25,16 +25,9 @@ struct SettingsSheet: View {
                         row(title: "Voice Packs", icon: .packageIcon)
                     }
                     NavigationLink {
-                        StorageView(
-                            viewModel: viewModel, voiceCloneViewModel: voiceCloneViewModel,
-                            packs: viewModel.packs)
+                        StorageView(viewModel: viewModel, packs: viewModel.packs)
                     } label: {
                         row(title: "Storage", icon: .hardDrive)
-                    }
-                    NavigationLink {
-                        ReadingStatsView(readingStats: readingStats)
-                    } label: {
-                        row(title: "Reading Stats", icon: .chartColumn)
                     }
                     NavigationLink {
                         AboutView()
@@ -73,8 +66,5 @@ struct SettingsSheet: View {
 
 #Preview {
     let dependencies = DependencyContainer()
-    SettingsSheet(
-        viewModel: TTSViewModel(dependencies: dependencies),
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        readingStats: dependencies.readingStatsStore)
+    SettingsSheet(viewModel: TTSViewModel(dependencies: dependencies))
 }

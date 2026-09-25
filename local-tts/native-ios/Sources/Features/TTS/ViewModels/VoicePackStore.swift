@@ -18,7 +18,6 @@ final class VoicePackStore: ObservableObject {
     // MARK: - Inventory
 
     @Published private(set) var kokoroDownloadedVariants: Set<KokoroVariant> = []
-    @Published private(set) var pocketDownloadedLanguages: Set<PocketLanguage> = []
 
     /// Where the bundled English pack lives (nil if the bundled-copy step in
     /// `DependencyContainer` failed) — Settings reports real on-disk sizes.
@@ -27,9 +26,9 @@ final class VoicePackStore: ObservableObject {
     /// front, only once a download actually resolves it, and it's deliberately
     /// not persisted: FluidAudio's default-cache-directory logic is private,
     /// so the path can't be recomputed without calling back into the SDK.
-    /// Settings shows this pack's size as unknown until Setup or Write runs
-    /// with Mandarin selected at least once per launch — the same known
-    /// imprecision ADR 7 documents for Pocket TTS.
+    /// Settings shows this pack's size as unknown until Setup runs with
+    /// Mandarin selected at least once per launch — the same known
+    /// imprecision ADR 7 documents.
     @Published private(set) var kokoroMandarinModelDirectory: URL?
 
     // MARK: - Download progress
@@ -41,8 +40,6 @@ final class VoicePackStore: ObservableObject {
     @Published private(set) var fraction: Double = 0
     @Published private(set) var downloadedBytes: Int64 = 0
     @Published private(set) var totalBytes: Int64?
-    /// "3 / 47" file counter, when the SDK is in its downloading phase.
-    @Published private(set) var fileProgress: String?
     /// Set only once a real download event fires. Packs persist on disk across
     /// launches, so `ensureModels()` is cheap and network-free on a fresh
     /// launch even with nothing loaded in memory — gating the download UI on
@@ -50,14 +47,10 @@ final class VoicePackStore: ObservableObject {
     @Published private(set) var didDownload = false
 
     private static let kokoroDownloadedVariantsDefaultsKey = "kokoroDownloadedVariants"
-    private static let pocketPackDownloadedLanguagesDefaultsKey = "pocketPackDownloadedLanguages"
-    // Original single-language flag, kept only to migrate existing installs.
-    private static let legacyPocketPackDownloadedBoolKey = "pocketPackDownloaded"
 
     init(kokoroModelDirectory: URL?, isKokoroPackBundled: Bool) {
         self.kokoroModelDirectory = kokoroModelDirectory
         kokoroDownloadedVariants = Self.loadKokoroDownloadedVariants(bundledEnglish: isKokoroPackBundled)
-        pocketDownloadedLanguages = Self.loadPocketDownloadedLanguages()
     }
 
     // MARK: - Readiness
@@ -67,15 +60,6 @@ final class VoicePackStore: ObservableObject {
     func isKokoroPackReady(_ variant: KokoroVariant) -> Bool {
         kokoroDownloadedVariants.contains(variant)
     }
-
-    func isPocketPackDownloaded(_ language: PocketLanguage) -> Bool {
-        pocketDownloadedLanguages.contains(language)
-    }
-
-    /// Convenience for call sites that predate multi-variant/multi-language
-    /// support and only ever meant the original English pack.
-    var isKokoroPackReady: Bool { isKokoroPackReady(.english) }
-    var isPocketPackDownloaded: Bool { isPocketPackDownloaded(.english) }
 
     // MARK: - Recording what's downloaded
 
@@ -93,13 +77,6 @@ final class VoicePackStore: ObservableObject {
             kokoroDownloadedVariants.map(\.rawValue), forKey: Self.kokoroDownloadedVariantsDefaultsKey)
     }
 
-    func markPocketDownloaded(_ language: PocketLanguage) {
-        pocketDownloadedLanguages.insert(language)
-        UserDefaults.standard.set(
-            pocketDownloadedLanguages.map(\.rawValue),
-            forKey: Self.pocketPackDownloadedLanguagesDefaultsKey)
-    }
-
     private static func loadKokoroDownloadedVariants(bundledEnglish: Bool) -> Set<KokoroVariant> {
         var variants: Set<KokoroVariant> = []
         if let rawValues = UserDefaults.standard.array(forKey: kokoroDownloadedVariantsDefaultsKey)
@@ -111,16 +88,6 @@ final class VoicePackStore: ObservableObject {
         // bundled copy succeeds, every launch.
         if bundledEnglish { variants.insert(.english) }
         return variants
-    }
-
-    private static func loadPocketDownloadedLanguages() -> Set<PocketLanguage> {
-        let defaults = UserDefaults.standard
-        if let rawValues = defaults.array(forKey: pocketPackDownloadedLanguagesDefaultsKey) as? [String] {
-            return Set(rawValues.compactMap(PocketLanguage.init(rawValue:)))
-        }
-        // Pre-multi-language installs only ever had English — migrate the old
-        // bool so those users don't lose an already-downloaded pack.
-        return defaults.bool(forKey: legacyPocketPackDownloadedBoolKey) ? [.english] : []
     }
 
     // MARK: - Progress
@@ -151,20 +118,11 @@ final class VoicePackStore: ObservableObject {
         switch progress.phase {
         case .listing:
             return "Listing model files…"
-        case .downloading(let completedFiles, let totalFiles):
-            fileProgress = "\(completedFiles) / \(totalFiles)"
+        case .downloading:
             return "Downloading model…"
         case .compiling:
             return "Compiling…"
         }
-    }
-
-    func resetProgress() {
-        fraction = 0
-        downloadedBytes = 0
-        totalBytes = nil
-        fileProgress = nil
-        didDownload = false
     }
 
     var progressLabel: String {

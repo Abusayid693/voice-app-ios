@@ -4,8 +4,9 @@ xcuserdata/
 DerivedData/
 .build/
 
-# Locally-converted Kokoro-ANE test models (~93MB) — regeneratable, see
-# docs/adr/0002-custom-kokoro-model-bundle.md for the exact recipe.
+# Locally-converted Kokoro-ANE test models (~93MB, laishere/kokoro-coreml —
+# see DependencyContainer.swift's own comment); no regeneration recipe is
+# preserved in-repo.
 local-tts/native-ios/CustomKokoroModel/
 
 # Throwaway validation experiments (e.g. inflect-v2-test) — not shipped

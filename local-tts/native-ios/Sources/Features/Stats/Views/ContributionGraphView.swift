@@ -1,57 +1,58 @@
 import SwiftUI
 
-/// GitHub-style contribution graph — one column per week, one row per
-/// weekday, horizontally scrollable so ~a year of weeks fits. Deliberately
-/// built from per-cell `Button`s rather than drawn with `Canvas`: each cell
-/// needs its own tap target to open that day's detail, not just a color.
+/// GitHub-style contribution graph, restyled as a flat grid of dots —
+/// chronological order (oldest first, most recent last), 18 per row,
+/// wrapping downward same as reading text. No scroll view of its own: it's
+/// meant to sit inside `ReadingStatsView`'s existing vertical `ScrollView`.
+/// Deliberately built from per-cell `Button`s rather than drawn with
+/// `Canvas`: each cell needs its own tap target to open that day's detail,
+/// not just a color.
 struct ContributionGraphView: View {
     let weeks: [[DayActivity?]]
     let onSelectDay: (Date) -> Void
 
-    private let cellSize: CGFloat = 12
-    private let cellSpacing: CGFloat = 3
+    private let cellSize: CGFloat = 11.2
+    private let cellSpacing: CGFloat = 10
+    private let columnsPerRow = 18
+
+    /// `weeks` groups by weekday column for a 7-wide layout this view no
+    /// longer uses, but it's already oldest-first within and across weeks —
+    /// flatten it and drop the `nil` padding that alignment needed, and the
+    /// chronological order falls out for free.
+    private var days: [DayActivity] {
+        weeks.flatMap { $0 }.compactMap { $0 }
+    }
 
     var body: some View {
-        ScrollView(.horizontal) {
-            LazyHGrid(
-                rows: Array(repeating: GridItem(.fixed(cellSize), spacing: cellSpacing), count: 7),
-                spacing: cellSpacing
-            ) {
-                ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
-                    ForEach(Array(week.enumerated()), id: \.offset) { _, activity in
-                        cell(for: activity)
-                    }
-                }
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: cellSpacing), count: columnsPerRow),
+            spacing: cellSpacing
+        ) {
+            ForEach(days) { activity in
+                cell(for: activity)
             }
-            .padding(.vertical, 4)
         }
-        .scrollIndicators(.hidden)
-        // Most recent week is the last column — land there, not at the
-        // (potentially very old) start of the tracked range.
-        .defaultScrollAnchor(.trailing)
         .accessibilityLabel("Reading activity by day")
     }
 
-    @ViewBuilder
-    private func cell(for activity: DayActivity?) -> some View {
-        if let activity {
-            Button {
-                onSelectDay(activity.day)
-            } label: {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.statsIntensity(level: activity.intensityLevel))
-                    .frame(width: cellSize, height: cellSize)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(accessibilityLabel(for: activity))
-        } else {
-            // Padding cell — before the tracked range started, or after
-            // today — no day exists here at all, not just "no activity".
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(Color.clear)
+    private func cell(for activity: DayActivity) -> some View {
+        Button {
+            onSelectDay(activity.day)
+        } label: {
+            Circle()
+                .fill(Color.statsIntensity(level: activity.intensityLevel))
                 .frame(width: cellSize, height: cellSize)
-                .accessibilityHidden(true)
+                // Wider tap target than the dot itself, without changing
+                // row height — a taller frame here was the row spacing
+                // bug: it pushed rows apart further than columns, since
+                // column spacing only ever comes from the grid's own
+                // `spacing`, never from cell content.
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel(for: activity))
     }
 
     private func accessibilityLabel(for activity: DayActivity) -> String {
@@ -67,7 +68,7 @@ struct ContributionGraphView: View {
 #Preview {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
-    let days: [DayActivity?] = (0..<28).map { offset in
+    let days: [DayActivity?] = (0..<64).map { offset in
         let day = calendar.date(byAdding: .day, value: -offset, to: today)!
         return DayActivity(
             day: day, listenedSeconds: Double([0, 120, 600, 1200, 2400].randomElement()!),
@@ -76,6 +77,6 @@ struct ContributionGraphView: View {
     let weeks = stride(from: 0, to: days.count, by: 7).map { Array(days[$0..<$0 + 7]) }
     return ContributionGraphView(weeks: weeks) { _ in }
         .padding()
-        .background(Color.appBackground)
-        .preferredColorScheme(.dark)
+        .background(BookShelfPalette.background)
+        .environment(\.colorScheme, .light)
 }

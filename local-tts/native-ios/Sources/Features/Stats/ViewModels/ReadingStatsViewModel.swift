@@ -10,17 +10,23 @@ import Foundation
 /// by the background actor.
 @MainActor
 final class ReadingStatsViewModel: ObservableObject {
-    /// One column per week, one row per weekday (Sunday-first) — `nil`
-    /// cells are padding before the tracked range started or after today,
-    /// keeping every column a full 7 days for a regular grid.
+    /// Grouped 7 per row (Sunday-first) — a layout `ContributionGraphView`
+    /// no longer renders directly (it now lays out a flat 18-per-row grid),
+    /// but this shape is kept as the fetch/aggregation boundary since it's
+    /// still a correct, order-preserving source: the view flattens it back
+    /// into a single chronological list. `nil` cells are padding before
+    /// Jan 1 or after Dec 31 of the current year, keeping every row a full
+    /// 7 days; the view drops those when it flattens.
     @Published private(set) var weeks: [[DayActivity?]] = []
     @Published private(set) var isLoading = false
     @Published private(set) var selectedDayDetail: DayDetail?
+    /// Seconds listened today — drives the half-circle goal gauge. Read
+    /// straight off the same `reload()` pass that builds `weeks` rather than
+    /// a separate fetch, since today is always the last real day in range.
+    @Published private(set) var todayListenedSeconds: Double = 0
 
     private let store: ReadingStatsStore
     private let calendar: Calendar
-    // ~1 year, GitHub-style.
-    private let weeksToShow = 53
 
     init(store: ReadingStatsStore, calendar: Calendar = .current) {
         self.store = store
@@ -32,17 +38,22 @@ final class ReadingStatsViewModel: ObservableObject {
         await reload()
     }
 
+    /// Every day of the current calendar year, January 1 through December
+    /// 31 — not a rolling window. Days later in the year than today have no
+    /// sessions yet, so they fall out naturally as empty (level 0) dots,
+    /// same convention as Book Shelf's own current-week teaser
+    /// (`ImportHomeView.recentActivityDots`).
     func reload() async {
         isLoading = true
         defer { isLoading = false }
-        let today = calendar.startOfDay(for: Date())
+        let year = calendar.component(.year, from: Date())
         guard
-            let rangeStart = calendar.date(
-                byAdding: .day, value: -(weeksToShow * 7 - 1), to: today),
-            let rangeEndExclusive = calendar.date(byAdding: .day, value: 1, to: today)
+            let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+            let yearEndExclusive = calendar.date(
+                from: DateComponents(year: year + 1, month: 1, day: 1))
         else { return }
 
-        let sessions = await store.sessions(from: rangeStart, to: rangeEndExclusive)
+        let sessions = await store.sessions(from: yearStart, to: yearEndExclusive)
 
         var listenedByDay: [Date: Double] = [:]
         var completedByDay: [Date: Int] = [:]
@@ -55,8 +66,8 @@ final class ReadingStatsViewModel: ObservableObject {
         }
 
         var days: [DayActivity] = []
-        var cursor = rangeStart
-        while cursor <= today {
+        var cursor = yearStart
+        while cursor < yearEndExclusive {
             days.append(
                 DayActivity(
                     day: cursor,
@@ -66,6 +77,7 @@ final class ReadingStatsViewModel: ObservableObject {
             cursor = next
         }
         weeks = Self.groupIntoWeeks(days, calendar: calendar)
+        todayListenedSeconds = listenedByDay[calendar.startOfDay(for: Date())] ?? 0
     }
 
     func selectDay(_ day: Date) async {

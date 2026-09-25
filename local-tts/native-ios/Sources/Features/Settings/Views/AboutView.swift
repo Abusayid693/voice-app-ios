@@ -19,9 +19,9 @@ struct AboutView: View {
                     Text(versionLabel).appText(.body)
                 }
                 HStack {
-                    Text("Engines").appText(.rowTitle)
+                    Text("Engine").appText(.rowTitle)
                     Spacer()
-                    Text("Kokoro-ANE, Pocket TTS").appText(.body)
+                    Text("Kokoro-ANE").appText(.body)
                 }
             }
             .listRowBackground(Color.appSecondaryBackground)

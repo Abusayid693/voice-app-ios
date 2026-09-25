@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// Settings > Storage — a real on-disk breakdown (see issue #9): both voice
-/// packs, the user's own cloned voices, and generated chapter audio
-/// (Features/Chapters), each computed from the actual directories they're
-/// written to (DiskStorage.directorySize), not an estimate.
+/// Settings > Storage — a real on-disk breakdown (see issue #9): the Kokoro
+/// packs and generated chapter audio (Features/Chapters), each computed from
+/// the actual directories they're written to (DiskStorage.directorySize),
+/// not an estimate.
 struct StorageView: View {
     @ObservedObject var viewModel: TTSViewModel
-    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     @ObservedObject var packs: VoicePackStore
 
     private var kokoroBytes: Int64 {
@@ -18,21 +17,11 @@ struct StorageView: View {
 
     // 0 (not shown as "unknown") while the exact directory hasn't been
     // resolved yet this session — see kokoroMandarinModelDirectory's doc
-    // comment. Total below still undercounts in that window, same known
-    // imprecision as Pocket's own whole-cache-dir measurement.
+    // comment. Total below still undercounts in that window.
     private var kokoroMandarinBytes: Int64 {
         guard packs.isKokoroPackReady(.mandarin), let directory = packs.kokoroMandarinModelDirectory
         else { return 0 }
         return DiskStorage.directorySize(at: directory)
-    }
-
-    private var pocketBytes: Int64 {
-        guard packs.isPocketPackDownloaded else { return 0 }
-        return DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
-    }
-
-    private var clonedVoicesBytes: Int64 {
-        DiskStorage.directorySize(at: ClonedVoice.directory)
     }
 
     // Generated chapter audio (Features/Chapters) — merged WAVs saved
@@ -44,7 +33,7 @@ struct StorageView: View {
     }
 
     private var totalBytes: Int64 {
-        kokoroBytes + kokoroMandarinBytes + pocketBytes + clonedVoicesBytes + savedGenerationsBytes
+        kokoroBytes + kokoroMandarinBytes + savedGenerationsBytes
     }
 
     var body: some View {
@@ -52,10 +41,6 @@ struct StorageView: View {
             Section {
                 row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
                 row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
-                row(title: "Pocket TTS pack", bytes: pocketBytes)
-                row(
-                    title: "My voices (\(voiceCloneViewModel.clonedVoices.count))",
-                    bytes: clonedVoicesBytes)
                 row(title: "Generated chapters", bytes: savedGenerationsBytes)
             }
             .listRowBackground(Color.appSecondaryBackground)
@@ -89,9 +74,6 @@ struct StorageView: View {
     let dependencies = DependencyContainer()
     let viewModel = TTSViewModel(dependencies: dependencies)
     NavigationStack {
-        StorageView(
-            viewModel: viewModel,
-            voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-            packs: viewModel.packs)
+        StorageView(viewModel: viewModel, packs: viewModel.packs)
     }
 }

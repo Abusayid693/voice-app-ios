@@ -12,6 +12,7 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ### Removed
 - The old Kokoro multi-track playlist system (`KokoroGeneration`, the chunk-scanning background worker, `ReadAlongPlayerView`, `KokoroGenerationListView`) and the retired `TTSHomeView`/`TextEntrySheet` debug screen, replaced by the chapters flow above
+- Pocket TTS and voice cloning removed entirely — Kokoro-ANE is the only engine. `Engine.pocketTts` is gone with no legacy decode path, so any saved project still naming it will fail to decode
 
 ## [0.1.0] - 2026-09-12
 

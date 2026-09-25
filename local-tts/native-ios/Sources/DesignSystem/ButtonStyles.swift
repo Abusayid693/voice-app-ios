@@ -6,10 +6,10 @@ import SwiftUI
 /// `.buttonStyle(.ghost)`. `.primary` is full-width by design (it's used
 /// only for standalone bottom-of-screen CTAs); `.secondary` sizes to its
 /// content, since its real call sites (a "Download" row action, a compact
-/// "Play"/"Re-record" pair) sit inline next to other content, not alone.
+/// inline control) sit inline next to other content, not alone.
 private let buttonLabelFont: Font = .system(size: 16, weight: .medium)
 
-/// Filled black CTA — the app's main action (Generate, Clone Voice, …).
+/// Filled black CTA — the app's main action (Generate, …).
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

@@ -1,77 +1,42 @@
 import Hugeicons
 import SwiftUI
+import UniformTypeIdentifiers
 
-enum RootTab: Hashable, CaseIterable, Identifiable {
-    case home, library, tools, voices
+/// A destination the Explore menu pushes onto Home's own navigation stack.
+/// Home is the app's single root, not one of these — they were four peer
+/// tabs before, each with its own stack; now Books *is* the app and the
+/// rest are routes off it.
+enum ExploreDestination: Hashable, CaseIterable, Identifiable {
+    case library, voices, tools
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .home: return "Home"
         case .library: return "Library"
-        case .tools: return "Tools"
         case .voices: return "Voices"
+        case .tools: return "Tools"
         }
     }
 
     var icon: HugeiconsAsset {
         switch self {
-        case .home: return Hugeicons.home01
         case .library: return Hugeicons.folderLibrary
-        case .tools: return Hugeicons.bolt
         case .voices: return Hugeicons.audioWave02
+        case .tools: return Hugeicons.bolt
         }
     }
 }
 
-/// App shell: 4 tabs (Home/Library/Tools/Voices) + a "+" quick-action
-/// button, all in one custom bottom bar (`CustomTabBar`) rather than the
-/// native `TabView` tab bar + a separately-floating button. That split
-/// used to exist — the native tab bar hid on pushed screens via
-/// `.toolbar(.hidden, for: .tabBar)` (UIKit-transition-timed) while the
-/// "+" button hid via our own `NavigationChromeVisibility` + `.animation`
-/// — and the two, being driven by different clocks, kept visibly
-/// desyncing (the "+" button appearing before the real tab bar finished
-/// reappearing). One custom bar means one `.transition`/`.animation`
-/// governs the whole thing's visibility, with nothing left to desync
-/// against.
-///
-/// Each tab root still owns its own `NavigationStack` and push state
-/// exactly as before — only the chrome around them changed. All 4 are
-/// kept unconditionally instantiated in `tabContent` (never `if
-/// selectedTab == tab { ... }`, which would tear down and rebuild a tab's
-/// `@State` on every switch) and shown/hidden via `.opacity` +
-/// `.allowsHitTesting` + `.accessibilityHidden`, reproducing the
-/// "each tab remembers where you left it" behavior `TabView` gave for
-/// free. Tapping "+" opens `QuickActionsSheet` (the same 8 actions as
-/// Home's action grids); only "Write text" does anything, by reusing
-/// Home's existing `isWriteTextPresented` pipeline rather than building a
-/// second one — see the `.sheet`'s `onDismiss` below.
-///
-/// Home now hosts the consumer-facing `ImportHomeView` (previously the
-/// separate "Import" tab).
+/// App shell: Home plus the floating Explore/Add Books bar. Everything the
+/// Explore menu offers is pushed within Home's stack, so there is only one
+/// mounted root and no tab state to preserve.
 struct RootTabView: View {
-    // This shell reads nothing off any of these itself — it only hands each
-    // tab root the objects that root actually observes. A plain `let` of a
-    // non-observable container (see AppEnvironment), so it subscribes to
-    // nothing.
     let app: AppEnvironment
-    // The one piece of `app` this shell genuinely reacts to (hides
-    // CustomTabBar on pushed screens) — taken as its own @ObservedObject,
-    // same as any other view that needs to observe something rather than
-    // just forward it. See NavigationChromeVisibility's doc comment.
     @ObservedObject private var navigationChrome: NavigationChromeVisibility
-    @State private var selectedTab: RootTab = .home
-    @State private var isQuickActionsPresented = false
-    @AppStorage("home.mode") private var storedHomeMode = HomeMode.studio.rawValue
-    // Set the instant "Write text" is chosen in QuickActionsSheet, but only
-    // acted on once this sheet's own onDismiss fires — mirrors
-    // ImportHomeView's own pendingProjectID, which exists for the same
-    // reason: two presentation-affecting writes in one SwiftUI transaction
-    // can silently drop one of them.
-    @State private var pendingWriteText = false
-    @State private var pendingPDFImport = false
+    @State private var isExploreExpanded = false
+    @State private var exploreDestination: ExploreDestination?
+    @State private var isDocumentPickerPresented = false
 
     init(app: AppEnvironment) {
         self.app = app
@@ -80,99 +45,61 @@ struct RootTabView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            tabContent
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if shouldShowTabBar {
-                        CustomTabBar(
-                            selectedTab: $selectedTab, safeAreaBottom: geometry.safeAreaInsets.bottom,
-                            onPlusTapped: { isQuickActionsPresented = true }
-                        )
-                        .transition(.opacity)
+            ImportHomeView(
+                libraryViewModel: app.library,
+                app: app,
+                exploreDestination: $exploreDestination)
+                // Tapping anywhere on the page dismisses the open menu.
+                // Clear rather than dimmed: the menu is a small floating
+                // control, not a modal, so it shouldn't darken the shelf.
+                .overlay {
+                    if isExploreExpanded {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                    isExploreExpanded = false
+                                }
+                            }
                     }
                 }
-                .animation(.default, value: shouldShowTabBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if navigationChrome.isAtTabRoot {
+                        CustomTabBar(
+                            isExploreExpanded: $isExploreExpanded,
+                            safeAreaBottom: geometry.safeAreaInsets.bottom,
+                            onSelect: open,
+                            onAddBooks: presentDocumentPicker)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.22), value: navigationChrome.isAtTabRoot)
         }
-        .sheet(
-            isPresented: $isQuickActionsPresented,
-            onDismiss: {
-                if pendingWriteText {
-                    pendingWriteText = false
-                    selectedTab = .home
-                    app.tts.isWriteTextPresented = true
-                }
-                if pendingPDFImport {
-                    pendingPDFImport = false
-                    selectedTab = .home
-                    app.pdfImports.requestDocumentPicker()
-                }
-            }
-        ) {
-            QuickActionsSheet { action in
-                if action == .writeText {
-                    pendingWriteText = true
-                }
-                if action == .uploadFile || action == .uploadBook {
-                    pendingPDFImport = true
-                }
-                isQuickActionsPresented = false
+        .fileImporter(
+            isPresented: $isDocumentPickerPresented,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first else { return }
+            Task {
+                await app.pdfImports.importPDF(
+                    from: url,
+                    engine: .kokoroAne,
+                    voiceName: app.tts.kokoroVoice)
             }
         }
     }
 
-    /// Invalid stored values deliberately resolve to Studio, matching the
-    /// fallback used by earlier per-screen `@AppStorage` bindings.
-    private var homeMode: HomeMode {
-        HomeMode(rawValue: storedHomeMode) ?? .studio
+    private func open(_ destination: ExploreDestination) {
+        isExploreExpanded = false
+        exploreDestination = destination
     }
 
-    /// Root owns both mode persistence and the one navigation consequence of
-    /// selecting Reading from another tab.
-    private var homeModeBinding: Binding<HomeMode> {
-        Binding(
-            get: { homeMode },
-            set: { mode in
-                storedHomeMode = mode.rawValue
-                if mode == .reading {
-                    selectedTab = .home
-                }
-            })
-    }
-
-    /// Reading is an immersive presentation only while Home is selected.
-    /// The other three app tabs retain their normal root-level tab bar even
-    /// when Reading remains the user's persisted Home preference.
-    private var shouldShowTabBar: Bool {
-        navigationChrome.isAtTabRoot
-            && (selectedTab != .home || homeMode != .reading)
-    }
-
-    // All 4 unconditionally instantiated (never `if selectedTab == tab`),
-    // toggled only by opacity/hit-testing/accessibility — see this type's
-    // own doc comment for why.
-    private var tabContent: some View {
-        ZStack {
-            ImportHomeView(
-                viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
-                packs: app.tts.packs, app: app, homeMode: homeModeBinding
-            )
-            .opacity(selectedTab == .home ? 1 : 0)
-            .allowsHitTesting(selectedTab == .home)
-            .accessibilityHidden(selectedTab != .home)
-
-            LibraryTabView(viewModel: app.library, app: app, homeMode: homeModeBinding)
-                .opacity(selectedTab == .library ? 1 : 0)
-                .allowsHitTesting(selectedTab == .library)
-                .accessibilityHidden(selectedTab != .library)
-
-            PlaceholderTabView(title: "Tools", homeMode: homeModeBinding)
-                .opacity(selectedTab == .tools ? 1 : 0)
-                .allowsHitTesting(selectedTab == .tools)
-                .accessibilityHidden(selectedTab != .tools)
-
-            VoicesTabView(viewModel: app.voiceClone, app: app, homeMode: homeModeBinding)
-                .opacity(selectedTab == .voices ? 1 : 0)
-                .allowsHitTesting(selectedTab == .voices)
-                .accessibilityHidden(selectedTab != .voices)
+    private func presentDocumentPicker() {
+        isExploreExpanded = false
+        Task { @MainActor in
+            await Task.yield()
+            isDocumentPickerPresented = true
         }
     }
 }

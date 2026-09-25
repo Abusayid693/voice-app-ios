@@ -2,13 +2,13 @@ import AVFoundation
 import Combine
 
 /// Plays a voice's bundled preview clip — pure file playback, no synthesis,
-/// so it never touches the TTS engines and can't collide with an
-/// in-progress "Write text" generation.
+/// so it never touches the TTS engine and can't collide with an
+/// in-progress Kokoro generation.
 ///
 /// Deliberately its own observable object rather than more state on
 /// `TTSViewModel`: the metering loop below updates `level`/`progress` ~15
 /// times a second, and while that lived on the shared view model every
-/// view observing it — including Import's whole 70-tile Trending scroll —
+/// view observing it — including VoicesTabView's whole voice grid —
 /// re-rendered at that rate for the duration of every preview. Now only
 /// the two views that actually show preview state observe it.
 @MainActor
@@ -28,9 +28,8 @@ final class VoicePreviewPlayer: ObservableObject {
     /// True if this voice has a bundled clip — independent of whether its
     /// pack is *downloaded*, since this is pure bundled-file playback.
     /// Voices with no pack downloaded still preview fine; voices with no
-    /// clip recorded yet (all of Pocket TTS today — see
-    /// docs/adr/0009-bundled-voice-preview-clips.md) can't preview even
-    /// when their pack is present.
+    /// clip recorded yet (see docs/adr/0009-bundled-voice-preview-clips.md)
+    /// can't preview even when their pack is present.
     func hasClip(voiceName: String, engine: Engine) -> Bool {
         Self.clipURL(voiceName: voiceName, engine: engine) != nil
     }
@@ -82,7 +81,6 @@ final class VoicePreviewPlayer: ObservableObject {
         let engineFolder: String
         switch engine {
         case .kokoroAne: engineFolder = "Kokoro"
-        case .pocketTts: engineFolder = "Pocket"
         }
         let subdirectory = "VoicePreviews/\(engineFolder)"
         return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)

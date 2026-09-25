@@ -22,17 +22,16 @@ import SwiftUI
 /// `EnvironmentKey` is for — an explicit parameter can't fail.
 struct AppEnvironment {
     let tts: TTSViewModel
-    let voiceClone: VoiceCloneViewModel
     let library: LibraryViewModel
     let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
     let generationStore: ChapterGenerationStore
     let readingStats: ReadingStatsStore
-    // Not "pass-through" like the others above — a live flag tab roots
-    // write to and RootTabView observes, so RootTabView's custom bottom
-    // bar (tabs + "+", all in one row — see CustomTabBar) can hide itself
-    // on pushed screens. See NavigationChromeVisibility's own doc comment.
+    // Not "pass-through" like the others above — a live flag Home writes
+    // to and RootTabView observes, so RootTabView's floating Explore/Add
+    // Books bar (see CustomTabBar) can hide itself on pushed screens. See
+    // NavigationChromeVisibility's own doc comment.
     let navigationChrome: NavigationChromeVisibility
 }
 
@@ -48,7 +47,7 @@ extension AppEnvironment {
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
         let library = LibraryViewModel()
         return AppEnvironment(
-            tts: tts, voiceClone: VoiceCloneViewModel(dependencies: dependencies),
+            tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
             chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis, statsTracker: statsTracker),
             generationStore: ChapterGenerationStore(synthesisService: synthesis),
