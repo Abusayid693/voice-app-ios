@@ -52,6 +52,12 @@ struct BookShelfView: View {
     @State private var selectedBookProgress: Double = 0
     @State private var selectedCoverFrame: CGRect?
     @State private var coverFrames: [UUID: CGRect] = [:]
+    /// Where each book's cover *face* sits — the modal hero's source. Differs
+    /// from `coverFrames` for a spine-out book; see BookHeroFramePreferenceKey.
+    @State private var heroFrames: [UUID: CGRect] = [:]
+    /// True while the detail modal owns `selectedBook`: a spine-out book is
+    /// turned face-out for the lift, and turned back on the way down.
+    @State private var detailShowsCoverFace = false
     @State private var modalPhase: CGFloat = 0
     @State private var showsModalDetails = false
     @State private var isShelfCoverHidden = false
@@ -169,6 +175,9 @@ struct BookShelfView: View {
             .onPreferenceChange(BookCoverFramePreferenceKey.self) { frames in
                 coverFrames = frames
             }
+            .onPreferenceChange(BookHeroFramePreferenceKey.self) { frames in
+                heroFrames = frames
+            }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
         .confirmationDialog(
@@ -264,6 +273,7 @@ struct BookShelfView: View {
                     arrangingBookID: arrangingBook?.id,
                     arrangeLiftOffset: arrangeLiftOffset,
                     previewDisplayMode: previewDisplayMode,
+                    coverFacedBookID: detailShowsCoverFace ? selectedBook?.id : nil,
                     onSelect: { book in presentDetail(for: book) },
                     onLongPress: { book in beginArranging(book) })
             }
@@ -386,7 +396,10 @@ struct BookShelfView: View {
         // Button's own tap to fire on release — without this the menu and
         // the detail modal would both open from one gesture.
         guard selectedBook == nil, !isDismissingDetail, arrangingBook == nil else { return }
-        selectedCoverFrame = coverFrames[book.id]
+        // The hero always flies from a full cover — a spine-out book turns
+        // face-out first — so it starts from the cover-face frame, not the
+        // narrow spine slot the book rests in.
+        selectedCoverFrame = heroFrames[book.id] ?? coverFrames[book.id]
         modalPhase = reduceMotion ? 2 : 0
         showsModalDetails = reduceMotion
         selectedBookProgress = 0
@@ -424,6 +437,12 @@ struct BookShelfView: View {
                 liftOffset = -liftDistance
             } completion: {
                 guard selectedBook?.id == book.id, !isDismissingDetail else { return }
+                // A spine-out book turns face-out while it hangs there, so
+                // what the overlay takes over is already a cover — the modal
+                // is a full cover, and flying a narrow spine into it read
+                // wrong. A cover-out book's turn is a no-op.
+                turnFaceOut(book) {
+                guard selectedBook?.id == book.id, !isDismissingDetail else { return }
                 // Hand off to the traveling overlay now that it's clear of
                 // the shelf — both sit at the identical lifted position, so
                 // the swap itself is invisible.
@@ -445,12 +464,50 @@ struct BookShelfView: View {
                         }
                     }
                 }
+                }
             }
         }
     }
 
+    /// Turns a spine-out book face-out and calls back once it has actually
+    /// finished. Uses `bookShelfRotationAnimation` so this completion lines
+    /// up with the turn `BookShelfRow` really plays.
+    private func turnFaceOut(
+        _ book: SavedGenerationSummary, then continuation: @escaping () -> Void
+    ) {
+        guard book.shelfDisplayMode == .spine, !reduceMotion else {
+            var instant = Transaction(animation: nil)
+            instant.disablesAnimations = true
+            withTransaction(instant) { detailShowsCoverFace = true }
+            continuation()
+            return
+        }
+        withAnimation(bookShelfRotationAnimation, completionCriteria: .logicallyComplete) {
+            detailShowsCoverFace = true
+        } completion: {
+            continuation()
+        }
+    }
+
+    /// The reverse, for the way back down: the book is face-out in the shelf
+    /// slot again, so turn it back to its spine before it settles.
+    private func turnBackToShelfFace(
+        _ book: SavedGenerationSummary, then continuation: @escaping () -> Void
+    ) {
+        guard book.shelfDisplayMode == .spine, !reduceMotion else {
+            detailShowsCoverFace = false
+            continuation()
+            return
+        }
+        withAnimation(bookShelfRotationAnimation, completionCriteria: .logicallyComplete) {
+            detailShowsCoverFace = false
+        } completion: {
+            continuation()
+        }
+    }
+
     private func dismissDetail(afterDismiss: (() -> Void)? = nil) {
-        guard selectedBook != nil, !isDismissingDetail else { return }
+        guard let dismissingBook = selectedBook, !isDismissingDetail else { return }
         isDismissingDetail = true
 
         withAnimation(.easeOut(duration: 0.11)) {
@@ -486,10 +543,14 @@ struct BookShelfView: View {
                     withTransaction(handoff) {
                         isShelfCoverHidden = false
                     }
-                    withAnimation(settleAnimation, completionCriteria: .logicallyComplete) {
-                        liftOffset = 0
-                    } completion: {
-                        completeShelfReturn(afterDismiss)
+                    // Still lifted and still face-out here. Turn back to the
+                    // spine first, then settle — the mirror of the way up.
+                    turnBackToShelfFace(dismissingBook) {
+                        withAnimation(settleAnimation, completionCriteria: .logicallyComplete) {
+                            liftOffset = 0
+                        } completion: {
+                            completeShelfReturn(afterDismiss)
+                        }
                     }
                 }
             }
@@ -520,6 +581,7 @@ struct BookShelfView: View {
         showsModalDetails = false
         isShelfCoverHidden = false
         isDismissingDetail = false
+        detailShowsCoverFace = false
         completion?()
     }
 
@@ -606,6 +668,8 @@ private struct BookShelfRow: View {
     let arrangingBookID: UUID?
     let arrangeLiftOffset: CGFloat
     let previewDisplayMode: ShelfDisplayMode?
+    /// Forced face-out while the detail modal's hero owns this book.
+    let coverFacedBookID: UUID?
     let onSelect: (SavedGenerationSummary) -> Void
     let onLongPress: (SavedGenerationSummary) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -653,10 +717,14 @@ private struct BookShelfRow: View {
             // HStack siblings paint in order, so a book whose artwork
             // overflows its slot — a cover mid-turn is far wider than the
             // spine slot it sits in — is drawn *under* every book after it.
-            // Raising the one being arranged keeps it on top for the whole
-            // lift → rotate → settle window (`arrangingBookID` outlives the
-            // menu by design).
-            .zIndex(arrangingBookID == book.id ? 1 : 0)
+            // Both lifts need raising, not just the arrange one: tapping a
+            // spine-out book turns it face-out for the modal hero, and that
+            // wide cover was landing behind its right-hand neighbour.
+            // `arrangingBookID` outlives the arrange menu, and
+            // `liftedBookID` spans the modal's lift/turn and its turn/settle
+            // on the way back, so between them they cover every frame where
+            // a book is off the shelf.
+            .zIndex(isRaised(book) ? 1 : 0)
             .background { frameReporter(for: book) }
             .transaction { transaction in
                 transaction.animation = nil
@@ -681,13 +749,25 @@ private struct BookShelfRow: View {
             .accessibilityAction(named: "Book options") { onLongPress(book) }
     }
 
-    /// Publishes each cover's frame for the detail-modal hero and the
-    /// arrange menu's anchor.
+    /// Whether this book is currently off the shelf, in either sense — being
+    /// arranged, or lifted for the detail modal. Either way its artwork can
+    /// overflow its slot and must paint above its neighbours.
+    private func isRaised(_ book: SavedGenerationSummary) -> Bool {
+        arrangingBookID == book.id || liftedBookID == book.id || coverFacedBookID == book.id
+    }
+
+    /// Publishes two frames per book: the real slot (anchors the arrange
+    /// menu) and where its cover face sits (what the modal hero flies from).
+    /// For a spine-out book those differ — see `BookHeroFramePreferenceKey`.
     private func frameReporter(for book: SavedGenerationSummary) -> some View {
         GeometryReader { proxy in
-            Color.clear.preference(
-                key: BookCoverFramePreferenceKey.self,
-                value: [book.id: proxy.frame(in: .named(bookShelfModalCoordinateSpace))])
+            let slot = proxy.frame(in: .named(bookShelfModalCoordinateSpace))
+            let hero = CGRect(
+                x: slot.minX, y: slot.minY,
+                width: coverSize.width, height: slot.height)
+            Color.clear
+                .preference(key: BookCoverFramePreferenceKey.self, value: [book.id: slot])
+                .preference(key: BookHeroFramePreferenceKey.self, value: [book.id: hero])
         }
     }
 
@@ -725,7 +805,13 @@ private struct BookShelfRow: View {
     /// `BookShelfView.endArranging` commits the mode and this frame changes.
     private func shelfCover(for book: SavedGenerationSummary) -> some View {
         let isArranging = arrangingBookID == book.id
-        let rendered = (isArranging ? previewDisplayMode : nil) ?? book.shelfDisplayMode
+        // A spine-out book turns face-out before the detail modal's hero
+        // takes over, and back again on the way down — the modal shows a
+        // full cover, so flying a narrow spine into it read wrong.
+        let rendered: ShelfDisplayMode =
+            coverFacedBookID == book.id
+            ? .cover
+            : ((isArranging ? previewDisplayMode : nil) ?? book.shelfDisplayMode)
         let layoutSize = size(for: book, mode: book.shelfDisplayMode)
 
         // 0 = cover face-on, 90 = spine face-on. The *angle* is what
@@ -754,10 +840,10 @@ private struct BookShelfRow: View {
 
     /// Enough life to read as a real flick of the wrist, damped enough that
     /// it doesn't overshoot far past edge-on (`RotatingBookFaces` fades a
-    /// face out over its last degrees as a second line of defence).
-    private var rotationAnimation: Animation {
-        .spring(response: 0.45, dampingFraction: 0.8)
-    }
+    /// face out over its last degrees as a second line of defence). Shared
+    /// with `BookShelfView`'s sequencing so its completion callbacks line up
+    /// with what's actually on screen.
+    private var rotationAnimation: Animation { bookShelfRotationAnimation }
 
     private func size(for book: SavedGenerationSummary, mode: ShelfDisplayMode) -> CGSize {
         switch mode {
@@ -1145,7 +1231,34 @@ private struct BookShelfDetailModal: View {
 
 private let bookShelfModalCoordinateSpace = "book-shelf-modal"
 
+/// Shared by `BookShelfView`'s sequencing and `BookShelfRow`'s own
+/// `.animation(_:value:)` on the turn. They must be the same spec: the row's
+/// value-scoped animation is what actually plays (it beats the row's
+/// `.transaction { animation = nil }`), while the view's `withAnimation`
+/// exists only for its completion callback — if the two differed, the next
+/// step would fire before the turn had visually finished.
+private let bookShelfRotationAnimation: Animation = .spring(
+    response: 0.45, dampingFraction: 0.8)
+
+/// Each book's real layout slot — spine-width for a spine-out book. Used to
+/// anchor the long-press arrange menu over the book you actually pressed.
 private struct BookCoverFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(
+        value: inout [UUID: CGRect],
+        nextValue: () -> [UUID: CGRect]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+/// Where the book's *cover face* sits, which is what the detail modal's hero
+/// flies from and back to. Separate from the slot frame above because a
+/// spine-out book turns face-out before the hero starts: it occupies a full
+/// cover's width from its slot's leading edge, not the narrow spine slot.
+/// Handing the hero the spine frame instead made it fly out of a sliver.
+private struct BookHeroFramePreferenceKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
 
     static func reduce(
