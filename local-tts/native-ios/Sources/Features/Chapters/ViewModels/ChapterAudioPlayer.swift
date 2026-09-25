@@ -30,6 +30,13 @@ final class ChapterAudioPlayer: ObservableObject {
     @Published private(set) var activeRef: ReaderPageRef?
     @Published private(set) var mode: ChapterPlaybackMode?
     @Published private(set) var isPlaying = false
+    /// True from a natural finish until playback restarts or repositions.
+    /// A finished `AVAudioPlayer` reports `currentTime == 0`, and the
+    /// read-along highlight is deliberately *not* gated on `isPlaying` (so it
+    /// survives a pause) — so without this it recomputed from a reset clock
+    /// at the end of a page and snapped back to the first word of the chunk
+    /// that had just finished.
+    private var hasFinishedPlayback = false
     @Published private(set) var isBuffering = false
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var duration: TimeInterval = 0
@@ -104,6 +111,7 @@ final class ChapterAudioPlayer: ObservableObject {
 
     private func handleSavedPlaybackFinished() {
         isPlaying = false
+        hasFinishedPlayback = true
         elapsed = duration
         currentChunkIndex = max(0, chunkTexts.count - 1)
         statsTracker.endListening(pageCompleted: true)
@@ -161,6 +169,15 @@ final class ChapterAudioPlayer: ObservableObject {
     /// internally; one fresh player per chunk for streaming, already
     /// starting at 0, so no offset is needed here).
     func currentWordIndex(atElapsed elapsed: TimeInterval) -> Int? {
+        // Playback ended on this chunk's last word, so hold it there rather
+        // than resolving a clock that has already reset to 0. Deliberately
+        // independent of `elapsed`: saved mode measures it against the merged
+        // file while streaming measures it within the chunk, and "the end of
+        // the current chunk" is the right answer either way.
+        if hasFinishedPlayback {
+            let timings = wordTimings(forChunk: currentChunkIndex)
+            return timings.isEmpty ? nil : timings.count - 1
+        }
         switch mode {
         case .saved:
             guard let manifest else { return nil }
@@ -179,6 +196,7 @@ final class ChapterAudioPlayer: ObservableObject {
     }
 
     func seek(to time: TimeInterval) {
+        hasFinishedPlayback = false
         switch mode {
         case .saved:
             guard let player else { return }
@@ -259,6 +277,7 @@ final class ChapterAudioPlayer: ObservableObject {
     }
 
     private func seekStreaming(to time: TimeInterval) {
+        hasFinishedPlayback = false
         guard !streamingChunkDurations.isEmpty else { return }
         let clamped = max(0, min(time, duration))
         var cumulative: TimeInterval = 0
@@ -280,6 +299,7 @@ final class ChapterAudioPlayer: ObservableObject {
     /// which the old sequential-only design could get away with, since a
     /// seek can now interrupt a chunk mid-playback).
     private func playFromRetained(index: Int, localOffset: TimeInterval) {
+        hasFinishedPlayback = false
         guard streamingChunkAudio.indices.contains(index) else { return }
         player?.stop()
         do {
@@ -309,6 +329,7 @@ final class ChapterAudioPlayer: ObservableObject {
         let nextIndex = index + 1
         guard nextIndex < chunkTexts.count else {
             isPlaying = false
+            hasFinishedPlayback = true
             isBuffering = false
             // Only this branch is a real finish — the one below just
             // advances to the next chunk (mid-page, not done).
@@ -332,6 +353,9 @@ final class ChapterAudioPlayer: ObservableObject {
             isPlaying = false
             statsTracker.pauseListening()
         } else {
+            // Tapping play on a finished page restarts it from the top, so
+            // the held end-of-chunk highlight has to be released.
+            hasFinishedPlayback = false
             player.play()
             isPlaying = true
             statsTracker.resumeListening()
@@ -357,6 +381,7 @@ final class ChapterAudioPlayer: ObservableObject {
         activeRef = nil
         mode = nil
         isPlaying = false
+        hasFinishedPlayback = false
         isBuffering = false
         elapsed = 0
         duration = 0

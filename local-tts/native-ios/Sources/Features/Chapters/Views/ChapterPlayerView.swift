@@ -22,31 +22,29 @@ private struct ReaderScrollVisibilityObserver: ViewModifier {
     }
 }
 
-private struct ReaderScrollContentReporter: View {
-    let onUpdate: (CGRect) -> Void
-
-    var body: some View {
-        GeometryReader { proxy in
-            let frame = proxy.frame(in: .named("reader-scroll"))
-            Color.clear
-                .onAppear { onUpdate(frame) }
-                .onChange(of: frame) { _, newFrame in onUpdate(newFrame) }
-        }
-    }
-}
 
 private enum ReaderPageNumberTransitionDirection: Equatable {
     case forward
     case backward
 }
 
-private struct VerticalNumberSlider: View {
+private struct PageNumberSlider: View {
     let value: Int
     let direction: ReaderPageNumberTransitionDirection
+    /// Width of the digits. The view is this wide exactly — the fade is on
+    /// the top and bottom edges, which is where the numbers travel.
     let width: CGFloat
     @State private var displayedValue: Int
     @State private var outgoingValue: Int?
     @State private var progress: CGFloat = 1
+
+    /// Height the resting digits sit in, and the fade each side of it — so a
+    /// number dissolves as it leaves rather than being cut off against a hard
+    /// clip edge. The fade is *outside* `digitBoxHeight` rather than measured
+    /// inward from the clip edge: digit ink nearly fills the resting box at
+    /// this font, so an inward fade would permanently dim the numbers.
+    private let digitBoxHeight: CGFloat = 24
+    private let fadeInset: CGFloat = 5
 
     init(value: Int, direction: ReaderPageNumberTransitionDirection, width: CGFloat) {
         self.value = value
@@ -65,15 +63,37 @@ private struct VerticalNumberSlider: View {
             Text("\(displayedValue)")
                 .offset(y: incomingOffset)
         }
-        .frame(width: width, height: 24)
-        .clipped()
+        .frame(width: width, height: totalHeight)
+        .mask(edgeFade)
         .onChange(of: value) { _, newValue in
             animate(to: newValue)
         }
     }
 
-    private var travelDistance: CGFloat { 28 }
+    private var totalHeight: CGFloat { digitBoxHeight + fadeInset * 2 }
 
+    /// Replaces a plain `.clipped()`: opaque across the resting digits,
+    /// fading to clear over `fadeInset` at the top and bottom. Doubles as the
+    /// clip, since anything past the edge is masked out entirely.
+    private var edgeFade: some View {
+        let fadeFraction = fadeInset / totalHeight
+        return LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: fadeFraction),
+                .init(color: .black, location: 1 - fadeFraction),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom)
+    }
+
+    /// Enough to clear the whole box it slides inside, fade included.
+    private var travelDistance: CGFloat { totalHeight }
+
+    /// Forward pushes the old number up and out the top, with the new one
+    /// rising in from below; backward is the inverse — the number climbs as
+    /// the page count does.
     private var outgoingOffset: CGFloat {
         let multiplier: CGFloat = direction == .forward ? -1 : 1
         return multiplier * travelDistance * progress
@@ -92,7 +112,10 @@ private struct VerticalNumberSlider: View {
             displayedValue = newValue
             progress = 0
         }
-        withAnimation(.easeInOut(duration: 0.28)) {
+        // A high-damping spring rather than an ease: it leaves at a gentler
+        // rate than `easeInOut` and settles without a visible stop, which is
+        // what makes the travel read as smooth over this short a distance.
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.92)) {
             progress = 1
         }
     }
@@ -154,25 +177,11 @@ struct ChapterPlayerView: View {
         var indices: Set<Int> = []
     }
     @State private var visibleParagraphsBox = VisibleParagraphsBox()
-    private final class ReaderScrollMetricsBox {
-        var contentFrame = CGRect.zero
-        var viewportHeight: CGFloat = 0
-
-        var topPullDistance: CGFloat {
-            max(contentFrame.minY, 0)
-        }
-
-        var bottomPullDistance: CGFloat {
-            let restingBottom = min(viewportHeight, contentFrame.height)
-            return max(restingBottom - contentFrame.maxY, 0)
-        }
-    }
     private final class PageTurnGestureBox {
         var hasTurnedPage = false
     }
-    // Scroll metrics and gesture bookkeeping stay reference-backed so they
-    // do not invalidate the full read-along layout at drag-frame frequency.
-    @State private var scrollMetricsBox = ReaderScrollMetricsBox()
+    // Reference-backed so a drag's per-frame bookkeeping does not invalidate
+    // the full read-along layout.
     @State private var pageTurnGestureBox = PageTurnGestureBox()
     // Fixed once, so the TimelineViews below get a stable schedule value
     // instead of a fresh one built from `.now` on every body pass.
@@ -488,26 +497,40 @@ struct ChapterPlayerView: View {
         HStack(spacing: 4) {
             Text("Page")
 
-            VerticalNumberSlider(
+            PageNumberSlider(
                 value: currentPageIndex + 1,
                 direction: pageNumberTransitionDirection,
                 width: pageNumberWidth)
 
             Text("of \(project.pageCount)")
 
-            if completedPageIndices.contains(currentPageIndex) {
-                LucideIcon(.check, size: 13, color: readerTheme.primaryText)
-                    .accessibilityHidden(true)
-            }
+            // The tick's slot is reserved whether or not it shows, and
+            // mirrored on the leading side: this group is centred in the
+            // nav bar, so a tick that changes the group's width would
+            // re-centre the whole title and shift it sideways the moment a
+            // page completed. Reserving both sides keeps it centred too,
+            // rather than parked permanently left of centre.
+            tickSlot.opacity(completedPageIndices.contains(currentPageIndex) ? 1 : 0)
         }
+        .padding(.leading, tickSlotWidth + 4)
         .font(.subheadline.weight(.semibold))
         .monospacedDigit()
         .foregroundStyle(readerTheme.primaryText)
-        .frame(height: 24)
+        // Tall enough for the slider's own fade margin, so the nav bar never
+        // clips a travelling number back to a hard edge.
+        .frame(height: 34)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "Page \(currentPageIndex + 1) of \(project.pageCount)"
                 + (completedPageIndices.contains(currentPageIndex) ? ", completed" : ""))
+    }
+
+    private var tickSlotWidth: CGFloat { 13 }
+
+    private var tickSlot: some View {
+        LucideIcon(.check, size: 13, color: readerTheme.primaryText)
+            .frame(width: tickSlotWidth)
+            .accessibilityHidden(true)
     }
 
     private var pageNumberWidth: CGFloat {
@@ -592,7 +615,6 @@ struct ChapterPlayerView: View {
         isPulsingPlayButton = false
         isAutoScrollPaused = false
         visibleParagraphsBox = VisibleParagraphsBox()
-        scrollMetricsBox = ReaderScrollMetricsBox()
         groupHeightsBox = GroupHeightsBox()
 
         currentPage = page
@@ -993,21 +1015,7 @@ struct ChapterPlayerView: View {
                             showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
                     }
                 }
-                .background(
-                    ReaderScrollContentReporter { frame in
-                        scrollMetricsBox.contentFrame = frame
-                    })
             }
-            .coordinateSpace(name: "reader-scroll")
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { scrollMetricsBox.viewportHeight = proxy.size.height }
-                        .onChange(of: proxy.size.height) { _, height in
-                            scrollMetricsBox.viewportHeight = height
-                        }
-                }
-            )
             .id(currentPageIndex)
             .simultaneousGesture(
                 DragGesture(minimumDistance: 10)
@@ -1044,30 +1052,39 @@ struct ChapterPlayerView: View {
         }
     }
 
+    /// Pages turn on a horizontal swipe: left for the next page, right for
+    /// the previous one.
+    ///
+    /// This replaced a 56pt vertical overscroll pull at the top/bottom of the
+    /// page. Horizontal is the easier axis to own here — the read-along is a
+    /// *vertical* ScrollView, so a sideways drag isn't a scroll it has to be
+    /// told apart from, which is why this needs no overscroll condition at
+    /// all. The dominance check still earns its keep against diagonal drags,
+    /// and `hasTurnedPage` keeps one long swipe from paging repeatedly.
     private func handleReaderDragChanged(_ value: DragGesture.Value) {
-        if abs(value.translation.height) < 12 {
+        let translation = value.translation
+
+        if abs(translation.width) < 12 {
             pageTurnGestureBox.hasTurnedPage = false
         }
 
-        if isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused {
+        // A vertical drag is a scroll, and any scroll takes auto-scroll out
+        // of the driver's seat until the jump pill is tapped.
+        if abs(translation.height) > abs(translation.width),
+           isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused
+        {
             isAutoScrollPaused = true
         }
 
         guard !pageTurnGestureBox.hasTurnedPage else { return }
+        guard abs(translation.width) > abs(translation.height) * 1.25,
+              abs(translation.width) >= 60
+        else { return }
 
-        let translation = value.translation
-        guard abs(translation.height) > abs(translation.width) * 1.25 else { return }
-
-        if translation.height < 0,
-           scrollMetricsBox.bottomPullDistance >= 56,
-           currentPageIndex < project.pageCount - 1
-        {
+        if translation.width < 0, currentPageIndex < project.pageCount - 1 {
             pageTurnGestureBox.hasTurnedPage = true
             selectPage(currentPageIndex + 1)
-        } else if translation.height > 0,
-                  scrollMetricsBox.topPullDistance >= 56,
-                  currentPageIndex > 0
-        {
+        } else if translation.width > 0, currentPageIndex > 0 {
             pageTurnGestureBox.hasTurnedPage = true
             selectPage(currentPageIndex - 1)
         }
@@ -1157,7 +1174,7 @@ struct ChapterPlayerView: View {
             paragraphWordItems.indices.contains(groupIndex)
             ? paragraphWordItems[groupIndex] : wordItems(for: group)
         let revision = paragraphRevisions.indices.contains(groupIndex) ? paragraphRevisions[groupIndex] : 0
-        // Position only — NOT gated on isPlaying, so the paragraph box and
+        // Position only — NOT gated on isPlaying, so the chunk band and
         // its last-highlighted word stay put on pause instead of both
         // disappearing. What isPlaying actually decides is below: whether
         // this row needs to keep ticking to track a moving position.
@@ -1181,6 +1198,7 @@ struct ChapterPlayerView: View {
                 highlightedChunkIndex: showsWordHighlight ? chapterPlayer.currentChunkIndex : nil,
                 highlightedWordIndex: showsWordHighlight
                     ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
+                currentChunkIndex: isCurrentGroup ? chapterPlayer.currentChunkIndex : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
                 fontFamily: readerFontFamily,
@@ -1196,8 +1214,8 @@ struct ChapterPlayerView: View {
     // playing word carry its own rounded background highlight, which plain
     // Text concatenation can't do (no way to give one piece within a
     // `Text + Text` run its own background). All word text is one color at
-    // full opacity; only the word background and the paragraph box signal
-    // position. Every word carries constant padding regardless of
+    // full opacity; only the word background and the playing chunk's own
+    // band signal position. Every word carries constant padding regardless of
     // highlight state — varying it would resize the word and reflow the
     // paragraph as the highlight moves, the construction-method-
     // consistency rule from the earlier pause/resume reflow fix.
@@ -1213,6 +1231,11 @@ struct ChapterPlayerView: View {
         let itemsRevision: Int
         let highlightedChunkIndex: Int?
         let highlightedWordIndex: Int?
+        /// The chunk actually playing, independent of the word-highlight
+        /// preference — `highlightedChunkIndex` goes nil when that's off or
+        /// a chunk has no timings, but the playing chunk still needs its own
+        /// background.
+        let currentChunkIndex: Int?
         let isCurrentGroup: Bool
         let fontSize: ReaderFontSize
         let fontFamily: ReaderFontFamily
@@ -1220,7 +1243,8 @@ struct ChapterPlayerView: View {
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
-                && lhs.highlightedWordIndex == rhs.highlightedWordIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
+                && lhs.highlightedWordIndex == rhs.highlightedWordIndex
+                && lhs.currentChunkIndex == rhs.currentChunkIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
                 && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily && lhs.theme == rhs.theme
         }
 
@@ -1249,22 +1273,30 @@ struct ChapterPlayerView: View {
                     let isHighlighted =
                         isCurrentGroup && item.chunkIndex == highlightedChunkIndex
                             && item.wordIndexInChunk == highlightedWordIndex
+                    // A row is a paragraph *group*, which can be several
+                    // chunks; backing the whole row lit every chunk in it at
+                    // once. Backing only the playing chunk's words keeps the
+                    // band on the chunk actually being spoken. Adjacent words
+                    // touch (their 2pt horizontal padding abuts), so a small
+                    // radius reads as one continuous band rather than pills.
+                    let isCurrentChunk = item.chunkIndex == currentChunkIndex
                     Text(item.text)
                         .font(fontSize.font(family: fontFamily))
                         .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
                         .background(
-                            isHighlighted ? theme.wordHighlightBackground : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 4))
+                            isHighlighted
+                                ? theme.wordHighlightBackground
+                                : (isCurrentChunk ? theme.chunkHighlightBackground : Color.clear),
+                            in: RoundedRectangle(cornerRadius: isHighlighted ? 4 : 3))
                         .lineBreaksBefore(item.lineBreaksBefore)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Padding kept even though the row no longer draws its own
+            // background — dropping it would reflow every paragraph.
             .padding(6)
-            .background(
-                isCurrentGroup ? theme.chunkHighlightBackground : Color.clear,
-                in: RoundedRectangle(cornerRadius: 8))
         }
     }
 
