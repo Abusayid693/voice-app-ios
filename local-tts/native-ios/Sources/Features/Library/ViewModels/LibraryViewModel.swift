@@ -119,6 +119,28 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
+    /// Persists a book's Book Shelf orientation (cover vs. spine). Unlike
+    /// `updateVoice` this touches no audio — it's purely how the shelf draws
+    /// the book — so it just rewrites metadata and republishes the summary.
+    @discardableResult
+    func updateShelfDisplayMode(_ mode: ShelfDisplayMode, for projectID: UUID) -> Bool {
+        guard var project = project(for: projectID) else { return false }
+        guard project.shelfDisplayMode != mode else { return true }
+        project.shelfDisplayMode = mode
+        guard let data = try? JSONEncoder().encode(project) else { return false }
+
+        do {
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[index] = project.summary
+                Self.persistIndex(savedGenerations)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func delete(_ generation: SavedGenerationSummary) {
         savedGenerations.removeAll { $0.id == generation.id }
         Self.persistIndex(savedGenerations)

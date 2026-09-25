@@ -62,6 +62,25 @@ struct BookShelfView: View {
     // of appearing to pass straight through it.
     @State private var liftOffset: CGFloat = 0
     private let liftDistance: CGFloat = 15
+
+    // MARK: - Long-press arrange mode
+    //
+    // A second, much simpler lift than the detail modal's: the book rises and
+    // holds while its options are showing, and only settles once the menu is
+    // dismissed. Rotate is *previewed* while lifted (`previewDisplayMode`)
+    // and committed on settle, which is what makes the neighbouring books
+    // reflow then rather than under the open menu.
+    @State private var arrangingBook: SavedGenerationSummary?
+    @State private var arrangeLiftOffset: CGFloat = 0
+    @State private var previewDisplayMode: ShelfDisplayMode?
+    @State private var deleteCandidate: SavedGenerationSummary?
+    /// Separate from `arrangingBook` on purpose: the menu has to disappear
+    /// the instant the user taps away, but the book keeps its lifted-book
+    /// identity (offset, shadow) until the settle animation has actually
+    /// finished. Clearing `arrangingBook` up front instead made the offset
+    /// snap to 0 rather than animate down.
+    @State private var isArrangeMenuVisible = false
+    private let arrangeLiftDistance: CGFloat = 18
     /// Height of `ImportHomeView`'s floating header controls (4pt top pad +
     /// a 44pt tap target), reserved at the top of the scroll content.
     static let headerControlsInset: CGFloat = 48
@@ -107,9 +126,29 @@ struct BookShelfView: View {
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
-                .scrollDisabled(selectedBook != nil)
+                .scrollDisabled(selectedBook != nil || arrangingBook != nil)
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
+
+                // Tap-anywhere-else dismissal for the arrange menu. Clear
+                // rather than dimmed — the book stays the focus, and the
+                // shelf behind it shouldn't read as modal.
+                if isArrangeMenuVisible {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { endArranging() }
+                        .accessibilityLabel("Dismiss book options")
+                        .zIndex(2)
+                }
+
+                if let arrangingBook, isArrangeMenuVisible {
+                    BookArrangeMenu(
+                        isSpine: (previewDisplayMode ?? arrangingBook.shelfDisplayMode) == .spine,
+                        anchor: coverFrames[arrangingBook.id],
+                        onRotate: toggleRotation,
+                        onDelete: { deleteCandidate = arrangingBook })
+                    .zIndex(3)
+                }
 
                 if let selectedBook {
                     BookShelfDetailModal(
@@ -132,6 +171,34 @@ struct BookShelfView: View {
             }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
+        .confirmationDialog(
+            "Delete “\(deleteCandidate?.title ?? "")”?",
+            isPresented: Binding(
+                get: { deleteCandidate != nil },
+                set: { if !$0 { deleteCandidate = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Book", role: .destructive) {
+                guard let book = deleteCandidate else { return }
+                deleteCandidate = nil
+                // Not via `endArranging` — that would commit a pending
+                // rotation onto a project whose files are about to go.
+                var cleanup = Transaction(animation: nil)
+                cleanup.disablesAnimations = true
+                withTransaction(cleanup) {
+                    isArrangeMenuVisible = false
+                    previewDisplayMode = nil
+                    arrangingBook = nil
+                    arrangeLiftOffset = 0
+                }
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+                    library.delete(book)
+                }
+            }
+            Button("Cancel", role: .cancel) { deleteCandidate = nil }
+        } message: {
+            Text("This removes its pages, any generated audio, and its cover. This can't be undone.")
+        }
         .onChange(of: isDetailPresented) { _, isPresented in
             if !isPresented, selectedBook != nil {
                 modalPhase = 0
@@ -193,10 +260,12 @@ struct BookShelfView: View {
                     liftedBookID: isShelfCoverHidden ? nil : selectedBook?.id,
                     liftOffset: liftOffset,
                     liftAnimation: shelfLiftAnimation,
-                    liftDistance: liftDistance
-                ) { book in
-                    presentDetail(for: book)
-                }
+                    liftDistance: max(liftDistance, arrangeLiftDistance),
+                    arrangingBookID: arrangingBook?.id,
+                    arrangeLiftOffset: arrangeLiftOffset,
+                    previewDisplayMode: previewDisplayMode,
+                    onSelect: { book in presentDetail(for: book) },
+                    onLongPress: { book in beginArranging(book) })
             }
         }
         .padding(.horizontal, horizontalInset)
@@ -245,8 +314,78 @@ struct BookShelfView: View {
         .easeInOut(duration: 0.20)
     }
 
+    // MARK: - Long-press arrange
+
+    private func beginArranging(_ book: SavedGenerationSummary) {
+        guard selectedBook == nil, !isDismissingDetail, arrangingBook == nil else { return }
+        previewDisplayMode = nil
+        var selection = Transaction(animation: nil)
+        selection.disablesAnimations = true
+        withTransaction(selection) { arrangingBook = book }
+        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.72)) {
+            arrangeLiftOffset = -arrangeLiftDistance
+            isArrangeMenuVisible = true
+        }
+    }
+
+    /// Only previews — the book redraws in the new orientation immediately
+    /// but keeps its committed layout footprint, so nothing around it moves
+    /// while the menu is still open. `endArranging` is what commits.
+    private func toggleRotation() {
+        guard let book = arrangingBook, isArrangeMenuVisible else { return }
+        let current = previewDisplayMode ?? book.shelfDisplayMode
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.78)) {
+            previewDisplayMode = current == .cover ? .spine : .cover
+        }
+    }
+
+    /// Settles the book back onto the shelf and, if Rotate was tapped,
+    /// commits the new orientation — which changes its layout width and so
+    /// reflows the rest of the row in the same animation.
+    private func endArranging() {
+        guard let book = arrangingBook, isArrangeMenuVisible else { return }
+        let committedMode = previewDisplayMode
+
+        withAnimation(.easeOut(duration: 0.12)) { isArrangeMenuVisible = false }
+
+        guard !reduceMotion else {
+            if let committedMode {
+                library.updateShelfDisplayMode(committedMode, for: book.id)
+            }
+            arrangeLiftOffset = 0
+            previewDisplayMode = nil
+            arrangingBook = nil
+            return
+        }
+
+        // Settle and commit together: the width change the commit causes is
+        // exactly what makes the neighbouring books reflow, so both belong
+        // in the same animation. `arrangingBook` is cleared only afterwards
+        // — it's what keeps the lift offset applied to this book until the
+        // settle has actually played out.
+        withAnimation(
+            .spring(response: 0.34, dampingFraction: 0.86),
+            completionCriteria: .logicallyComplete
+        ) {
+            arrangeLiftOffset = 0
+            if let committedMode {
+                library.updateShelfDisplayMode(committedMode, for: book.id)
+            }
+        } completion: {
+            var cleanup = Transaction(animation: nil)
+            cleanup.disablesAnimations = true
+            withTransaction(cleanup) {
+                previewDisplayMode = nil
+                arrangingBook = nil
+            }
+        }
+    }
+
     private func presentDetail(for book: SavedGenerationSummary) {
-        guard selectedBook == nil, !isDismissingDetail else { return }
+        // `arrangingBook` matters here because a long press can leave the
+        // Button's own tap to fire on release — without this the menu and
+        // the detail modal would both open from one gesture.
+        guard selectedBook == nil, !isDismissingDetail, arrangingBook == nil else { return }
         selectedCoverFrame = coverFrames[book.id]
         modalPhase = reduceMotion ? 2 : 0
         showsModalDetails = reduceMotion
@@ -464,34 +603,19 @@ private struct BookShelfRow: View {
     let liftOffset: CGFloat
     let liftAnimation: Animation
     let liftDistance: CGFloat
+    let arrangingBookID: UUID?
+    let arrangeLiftOffset: CGFloat
+    let previewDisplayMode: ShelfDisplayMode?
     let onSelect: (SavedGenerationSummary) -> Void
+    let onLongPress: (SavedGenerationSummary) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView(.horizontal) {
                 HStack(alignment: .bottom, spacing: spacing) {
                     ForEach(books) { book in
-                        Button {
-                            onSelect(book)
-                        } label: {
-                            shelfCover(for: book)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(book.title), \(book.pageCountLabel)")
-                        .accessibilityHint("Opens this book")
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: BookCoverFramePreferenceKey.self,
-                                    value: [
-                                        book.id: proxy.frame(
-                                            in: .named(bookShelfModalCoordinateSpace))
-                                    ])
-                            }
-                        }
-                        .transaction { transaction in
-                            transaction.animation = nil
-                        }
+                        bookItem(for: book)
                     }
                 }
                 // Extra headroom above the covers equal to liftDistance —
@@ -520,20 +644,206 @@ private struct BookShelfRow: View {
         .frame(height: coverSize.height + 22 + liftDistance)
     }
 
+    /// Split across three small functions rather than one chain: as a single
+    /// expression this exceeded the type-checker's budget outright
+    /// ("unable to type-check this expression in reasonable time"). Each
+    /// piece here stays trivially inferrable.
+    private func bookItem(for book: SavedGenerationSummary) -> some View {
+        interactiveCover(for: book)
+            // HStack siblings paint in order, so a book whose artwork
+            // overflows its slot — a cover mid-turn is far wider than the
+            // spine slot it sits in — is drawn *under* every book after it.
+            // Raising the one being arranged keeps it on top for the whole
+            // lift → rotate → settle window (`arrangingBookID` outlives the
+            // menu by design).
+            .zIndex(arrangingBookID == book.id ? 1 : 0)
+            .background { frameReporter(for: book) }
+            .transaction { transaction in
+                transaction.animation = nil
+            }
+    }
+
+    /// Deliberately *not* a `Button`: a Button's own gesture recognizer
+    /// claims the touch before any long press attached to it can resolve, so
+    /// the menu never opened. A plain view with both gestures lets SwiftUI
+    /// arbitrate them properly — quick release taps, hold opens the menu —
+    /// and `presentDetail` guards the case where a release after the long
+    /// press still fires the tap.
+    private func interactiveCover(for book: SavedGenerationSummary) -> some View {
+        shelfCover(for: book)
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect(book) }
+            .onLongPressGesture(minimumDuration: 0.35) { onLongPress(book) }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("\(book.title), \(book.pageCountLabel)")
+            .accessibilityHint("Opens this book")
+            .accessibilityAction(named: "Book options") { onLongPress(book) }
+    }
+
+    /// Publishes each cover's frame for the detail-modal hero and the
+    /// arrange menu's anchor.
+    private func frameReporter(for book: SavedGenerationSummary) -> some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: BookCoverFramePreferenceKey.self,
+                value: [book.id: proxy.frame(in: .named(bookShelfModalCoordinateSpace))])
+        }
+    }
+
+    /// The fixed layout slot with the turning book drawn into it.
+    ///
+    /// Every animation here has to be an explicit `.animation(_:value:)`:
+    /// the row applies `.transaction { animation = nil }` per book, and only
+    /// a value-scoped animation wins over that override — a plain
+    /// `withAnimation` at the call site does not reach in here.
+    private func slot(
+        size layoutSize: CGSize, book: SavedGenerationSummary, angle: Double
+    ) -> some View {
+        Color.clear
+            .frame(width: layoutSize.width, height: layoutSize.height)
+            .animation(arrangeAnimation, value: layoutSize.width)
+            // `.bottomLeading`, not `.bottom`: both faces hinge on the
+            // slot's leading edge (see RotatingBookFaces). At rest each face
+            // is exactly the slot's width, so this looks identical to
+            // centering it.
+            .overlay(alignment: .bottomLeading) {
+                RotatingBookFaces(
+                    coverURL: book.coverURL,
+                    title: book.title,
+                    coverSize: coverSize,
+                    spineWidth: book.spineWidth,
+                    angle: angle)
+                    .animation(reduceMotion ? nil : rotationAnimation, value: angle)
+            }
+    }
+
+    /// The book's *layout* footprint follows its committed mode only, while
+    /// the artwork drawn into it follows the preview. That split is what lets
+    /// a rotate read immediately on the lifted book without the rest of the
+    /// row shifting under the open menu — the neighbours only move once
+    /// `BookShelfView.endArranging` commits the mode and this frame changes.
     private func shelfCover(for book: SavedGenerationSummary) -> some View {
-        SavedProjectCover(
-            coverURL: book.coverURL,
-            title: book.title,
-            size: coverSize)
+        let isArranging = arrangingBookID == book.id
+        let rendered = (isArranging ? previewDisplayMode : nil) ?? book.shelfDisplayMode
+        let layoutSize = size(for: book, mode: book.shelfDisplayMode)
+
+        // 0 = cover face-on, 90 = spine face-on. The *angle* is what
+        // animates — driving `RotatingBookFaces` off a continuous value
+        // rather than swapping two discrete views is what lets the book
+        // actually turn instead of blinking between faces.
+        let angle: Double = rendered == .spine ? 90 : 0
+
+        return slot(size: layoutSize, book: book, angle: angle)
             .opacity(hiddenBookID == book.id ? 0 : 1)
             .animation(.linear(duration: 0.001), value: hiddenBookID)
             .offset(y: liftedBookID == book.id ? liftOffset : 0)
-            // Nested inside the enclosing Button's own .transaction{nil}
-            // override the same way the opacity animation above is — an
-            // explicit .animation(_:value:) here is confirmed to win over
-            // that override; a trailing one chained onto the Button itself
-            // was not.
             .animation(liftAnimation, value: liftOffset)
+            .offset(y: isArranging ? arrangeLiftOffset : 0)
+            .shadow(
+                color: .black.opacity(isArranging ? 0.22 : 0),
+                radius: isArranging ? 10 : 0,
+                y: isArranging ? 6 : 0)
+            .animation(arrangeAnimation, value: arrangeLiftOffset)
+            .animation(arrangeAnimation, value: isArranging)
+    }
+
+    private var arrangeAnimation: Animation {
+        .spring(response: 0.34, dampingFraction: 0.84)
+    }
+
+    /// Enough life to read as a real flick of the wrist, damped enough that
+    /// it doesn't overshoot far past edge-on (`RotatingBookFaces` fades a
+    /// face out over its last degrees as a second line of defence).
+    private var rotationAnimation: Animation {
+        .spring(response: 0.45, dampingFraction: 0.8)
+    }
+
+    private func size(for book: SavedGenerationSummary, mode: ShelfDisplayMode) -> CGSize {
+        switch mode {
+        case .cover: return coverSize
+        case .spine: return CGSize(width: book.spineWidth, height: coverSize.height)
+        }
+    }
+}
+
+/// The two-option menu a long press raises above the lifted book. Positioned
+/// from the book's own measured frame (`BookCoverFramePreferenceKey`, which
+/// the shelf already tracks for the detail-modal hero), clamped so it can't
+/// run off either screen edge for a book at the end of a row.
+private struct BookArrangeMenu: View {
+    let isSpine: Bool
+    let anchor: CGRect?
+    let onRotate: () -> Void
+    let onDelete: () -> Void
+
+    private let menuWidth: CGFloat = 188
+    private let gapAboveBook: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                option(
+                    icon: .rotateCw,
+                    title: isSpine ? "Lay Flat" : "Rotate",
+                    role: .normal,
+                    action: onRotate)
+
+                Divider().frame(height: 26).overlay(BookShelfPalette.secondaryText.opacity(0.25))
+
+                option(icon: .trash, title: "Delete", role: .destructive, action: onDelete)
+            }
+            .frame(width: menuWidth)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(BookShelfPalette.primaryText.opacity(0.08)))
+            .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+            .position(position(in: geometry.size))
+            .transition(.scale(scale: 0.88, anchor: .bottom).combined(with: .opacity))
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func option(
+        icon: LucideIconName, title: String, role: OptionRole, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                LucideIcon(icon, size: 17, color: role.tint)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(role.tint)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
+    private enum OptionRole {
+        case normal, destructive
+
+        var tint: Color {
+            switch self {
+            case .normal: return BookShelfPalette.primaryText
+            case .destructive: return .red
+            }
+        }
+    }
+
+    /// Sits centered over the book and above it where there's room, flipping
+    /// below only when the book is too close to the top of the shelf.
+    private func position(in container: CGSize) -> CGPoint {
+        guard let anchor else {
+            return CGPoint(x: container.width / 2, y: container.height / 2)
+        }
+        let halfWidth = menuWidth / 2
+        let x = min(max(anchor.midX, halfWidth + 12), container.width - halfWidth - 12)
+        let above = anchor.minY - gapAboveBook - 30
+        let y = above < 40 ? anchor.maxY + gapAboveBook + 30 : above
+        return CGPoint(x: x, y: y)
     }
 }
 
