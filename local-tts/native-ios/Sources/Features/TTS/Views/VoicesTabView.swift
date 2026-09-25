@@ -23,6 +23,14 @@ struct VoicesTabView: View {
                 .listRowSeparator(.hidden)
             }
         }
+        // Default `List` styling is `.insetGrouped` here (no other
+        // `.listStyle` call in this app overrides it) — that adds a side
+        // margin and rounded corners at the *section* level, separate from
+        // `.listRowInsets`, which only zeroes a row's own internal padding.
+        // The zeroed row insets alone still left each horizontal grid
+        // inset from the true screen edges; `.plain` removes the section
+        // margin so the grids can actually reach edge-to-edge.
+        .listStyle(.plain)
         .contentMargins(.top, 8, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.appBackground.ignoresSafeArea())
@@ -36,6 +44,10 @@ struct VoicesTabView: View {
         // `.toolbarColorScheme`. Stating it here directly, rather than
         // relying solely on Home's window-level `.preferredColorScheme`
         // toggle, is what actually guarantees a white title.
+        // `.toolbarBackground(.visible, ...)` pairs with it — without an
+        // explicit background visibility, some iOS versions don't fully
+        // materialize a custom `.toolbarColorScheme` on the bar.
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(item: $selectedVoiceTile) { tile in
             VoicePreviewSheet(

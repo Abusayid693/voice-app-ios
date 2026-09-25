@@ -9,6 +9,10 @@ struct ImportHomeView: View {
     /// Driven by the Explore menu in `RootTabView`'s floating bar — Library,
     /// Voices and Tools are pushed here rather than mounted as peer tabs.
     @Binding var exploreDestination: ExploreDestination?
+    /// RootTabView owns the PDF file importer (it's global, reachable from
+    /// Add Books too) — forwarded into Tools' "Upload File" row so it
+    /// triggers the exact same picker rather than a second one.
+    let onAddBooks: () -> Void
 
     @State private var isSettingsPresented = false
     @State private var isAvatarPickerPresented = false
@@ -105,7 +109,7 @@ struct ImportHomeView: View {
         case .voices:
             VoicesTabView(packs: app.tts.packs, app: app)
         case .tools:
-            PlaceholderTabView(title: "Tools")
+            ToolsView(libraryViewModel: libraryViewModel, app: app, onAddBooks: onAddBooks)
         }
     }
 
@@ -280,5 +284,6 @@ extension Array {
 #Preview {
     let app = AppEnvironment.preview()
     return ImportHomeView(
-        libraryViewModel: app.library, app: app, exploreDestination: .constant(nil))
+        libraryViewModel: app.library, app: app, exploreDestination: .constant(nil),
+        onAddBooks: {})
 }

@@ -48,7 +48,8 @@ struct RootTabView: View {
             ImportHomeView(
                 libraryViewModel: app.library,
                 app: app,
-                exploreDestination: $exploreDestination)
+                exploreDestination: $exploreDestination,
+                onAddBooks: presentDocumentPicker)
                 // Tapping anywhere on the page dismisses the open menu.
                 // Clear rather than dimmed: the menu is a small floating
                 // control, not a modal, so it shouldn't darken the shelf.
