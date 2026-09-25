@@ -17,7 +17,16 @@ final class ReadingStatsViewModel: ObservableObject {
     /// into a single chronological list. `nil` cells are padding before
     /// Jan 1 or after Dec 31 of the current year, keeping every row a full
     /// 7 days; the view drops those when it flattens.
-    @Published private(set) var weeks: [[DayActivity?]] = []
+    ///
+    /// Seeded synchronously with a full year of zero-activity placeholder
+    /// days — same technique as Book Shelf's weekly teaser
+    /// (`ImportHomeView.emptyRecentDays`) — so the dot grid has its real,
+    /// final row count on the very first frame. Without this, `weeks`
+    /// started `[]`, `ReadingStatsView` showed its much shorter empty-state
+    /// message until the async `reload()` below resolved, and everything
+    /// below the graph (the goal gauge) visibly jumped down when the real
+    /// grid popped in.
+    @Published private(set) var weeks: [[DayActivity?]] = ReadingStatsViewModel.emptyYearWeeks()
     @Published private(set) var isLoading = false
     @Published private(set) var selectedDayDetail: DayDetail?
     /// Seconds listened today — drives the half-circle goal gauge. Read
@@ -27,6 +36,9 @@ final class ReadingStatsViewModel: ObservableObject {
 
     private let store: ReadingStatsStore
     private let calendar: Calendar
+    /// `weeks` is never actually empty now (seeded above), so it can't
+    /// double as the "have we loaded yet" flag `loadIfNeeded` needs.
+    private var hasLoaded = false
 
     init(store: ReadingStatsStore, calendar: Calendar = .current) {
         self.store = store
@@ -34,7 +46,8 @@ final class ReadingStatsViewModel: ObservableObject {
     }
 
     func loadIfNeeded() async {
-        guard weeks.isEmpty else { return }
+        guard !hasLoaded else { return }
+        hasLoaded = true
         await reload()
     }
 
@@ -46,12 +59,9 @@ final class ReadingStatsViewModel: ObservableObject {
     func reload() async {
         isLoading = true
         defer { isLoading = false }
-        let year = calendar.component(.year, from: Date())
-        guard
-            let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
-            let yearEndExclusive = calendar.date(
-                from: DateComponents(year: year + 1, month: 1, day: 1))
-        else { return }
+        guard let yearEndExclusive = Self.yearRange(calendar: calendar)?.endExclusive else { return }
+        let days = Self.daysInCurrentYear(calendar: calendar)
+        guard let yearStart = days.first else { return }
 
         let sessions = await store.sessions(from: yearStart, to: yearEndExclusive)
 
@@ -65,19 +75,46 @@ final class ReadingStatsViewModel: ObservableObject {
             }
         }
 
-        var days: [DayActivity] = []
-        var cursor = yearStart
-        while cursor < yearEndExclusive {
-            days.append(
-                DayActivity(
-                    day: cursor,
-                    listenedSeconds: listenedByDay[cursor] ?? 0,
-                    pagesCompleted: completedByDay[cursor] ?? 0))
+        let activity = days.map { day in
+            DayActivity(
+                day: day,
+                listenedSeconds: listenedByDay[day] ?? 0,
+                pagesCompleted: completedByDay[day] ?? 0)
+        }
+        weeks = Self.groupIntoWeeks(activity, calendar: calendar)
+        todayListenedSeconds = listenedByDay[calendar.startOfDay(for: Date())] ?? 0
+    }
+
+    /// Placeholder shape for `weeks`' synchronous seed — every day of the
+    /// current year at zero activity, so the real `reload()` swaps in new
+    /// values for the exact same set of cells rather than changing the
+    /// grid's row count.
+    private static func emptyYearWeeks(calendar: Calendar = .current) -> [[DayActivity?]] {
+        let activity = daysInCurrentYear(calendar: calendar).map { day in
+            DayActivity(day: day, listenedSeconds: 0, pagesCompleted: 0)
+        }
+        return groupIntoWeeks(activity, calendar: calendar)
+    }
+
+    private static func yearRange(calendar: Calendar) -> (start: Date, endExclusive: Date)? {
+        let year = calendar.component(.year, from: Date())
+        guard
+            let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+            let endExclusive = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1))
+        else { return nil }
+        return (start, endExclusive)
+    }
+
+    private static func daysInCurrentYear(calendar: Calendar) -> [Date] {
+        guard let range = yearRange(calendar: calendar) else { return [] }
+        var days: [Date] = []
+        var cursor = range.start
+        while cursor < range.endExclusive {
+            days.append(cursor)
             guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
             cursor = next
         }
-        weeks = Self.groupIntoWeeks(days, calendar: calendar)
-        todayListenedSeconds = listenedByDay[calendar.startOfDay(for: Date())] ?? 0
+        return days
     }
 
     func selectDay(_ day: Date) async {
