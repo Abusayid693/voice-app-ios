@@ -22,17 +22,7 @@ struct SavedProjectSpine: View {
 
     var body: some View {
         ZStack {
-            Group {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    LinearGradient.stablePlaceholder(seed: title)
-                }
-            }
-            .frame(width: size.width, height: size.height)
-            .clipped()
+            artwork
 
             spineShading
 
@@ -44,6 +34,31 @@ struct SavedProjectSpine: View {
             image = coverURL.flatMap { UIImage(contentsOfFile: $0.path) }
         }
         .accessibilityLabel("Spine for \(title)")
+    }
+
+    /// The cover turned on its side and run down the spine, so the artwork
+    /// follows the spine's long axis instead of being cropped to a thin
+    /// upright sliver of itself.
+    ///
+    /// The frame is deliberately **swapped** (`height × width`) *before*
+    /// rotating: `rotationEffect` doesn't change layout, so filling the
+    /// rotated shape means filling the pre-rotation rectangle it came from.
+    /// The outer frame afterwards reclaims the spine's real footprint. Same
+    /// -90° as `verticalTitle`, so artwork and title run the same way.
+    private var artwork: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                LinearGradient.stablePlaceholder(seed: title)
+            }
+        }
+        .frame(width: size.height, height: size.width)
+        .clipped()
+        .rotationEffect(.degrees(-90))
+        .frame(width: size.width, height: size.height)
     }
 
     /// Darkened overall so white title text stays legible over whatever the
