@@ -42,8 +42,8 @@ struct ReaderPagePickerSheet: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 16)
         .presentationBackground(.clear)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .presentationContentInteraction(.scrolls)
         .preferredColorScheme(theme.colorScheme)
     }

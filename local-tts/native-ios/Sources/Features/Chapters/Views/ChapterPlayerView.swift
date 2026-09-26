@@ -237,11 +237,12 @@ struct ChapterPlayerView: View {
         var heights: [Int: CGFloat] = [:]
     }
     @State private var groupHeightsBox = GroupHeightsBox()
-    // Play/pause button pulses opacity while nothing is playable yet
-    // (chapterPlayer.isBuffering — true entering the player before
-    // streaming's first chunk lands, or between chunks if playback ever
-    // catches up to the synthesis frontier).
+    // A spinning ring in the highlight color rings the play/pause button
+    // while nothing is playable yet (chapterPlayer.isBuffering — true
+    // entering the player before streaming's first chunk lands, or between
+    // chunks if playback ever catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
+    @State private var bufferingRingRotation: Double = 0
     @State private var isOptionsSheetPresented = false
     @State private var isPagePickerPresented = false
     @State private var isVoiceSelectionPresented = false
@@ -307,16 +308,22 @@ struct ChapterPlayerView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            readAlong
-            if showFloatingPlayer, hasReadableText {
-                // Keep the compact pill 30pt lower than its prior placement
-                // without moving the expanded transport card.
-                floatingPlayer.padding(.bottom, isPlayerCollapsed ? -27 : 18)
+        readAlong
+            .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
+            .background(readerTheme.background.ignoresSafeArea())
+            // `.overlay`, not a shared ZStack with readAlong: `.safeAreaInset`
+            // content composites on top of its own main view, so a ZStack
+            // sibling of readAlong still painted *under* pageNavigator's
+            // background wherever the pill's negative bottom padding dipped
+            // into that region. An overlay applied after the inset is
+            // guaranteed to draw on top of both.
+            .overlay(alignment: .bottom) {
+                if showFloatingPlayer, hasReadableText {
+                    // Same bottom padding either state — collapsing must not
+                    // shift the card's position.
+                    floatingPlayer.padding(.bottom, 18)
+                }
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
-        .background(readerTheme.background.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -425,7 +432,13 @@ struct ChapterPlayerView: View {
         }
     }
 
-    private var pageNavigator: some View {
+    /// Shared by `pageNavigator` (the bottom bar) and `expandedPageControls`
+    /// (the same controls repeated inside the expanded player card, since
+    /// that card's own height now hides the bar underneath it) — same
+    /// layout, sized down a step for the card.
+    private func pageControlsRow(
+        buttonSize: CGFloat, iconSize: CGFloat, cornerRadius: CGFloat, pagesRowHeight: CGFloat
+    ) -> some View {
         HStack(spacing: 12) {
             Button {
                 refreshCompletedPages()
@@ -433,7 +446,7 @@ struct ChapterPlayerView: View {
             } label: {
                 Label("Pages", systemImage: "list.bullet")
                     .font(AppTextStyle.label.font)
-                    .frame(height: 40)
+                    .frame(height: pagesRowHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -447,11 +460,11 @@ struct ChapterPlayerView: View {
                     selectPage(currentPageIndex - 1)
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 40, height: 40)
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .frame(width: buttonSize, height: buttonSize)
                         .background(
                             readerTheme.controlBackground,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -464,11 +477,11 @@ struct ChapterPlayerView: View {
                     selectPage(currentPageIndex + 1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 40, height: 40)
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .frame(width: buttonSize, height: buttonSize)
                         .background(
                             readerTheme.controlBackground,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -478,17 +491,40 @@ struct ChapterPlayerView: View {
                 .accessibilityLabel("Next page")
             }
         }
+    }
+
+    /// The same page controls, scaled down to sit inside the expanded
+    /// player card rather than the full-width bottom bar.
+    private var expandedPageControls: some View {
+        pageControlsRow(buttonSize: 34, iconSize: 14, cornerRadius: 9, pagesRowHeight: 34)
+    }
+
+    private var pageNavigator: some View {
+        pageControlsRow(buttonSize: 40, iconSize: 16, cornerRadius: 10, pagesRowHeight: 40)
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
         .background {
+            // A fixed `.frame(height:)` here fought `.ignoresSafeArea`: it
+            // pinned the rectangle to an exact size instead of letting it
+            // grow to the true screen edge, leaving a gap below it over the
+            // home indicator. Growing the *top* edge with negative padding
+            // instead leaves the default background sizing (which already
+            // matches this bar and reaches the true bottom via
+            // ignoresSafeArea below) alone, and only extends upward — same
+            // "extend past your own bounds" move as ShelfTopBlur, just
+            // facing the other way.
             Rectangle()
                 .fill(.ultraThinMaterial)
                 .mask {
                     LinearGradient(
-                        colors: [.clear, .black.opacity(0.72), .black],
+                        colors: [
+                            .clear, .black.opacity(0.18), .black.opacity(0.55),
+                            .black.opacity(0.85), .black,
+                        ],
                         startPoint: .top,
                         endPoint: .bottom)
                 }
+                .padding(.top, -84)
                 .ignoresSafeArea(edges: .bottom)
         }
     }
@@ -626,17 +662,22 @@ struct ChapterPlayerView: View {
         return true
     }
 
-    // Starting a `.repeatForever` animation from `false` toggles it into
-    // an indefinite back-and-forth between 1 and 0.5 opacity; setting it
-    // back to `false` (with its own short, non-repeating animation) is
-    // what stops it once something is actually playable.
+    // The ring's own rotation is a separate `.linear.repeatForever` drive —
+    // 0 to 360 rather than back-and-forth, so it spins one direction rather
+    // than pulsing in place. `isPulsingPlayButton` just shows/hides it; once
+    // it's hidden the ring leaves the view tree, which cancels the
+    // in-progress repeatForever with it, so there's nothing to stop by hand.
     private func updatePlayButtonPulse(isBuffering: Bool) {
         if isBuffering {
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+            bufferingRingRotation = 0
+            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
+                bufferingRingRotation = 360
+            }
+            withAnimation(.easeOut(duration: 0.2)) {
                 isPulsingPlayButton = true
             }
         } else {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.2)) {
                 isPulsingPlayButton = false
             }
         }
@@ -741,12 +782,21 @@ struct ChapterPlayerView: View {
     }
 
     private var expandedPlayer: some View {
-        // 56pt header + 64pt transport row - 4pt overlap = 116pt,
-        // approximately 70% of the previous 166pt card, without shrinking
-        // any of the enlarged control hit targets.
-        VStack(spacing: -4) {
-            durationHeader
-            transportRow
+        VStack(spacing: 0) {
+            // 56pt header + 64pt transport row - 4pt overlap = 116pt,
+            // approximately 70% of the previous 166pt card, without
+            // shrinking any of the enlarged control hit targets.
+            VStack(spacing: -4) {
+                durationHeader
+                transportRow
+            }
+
+            // pageNavigator sits underneath this card now that the card's
+            // own height covers it, so its controls are unreachable while
+            // expanded without a copy in here too.
+            expandedPageControls
+                .padding(.top, 2)
+                .padding(.bottom, 12)
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
@@ -778,25 +828,14 @@ struct ChapterPlayerView: View {
         .frame(height: 56)
     }
 
+    // Collapsed to just the play/pause control — the separate expand chevron
+    // is gone, and this button now does both jobs at once (see
+    // `playPauseButton(alsoExpands:)`).
     private var compactPlayer: some View {
-        HStack(spacing: 4) {
-            playPauseButton
-
-            Button {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                    isPlayerCollapsed = false
-                }
-            } label: {
-                LucideIcon(.chevronUp, size: 24, color: readerTheme.primaryText)
-                    .frame(width: 56, height: 56)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Expand player")
-        }
-        .background { playerBackground(cornerRadius: 32) }
-        .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-        .onTapGesture { }
+        playPauseButton(alsoExpands: true)
+            .background { playerBackground(cornerRadius: 32) }
+            .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .onTapGesture { }
     }
 
     // Liquid Glass is only available on iOS 26+. Its tint follows the
@@ -846,7 +885,19 @@ struct ChapterPlayerView: View {
     }
 
     private var playPauseButton: some View {
+        playPauseButton(alsoExpands: false)
+    }
+
+    /// `alsoExpands` is what the collapsed pill uses: one tap both expands
+    /// the player and toggles playback, since the chevron that used to do
+    /// the expanding on its own is gone.
+    private func playPauseButton(alsoExpands: Bool) -> some View {
         Button {
+            if alsoExpands {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    isPlayerCollapsed = false
+                }
+            }
             toggleKokoroPlayback()
         } label: {
             (displayedIsPlaying ? Hugeicons.pause : Hugeicons.play)
@@ -864,7 +915,19 @@ struct ChapterPlayerView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(isCurrentKokoroPageActive && chapterPlayer.isPlaying ? "Pause" : "Play")
         .disabled(!hasReadableText)
-        .opacity(isPulsingPlayButton ? 0.5 : 1)
+        .overlay {
+            if isPulsingPlayButton {
+                Circle()
+                    .trim(from: 0, to: 0.72)
+                    .stroke(
+                        readerTheme.wordHighlightBackground,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 72, height: 72)
+                    .rotationEffect(.degrees(bufferingRingRotation))
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
         .onAppear {
             updatePlayButtonPulse(
                 isBuffering: isCurrentKokoroPageActive && chapterPlayer.isBuffering)
