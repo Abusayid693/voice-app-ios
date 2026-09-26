@@ -10,6 +10,7 @@ struct ToolsView: View {
     let onAddBooks: () -> Void
 
     @State private var isWriteTextPresented = false
+    @State private var isPlaybackLabPresented = false
     @State private var openProject: SavedGeneration?
 
     var body: some View {
@@ -37,6 +38,16 @@ struct ToolsView: View {
                     icon: .image, title: "Upload Image",
                     subtitle: "Coming soon", isEnabled: false
                 ) {}
+                // A scratch harness, not a shipping feature: paste a long text
+                // and check whether synthesis keeps ahead of playback with the
+                // screen locked.
+                ToolActionRow(
+                    icon: .headphones, title: "Background Playback",
+                    subtitle: "Test continuous play with the screen locked",
+                    isEnabled: true
+                ) {
+                    isPlaybackLabPresented = true
+                }
             }
             .listRowBackground(Color.appSecondaryBackground)
         }
@@ -48,6 +59,9 @@ struct ToolsView: View {
         // ImportHomeView applies at the push site, only `.preferredColorScheme`/
         // `.toolbarColorScheme`.
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationDestination(isPresented: $isPlaybackLabPresented) {
+            StreamingPlaybackLabView(viewModel: app.tts)
+        }
         .navigationDestination(isPresented: $isWriteTextPresented) {
             WriteTextView(library: libraryViewModel, viewModel: app.tts) { project in
                 openProject = project

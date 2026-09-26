@@ -30,6 +30,18 @@ final class DependencyContainer {
     // downloaded" state for Kokoro.
     let isKokoroPackBundled: Bool
 
+    /// Every Kokoro stage on the ANE or the CPU, and **none on the GPU**.
+    ///
+    /// FluidAudio's default on this OS line puts the noise and tail (iSTFT)
+    /// stages on `.cpuAndGPU`, which is faster — but iOS refuses Metal work to
+    /// a backgrounded app outright (`kIOGPUCommandBufferCallbackError`
+    /// `BackgroundExecutionNotPermitted`), and the failure surfaces as an
+    /// MPSGraph assertion that aborts the process rather than an error we could
+    /// catch. So synthesis while the screen is locked is impossible on the GPU
+    /// route, at any deployment target — the restriction is not version
+    /// specific. This is the routing FluidAudio itself defaults to on OS 27+.
+    static let kokoroComputeUnits: KokoroAneComputeUnits = .aneTailCpu
+
     private static func makeKokoroManager() -> (
         manager: KokoroAneManager, directory: URL?, isBundled: Bool
     ) {
@@ -42,7 +54,7 @@ final class DependencyContainer {
         // the bundle's top level, sibling to the executable).
         let bundledDir = Bundle.main.bundleURL.appendingPathComponent("CustomKokoroModel")
         guard FileManager.default.fileExists(atPath: bundledDir.path) else {
-            return (KokoroAneManager(), nil, false)
+            return (KokoroAneManager(computeUnits: kokoroComputeUnits), nil, false)
         }
         // The app's own .app bundle is read-only at runtime, but CoreML's
         // ANE compilation step needs to write analytics/cache data back
@@ -53,11 +65,15 @@ final class DependencyContainer {
         // our bundled models there once (skipped on later launches) so
         // the same thing works for this custom build.
         guard let writableDir = DependencyContainer.writableCopy(ofBundled: bundledDir) else {
-            return (KokoroAneManager(), nil, false)
+            return (KokoroAneManager(computeUnits: kokoroComputeUnits), nil, false)
         }
         // defaultVoice is mostly moot — TTSViewModel always passes an
         // explicit voice — but af_heart is a sane fallback.
-        return (KokoroAneManager(defaultVoice: "af_heart", directory: writableDir), writableDir, true)
+        return (
+            KokoroAneManager(
+                defaultVoice: "af_heart", directory: writableDir,
+                computeUnits: kokoroComputeUnits),
+            writableDir, true)
     }
 
     init() {
@@ -91,12 +107,16 @@ final class DependencyContainer {
     // everything needed (7-stage chain + G2P frontend assets + voices), so
     // these are real, network-downloaded managers. `directory: nil` lets
     // KokoroAneResourceDownloader use its own default cache location.
-    let kokoroMandarinManager = KokoroAneManager(variant: .mandarin, defaultVoice: "zf_001")
+    let kokoroMandarinManager = KokoroAneManager(
+        variant: .mandarin, defaultVoice: "zf_001",
+        computeUnits: DependencyContainer.kokoroComputeUnits)
     // Japanese requires FluidAudio pinned past v0.15.7 (see project.yml) —
     // KokoroAneManager.phonemes(for:) unconditionally threw for this
     // variant before FluidInference/FluidAudio#915 added a real MeCab +
     // Cutlet text frontend.
-    let kokoroJapaneseManager = KokoroAneManager(variant: .japanese, defaultVoice: "jf_alpha")
+    let kokoroJapaneseManager = KokoroAneManager(
+        variant: .japanese, defaultVoice: "jf_alpha",
+        computeUnits: DependencyContainer.kokoroComputeUnits)
 
     // Lazy so opening/creating the SwiftData store doesn't tax cold
     // launch — only constructed on first actual use (the reader's first
