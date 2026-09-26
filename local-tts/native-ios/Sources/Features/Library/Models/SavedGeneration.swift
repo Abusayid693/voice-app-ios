@@ -94,6 +94,20 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    /// The project's own copy of the imported document, kept so the reader can
+    /// show the original page. The import job also holds a copy, but that
+    /// directory is the importer's to delete — a project cannot depend on it.
+    static func sourcePDFFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("source.pdf")
+    }
+
+    /// Nil for typed text, and for PDFs imported before the copy existed —
+    /// which is what the reader keys off to hide the original-page control.
+    static func existingSourcePDFURL(id: UUID) -> URL? {
+        let url = sourcePDFFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     static func pageFileURL(projectID: UUID, index: Int) -> URL {
         projectPagesDirectory(id: projectID)
             .appendingPathComponent(String(format: "%06d.json", index))

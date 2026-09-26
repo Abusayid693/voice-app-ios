@@ -24,7 +24,7 @@ final class LibraryViewModel: ObservableObject {
     /// Copies finalized PDF page files without decoding the full document.
     @discardableResult
     func saveImportedPDF(
-        title: String, pagesDirectory: URL, pageCount: Int, coverURL: URL?,
+        title: String, pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
         engine: Engine, voiceName: String
     ) -> UUID? {
         guard pageCount > 0 else { return nil }
@@ -43,6 +43,13 @@ final class LibraryViewModel: ObservableObject {
                 // readable project if a raster file is unexpectedly bad.
                 try? FileManager.default.copyItem(
                     at: coverURL, to: SavedGeneration.coverFileURL(id: id))
+            }
+            if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
+                // Best-effort for the same reason: without it the reader just
+                // can't offer the original-page view for this book, which is
+                // no reason to fail an otherwise readable import.
+                try? FileManager.default.copyItem(
+                    at: sourceURL, to: SavedGeneration.sourcePDFFileURL(id: id))
             }
             try persist(entry)
             return id

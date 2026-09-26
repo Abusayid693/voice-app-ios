@@ -220,17 +220,18 @@ struct PDFParagraphAssembler {
 
         func flush() {
             guard let first = current.first else { return }
-            let text = joined(current)
-            if !text.isEmpty {
+            let joined = joined(current)
+            if !joined.text.isEmpty {
                 // The longest line represents the paragraph's typography
                 // better than its first one, which may be a short opener.
                 let dominant = current.max { $0.text.count < $1.text.count } ?? first
                 let heading = isHeading(dominant, metrics: metrics)
                 result.append(PDFParagraph(
-                    text: text, pageIndex: pageIndex, top: first.bounds.y,
+                    text: joined.text, pageIndex: pageIndex, top: first.bounds.y,
                     fontSize: dominant.fontSize, isBold: dominant.isBold,
                     isHeading: heading,
-                    fontScale: heading ? headingScale(dominant, metrics: metrics) : 1))
+                    fontScale: heading ? headingScale(dominant, metrics: metrics) : 1,
+                    lineSpans: joined.spans))
             }
             current = []
         }
@@ -441,10 +442,25 @@ struct PDFParagraphAssembler {
         text.last.map(Self.wrapHyphens.contains) ?? false
     }
 
-    private func joined(_ lines: [PDFTextFragment]) -> String {
+    /// Joins a paragraph's lines, recording where each one landed so the reader
+    /// can map text back to the page image. The offsets have to be tracked here
+    /// rather than recovered later: this is the last point at which a line's
+    /// text and its rectangle are still associated, and joining rewrites the
+    /// text — it merges fragments, drops wrap hyphens and inserts separators.
+    private func joined(
+        _ lines: [PDFTextFragment]
+    ) -> (text: String, spans: [PDFParagraphLineSpan]) {
         var text = ""
+        var spans: [PDFParagraphLineSpan] = []
+
+        func appendSpan(start: Int, _ line: PDFTextFragment) {
+            spans.append(PDFParagraphLineSpan(
+                start: start, length: line.text.count, bounds: line.bounds))
+        }
+
         for line in lines {
             guard !text.isEmpty else {
+                appendSpan(start: 0, line)
                 text = line.text
                 continue
             }
@@ -452,16 +468,37 @@ struct PDFParagraphAssembler {
                 // A hyphen at a wrap never has a space after it, whether or
                 // not the word itself should be rejoined — so "1990-"/"1995"
                 // becomes "1990-1995" rather than "1990- 1995".
-                text = dehyphenated(text, joining: line.text) ?? text + line.text
-            } else if let last = text.last, let next = line.text.first,
-                      isCJK(last), isCJK(next)
-            {
+                if let rejoined = dehyphenated(text, joining: line.text) {
+                    // The hyphen left with the previous line, so that span
+                    // covers one character fewer and this one starts there.
+                    if let previous = spans.popLast() {
+                        spans.append(PDFParagraphLineSpan(
+                            start: previous.start, length: max(0, previous.length - 1),
+                            bounds: previous.bounds))
+                    }
+                    appendSpan(start: text.count - 1, line)
+                    text = rejoined
+                } else {
+                    appendSpan(start: text.count, line)
+                    text += line.text
+                }
+                continue
+            }
+            if let last = text.last, let next = line.text.first, isCJK(last), isCJK(next) {
+                appendSpan(start: text.count, line)
                 text += line.text
             } else {
-                text += " " + line.text
+                text += " "
+                appendSpan(start: text.count, line)
+                text += line.text
             }
         }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Every fragment is trimmed by `normalizedText`, so this should never
+        // fire — but if it did, every recorded offset would shift. Drop the
+        // spans rather than point the reader at the wrong part of the page.
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed == text ? (text, spans) : (trimmed, [])
     }
 
     /// Drops a wrap hyphen only when the break is genuinely mid-word: a

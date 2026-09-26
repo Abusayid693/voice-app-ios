@@ -262,6 +262,9 @@ struct ChapterPlayerView: View {
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
     @AppStorage("chapterPlayerFontFamily") private var readerFontFamily: ReaderFontFamily = .sfProText
     @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
+    /// Shows the imported document's own page instead of the extracted text.
+    /// Only reachable for PDF projects that kept a copy of their source.
+    @AppStorage("chapterPlayerShowsOriginalPage") private var showsOriginalPage = false
 
     init(
         project: SavedGeneration, initialPageIndex: Int? = nil,
@@ -311,8 +314,29 @@ struct ChapterPlayerView: View {
         paragraphGroups.isEmpty ? visibleChunkTexts.indices.map { [$0] } : paragraphGroups
     }
 
+    /// The project's own copy of the imported PDF, when it has one. Books
+    /// imported before that copy existed return nil, which hides the control.
+    private var sourcePDFURL: URL? {
+        SavedGeneration.existingSourcePDFURL(id: project.id)
+    }
+
+    private var canShowOriginalPage: Bool { sourcePDFURL != nil }
+
+    @ViewBuilder
+    private var readingSurface: some View {
+        if showsOriginalPage, let sourcePDFURL {
+            ReaderPDFPageView(
+                pdfURL: sourcePDFURL, pageIndex: currentPageIndex,
+                highlights: currentChunkPageRects, theme: readerTheme)
+                .padding(.horizontal, 12)
+                .padding(.bottom, showFloatingPlayer ? 96 : 12)
+        } else {
+            readAlong
+        }
+    }
+
     var body: some View {
-        readAlong
+        readingSurface
             .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
             .background(readerTheme.background.ignoresSafeArea())
             // `.overlay`, not a shared ZStack with readAlong: `.safeAreaInset`
@@ -335,6 +359,7 @@ struct ChapterPlayerView: View {
                 animatedPageTitle
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
+                if canShowOriginalPage { originalPageToolbarControl }
                 generationToolbarControl
                 Button {
                     isOptionsSheetPresented = true
@@ -592,6 +617,22 @@ struct ChapterPlayerView: View {
         }
     }
 
+    /// Switches between the extracted text and the document's own page. Filled
+    /// while original-page mode is on, so the control shows the current state
+    /// rather than only what tapping it would do.
+    private var originalPageToolbarControl: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showsOriginalPage.toggle()
+            }
+        } label: {
+            LucideIcon(
+                showsOriginalPage ? .fileText : .file,
+                color: showsOriginalPage ? readerTheme.controlAccent : readerTheme.primaryText)
+        }
+        .accessibilityLabel(showsOriginalPage ? "Show extracted text" : "Show original page")
+    }
+
     @ViewBuilder
     private var generationToolbarControl: some View {
         if let page = currentPage, hasReadableText {
@@ -786,6 +827,28 @@ struct ChapterPlayerView: View {
             searchStart = range.upperBound
         }
         return ranges
+    }
+
+    /// The source-page rectangles the chunk being spoken occupies, as fractions
+    /// of the page — what original-page mode highlights.
+    ///
+    /// Line rects are recorded at import against `ReaderPage.text`, and chunks
+    /// are slices of that same string, so this is the same offset lookup the
+    /// heading styling does. Overlap rather than containment, because one chunk
+    /// normally spans several source lines and starts mid-line.
+    private var currentChunkPageRects: [CGRect] {
+        guard let page = currentPage, !page.lineRects.isEmpty else { return [] }
+        let texts = visibleChunkTexts
+        let index = chapterPlayer.currentChunkIndex
+        guard isCurrentKokoroPageActive, texts.indices.contains(index) else { return [] }
+        let ranges = chunkRanges(in: page.text, texts: texts)
+        guard ranges.indices.contains(index), let range = ranges[index] else { return [] }
+
+        let start = page.text.distance(from: page.text.startIndex, to: range.lowerBound)
+        let end = page.text.distance(from: page.text.startIndex, to: range.upperBound)
+        return page.lineRects
+            .filter { $0.start < end && $0.end > start }
+            .map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
     }
 
     /// Matches each paragraph group against the page's stored heading ranges.

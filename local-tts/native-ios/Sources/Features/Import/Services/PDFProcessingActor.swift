@@ -80,10 +80,14 @@ actor PDFProcessingActor {
             {
                 readerPage = existing
             } else {
-                let paragraphs = loadPage(job: job, index: pageIndex).map {
+                let content = loadPage(job: job, index: pageIndex)
+                let paragraphs = content.map {
                     makeParagraphs(from: $0, excluding: repeated, bodyFontSize: bodyFontSize)
                 } ?? []
-                readerPage = makeReaderPage(at: pageIndex, from: paragraphs)
+                readerPage = makeReaderPage(
+                    at: pageIndex, from: paragraphs,
+                    pageSize: CGSize(
+                        width: content?.pageWidth ?? 0, height: content?.pageHeight ?? 0))
                 let data = try JSONEncoder().encode(readerPage)
                 try data.write(to: job.readerPageURL(index: pageIndex), options: .atomic)
             }
@@ -101,6 +105,7 @@ actor PDFProcessingActor {
         return PDFImportResult(
             title: job.sourceFileName,
             pagesDirectory: job.readerPagesDirectory,
+            sourceURL: job.sourceURL,
             pageCount: pageCount,
             coverURL: coverURL)
     }
@@ -216,27 +221,47 @@ actor PDFProcessingActor {
     /// styling travels beside `text` rather than inside it, because the reader
     /// locates synthesis chunks by searching for them as literal substrings of
     /// this exact string (and the TTS engine speaks it verbatim).
-    private func makeReaderPage(at index: Int, from paragraphs: [PDFParagraph]) -> ReaderPage {
+    private func makeReaderPage(
+        at index: Int, from paragraphs: [PDFParagraph], pageSize: CGSize
+    ) -> ReaderPage {
         let separator = "\n\n"
         var text = ""
         var headings: [ReaderStyledRange] = []
+        var lineRects: [ReaderTextRect] = []
+        let canMapRects = pageSize.width > 0 && pageSize.height > 0
+
         for paragraph in paragraphs where !paragraph.text.isEmpty {
             if !text.isEmpty { text += separator }
+            let base = text.count
             if paragraph.isHeading {
                 headings.append(ReaderStyledRange(
-                    start: text.count, length: paragraph.text.count,
+                    start: base, length: paragraph.text.count,
                     style: ReaderTextStyle(
                         scale: paragraph.fontScale, isBold: paragraph.isBold)))
             }
+            if canMapRects {
+                // Rebase each line onto the page's text, and express its
+                // rectangle as a fraction of the page so the reader can scale
+                // it to whatever size it renders the page at.
+                for span in paragraph.lineSpans {
+                    lineRects.append(ReaderTextRect(
+                        start: base + span.start, length: span.length,
+                        x: span.bounds.x / pageSize.width,
+                        y: span.bounds.y / pageSize.height,
+                        width: span.bounds.width / pageSize.width,
+                        height: span.bounds.height / pageSize.height))
+                }
+            }
             text += paragraph.text
         }
+
         // Paragraph text is already trimmed, so no offset can shift here — but
         // guard the invariant rather than trusting it.
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed == text else {
             return ReaderPage(index: index, text: trimmed)
         }
-        return ReaderPage(index: index, text: text, headings: headings)
+        return ReaderPage(index: index, text: text, headings: headings, lineRects: lineRects)
     }
 
     private func isPrintedPageNumber(_ line: PDFTextFragment, pageHeight: Double) -> Bool {

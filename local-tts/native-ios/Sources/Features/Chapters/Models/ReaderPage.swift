@@ -28,20 +28,50 @@ struct ReaderStyledRange: Codable, Hashable, Sendable {
     var end: Int { start + length }
 }
 
+/// Where a run of this page's text sat on the original PDF page, for reading
+/// along on the page image itself rather than on the extracted text.
+///
+/// Coordinates are fractions of the source page's own width and height with a
+/// top-left origin, so a view scales them by whatever size it renders the page
+/// at and needs no page dimensions of its own.
+///
+/// Deliberately its own type rather than reusing `PDFNormalizedRect`: that
+/// lives in `Features/Import`, and the reader has no business depending on the
+/// import pipeline's models.
+struct ReaderTextRect: Codable, Hashable, Sendable {
+    /// Character offset into `ReaderPage.text`.
+    let start: Int
+    let length: Int
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+
+    var end: Int { start + length }
+}
+
 struct ReaderPage: Codable, Identifiable, Hashable, Sendable {
     let index: Int
     let text: String
     /// Empty for typed text and for every page saved before headings existed.
     let headings: [ReaderStyledRange]
+    /// One entry per source line, in reading order. Empty for typed text and
+    /// for pages imported before this existed — which is what the reader keys
+    /// off to decide whether the original-page view is available at all.
+    let lineRects: [ReaderTextRect]
 
     var id: Int { index }
     var number: Int { index + 1 }
     var title: String { "Page \(number)" }
 
-    init(index: Int, text: String, headings: [ReaderStyledRange] = []) {
+    init(
+        index: Int, text: String, headings: [ReaderStyledRange] = [],
+        lineRects: [ReaderTextRect] = []
+    ) {
         self.index = index
         self.text = text
         self.headings = headings
+        self.lineRects = lineRects
     }
 
     // Hand-written because Swift's synthesized `Decodable` throws
@@ -55,6 +85,8 @@ struct ReaderPage: Codable, Identifiable, Hashable, Sendable {
         text = try container.decode(String.self, forKey: .text)
         headings = try container.decodeIfPresent(
             [ReaderStyledRange].self, forKey: .headings) ?? []
+        lineRects = try container.decodeIfPresent(
+            [ReaderTextRect].self, forKey: .lineRects) ?? []
     }
 }
 
