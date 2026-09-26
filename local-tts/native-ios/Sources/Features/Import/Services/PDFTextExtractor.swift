@@ -263,23 +263,47 @@ struct PDFKitTextExtractor: PDFTextExtractor {
 
     /// Reading order within one column: top to bottom, then along each row.
     ///
-    /// The row key is quantised rather than compared with an epsilon. An
-    /// `abs(a.y - b.y) > 2` predicate is not a strict weak ordering — it is
-    /// non-transitive across near-equal tops — so `sorted` was free to produce
-    /// an arbitrary order for lines sharing a row.
+    /// Rows are found by **vertical overlap**, not by comparing tops. Two
+    /// fragments of one visual line do not report the same top — a curly quote
+    /// and body text come from different fonts, so their bounds origins differ
+    /// by a fraction of a point. Bucketing `y` (which this did) put those two
+    /// halves in different rows whenever the fraction straddled a bucket
+    /// boundary, and the later-bucketed half then sorted after the whole rest
+    /// of the line: `‘Khalistan’. This demand…` came out as `This demand…
+    /// ‘Khalistan’`. Comparing tops with an epsilon instead is no good either —
+    /// `abs(a.y - b.y) > 2` is non-transitive, so `sorted` may order near-equal
+    /// tops arbitrarily. Assigning an integer row up front gives a strict weak
+    /// ordering *and* survives sub-point differences within a row.
     private func byRow(
         _ lines: [PDFTextFragment], rightToLeft: Bool
     ) -> [PDFTextFragment] {
         guard lines.count > 1 else { return lines }
-        return lines
-            .map { (row: ($0.bounds.y / 3).rounded(.down), line: $0) }
-            .sorted { lhs, rhs in
-                guard lhs.row == rhs.row else { return lhs.row < rhs.row }
-                return rightToLeft
-                    ? lhs.line.bounds.x > rhs.line.bounds.x
-                    : lhs.line.bounds.x < rhs.line.bounds.x
+        let sorted = lines.sorted { $0.bounds.y < $1.bounds.y }
+        var rows: [Int] = []
+        rows.reserveCapacity(sorted.count)
+        var row = 0
+        var top = sorted[0].bounds.y
+        var bottom = sorted[0].bounds.maxY
+        for line in sorted {
+            let overlap = min(bottom, line.bounds.maxY) - max(top, line.bounds.y)
+            let shorter = min(bottom - top, line.bounds.height)
+            if shorter > 0, overlap / shorter > 0.5 {
+                bottom = max(bottom, line.bounds.maxY)
+            } else {
+                row += 1
+                top = line.bounds.y
+                bottom = line.bounds.maxY
             }
-            .map(\.line)
+            rows.append(row)
+        }
+        return zip(rows, sorted)
+            .sorted { lhs, rhs in
+                guard lhs.0 == rhs.0 else { return lhs.0 < rhs.0 }
+                return rightToLeft
+                    ? lhs.1.bounds.x > rhs.1.bounds.x
+                    : lhs.1.bounds.x < rhs.1.bounds.x
+            }
+            .map(\.1)
     }
 
     private func isPredominantlyRightToLeft(_ lines: [PDFTextFragment]) -> Bool {

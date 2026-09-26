@@ -124,10 +124,21 @@ struct PDFParagraphAssembler {
     private func mergedLines(_ lines: [PDFTextFragment]) -> [PDFTextFragment] {
         var merged: [PDFTextFragment] = []
         for line in lines {
-            guard let previous = merged.last,
-                  sharesRow(previous, line),
-                  let combined = combining(previous, line)
-            else {
+            // Either arrival order is accepted. The two halves of a row can
+            // reach here right-hand-first if anything upstream orders them by
+            // a top edge, since fragments in different fonts do not report the
+            // same top — insisting on left-to-right made the merge silently
+            // fail exactly when it was needed. Reordering only this adjacent
+            // pair keeps a genuine two-column page (emitted column by column,
+            // deliberately not in row order) untouched.
+            guard let previous = merged.last, sharesRow(previous, line) else {
+                merged.append(line)
+                continue
+            }
+            let ordered = line.bounds.x < previous.bounds.x
+                ? (left: line, right: previous)
+                : (left: previous, right: line)
+            guard let combined = combining(ordered.left, ordered.right) else {
                 merged.append(line)
                 continue
             }
@@ -258,9 +269,11 @@ struct PDFParagraphAssembler {
 
         // 3. The previous line stopped short of the right edge — in justified
         // text the single most reliable end-of-paragraph signal there is. A
-        // wrap hyphen means the word continues, so it is never an ending.
+        // wrap hyphen means the word continues, so it is never an ending, and
+        // neither is a next line that plainly continues a sentence.
         if metrics.isJustified, !previousIsHeading,
            !endsWithWrapHyphen(previous.text),
+           !continuesPreviousLine(current.text),
            previous.bounds.maxX < metrics.columnRight - metrics.columnWidth * 0.06
         {
             return true
@@ -312,6 +325,16 @@ struct PDFParagraphAssembler {
     private func headingScale(_ line: PDFTextFragment, metrics: Metrics) -> Double {
         guard metrics.referenceFontSize > 0, line.fontSize > 0 else { return 1 }
         return min(2, max(1, line.fontSize / metrics.referenceFontSize))
+    }
+
+    /// A line that opens mid-sentence is never the start of a paragraph. The
+    /// punctuation case is the one that matters in practice: when PDFKit splits
+    /// a line after a quoted word, the remainder begins with the sentence's own
+    /// full stop — `‘Khalistan’` / `. This demand…` — and the short first half
+    /// would otherwise look like a paragraph ending.
+    private func continuesPreviousLine(_ text: String) -> Bool {
+        guard let first = text.first else { return false }
+        return first.isLowercase || ".,;:!?".contains(first)
     }
 
     private func isAllCaps(_ text: String) -> Bool {
