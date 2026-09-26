@@ -139,6 +139,13 @@ struct PDFParagraph: Codable, Hashable {
     let top: Double
     let fontSize: Double
     let isBold: Bool
+    /// Set by `PDFParagraphAssembler` from the same typographic evidence it uses
+    /// to break paragraphs, so a title/chapter/lesson heading can be styled in
+    /// the reader instead of reading as body text.
+    let isHeading: Bool
+    /// How much larger than the document's body text this paragraph was, already
+    /// clamped. 1 for body text and for a heading set apart only by weight.
+    let fontScale: Double
 }
 
 struct PDFImportResult: Sendable {

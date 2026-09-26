@@ -200,6 +200,10 @@ struct ChapterPlayerView: View {
     // (chapterPlayer's ticker), and this does an O(n) string search over
     // the chapter text.
     @State private var paragraphGroups: [[Int]] = []
+    /// One entry per paragraph group: the heading style the source document gave
+    /// it, or nil for body text. Computed alongside `paragraphGroups` because it
+    /// reuses the same chunk-to-page-text offsets.
+    @State private var paragraphStyles: [ReaderTextStyle?] = []
     // Precomputed per-group word items (see wordItems(for:)) + a
     // per-group revision, both feeding ParagraphRow's Equatable
     // conformance — the actual fix for read-along scroll jank. Without
@@ -394,6 +398,7 @@ struct ChapterPlayerView: View {
         .onChange(of: chapterPlayer.chunkTexts.count) { _, _ in
             if isCurrentKokoroPageActive {
                 paragraphGroups = computeParagraphGroups()
+                paragraphStyles = computeParagraphStyles(groups: effectiveGroups)
                 recomputeWordItems()
             }
         }
@@ -656,6 +661,7 @@ struct ChapterPlayerView: View {
         currentPage = page
         idleChunkTexts = KokoroTextChunker.chunk(page.text)
         paragraphGroups = computeParagraphGroups()
+        paragraphStyles = computeParagraphStyles(groups: effectiveGroups)
         paragraphWordItems = []
         paragraphRevisions = []
         recomputeWordItems()
@@ -735,33 +741,79 @@ struct ChapterPlayerView: View {
             return Array(repeating: true, count: texts.count)
         }
         var gaps = [Bool](repeating: true, count: texts.count)
-        var searchStart = fullText.startIndex
-        var previousEnd: String.Index?
-        for (index, text) in texts.enumerated() {
-            guard let range = fullText.range(of: text, range: searchStart..<fullText.endIndex) else {
-                // Couldn't locate this chunk verbatim (shouldn't happen —
-                // fail safe to a normal gap rather than guessing).
-                previousEnd = nil
-                continue
-            }
-            if index > 0, let previousEnd {
-                // Three places the break can be, not one. `KokoroTextChunker`
-                // trims chunks with `.whitespaces`, which excludes newlines
-                // (CharacterSet.whitespaces is Unicode Zs + tab), so a
-                // paragraph's newline usually rides along *inside* a chunk's
-                // own text — and since chunk ranges are contiguous, the gap
-                // between two matches is then empty. Checking only the gap
-                // reported "no break" at every boundary, merging a whole
-                // chapter into one paragraph group.
-                gaps[index] =
-                    fullText[previousEnd..<range.lowerBound].contains(where: \.isNewline)
-                    || texts[index - 1].last?.isNewline == true
-                    || text.first?.isNewline == true
-            }
-            previousEnd = range.upperBound
-            searchStart = range.upperBound
+        let ranges = chunkRanges(in: fullText, texts: texts)
+        for index in 1..<texts.count {
+            // A chunk that couldn't be located leaves its boundary at the
+            // default — fail safe to a normal gap rather than guessing.
+            guard let range = ranges[index], let previous = ranges[index - 1] else { continue }
+            // Three places the break can be, not one. `KokoroTextChunker`
+            // trims chunks with `.whitespaces`, which excludes newlines
+            // (CharacterSet.whitespaces is Unicode Zs + tab), so a
+            // paragraph's newline usually rides along *inside* a chunk's
+            // own text — and since chunk ranges are contiguous, the gap
+            // between two matches is then empty. Checking only the gap
+            // reported "no break" at every boundary, merging a whole
+            // chapter into one paragraph group.
+            gaps[index] =
+                fullText[previous.upperBound..<range.lowerBound].contains(where: \.isNewline)
+                || texts[index - 1].last?.isNewline == true
+                || texts[index].first?.isNewline == true
         }
         return gaps
+    }
+
+    /// Where each synthesis chunk sits inside the page text, nil when it could
+    /// not be located verbatim.
+    ///
+    /// This literal search works only because `KokoroTextChunker` keeps a chunk
+    /// byte-identical to a slice of the page text — it trims with
+    /// `.whitespaces`, which excludes newlines. Both paragraph-break detection
+    /// and heading styling need these positions, so they share one walk.
+    private func chunkRanges(
+        in fullText: String, texts: [String]
+    ) -> [Range<String.Index>?] {
+        var ranges: [Range<String.Index>?] = []
+        ranges.reserveCapacity(texts.count)
+        var searchStart = fullText.startIndex
+        for text in texts {
+            guard let range = fullText.range(
+                of: text, range: searchStart..<fullText.endIndex)
+            else {
+                ranges.append(nil)
+                continue
+            }
+            ranges.append(range)
+            searchStart = range.upperBound
+        }
+        return ranges
+    }
+
+    /// Matches each paragraph group against the page's stored heading ranges.
+    ///
+    /// A group qualifies only when it *starts* at a heading and is not
+    /// materially longer than that heading. Both halves matter: the length guard
+    /// is what stops a heading that accidentally merged with the paragraph
+    /// following it from rendering that whole paragraph at title size, which is
+    /// a far louder failure than missing a heading altogether.
+    private func computeParagraphStyles(groups: [[Int]]) -> [ReaderTextStyle?] {
+        guard let page = currentPage, !page.headings.isEmpty else {
+            return Array(repeating: nil, count: groups.count)
+        }
+        let text = page.text
+        let ranges = chunkRanges(in: text, texts: visibleChunkTexts)
+
+        return groups.map { group in
+            let located = group.compactMap { index -> Range<String.Index>? in
+                ranges.indices.contains(index) ? ranges[index] : nil
+            }
+            guard let first = located.first, let last = located.last else { return nil }
+            let start = text.distance(from: text.startIndex, to: first.lowerBound)
+            let length = text.distance(from: first.lowerBound, to: last.upperBound)
+            return page.headings.first { heading in
+                heading.start == start
+                    && Double(length) <= Double(heading.length) * 1.5 + 8
+            }?.style
+        }
     }
 
     // MARK: - Floating player
@@ -1265,6 +1317,8 @@ struct ChapterPlayerView: View {
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
                 fontFamily: readerFontFamily,
+                style: paragraphStyles.indices.contains(groupIndex)
+                    ? paragraphStyles[groupIndex] : nil,
                 theme: readerTheme
             ).equatable()
         }
@@ -1302,25 +1356,37 @@ struct ChapterPlayerView: View {
         let isCurrentGroup: Bool
         let fontSize: ReaderFontSize
         let fontFamily: ReaderFontFamily
+        /// The source document's own heading treatment for this paragraph, or
+        /// nil for body text.
+        let style: ReaderTextStyle?
         let theme: ReaderTheme
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
                 && lhs.highlightedWordIndex == rhs.highlightedWordIndex
                 && lhs.currentChunkIndex == rhs.currentChunkIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
-                && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily && lhs.theme == rhs.theme
+                && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily
+                && lhs.style == rhs.style && lhs.theme == rhs.theme
         }
 
-        // The two inputs that can change a word's measured size. Colors
-        // (which is all the highlight changes) can't, so the ~12x/sec
-        // re-runs while this paragraph plays reuse the measured sizes
-        // instead of re-measuring every word each time.
+        // The inputs that can change a word's measured size. Colors (which is
+        // all the highlight changes) can't, so the ~12x/sec re-runs while this
+        // paragraph plays reuse the measured sizes instead of re-measuring
+        // every word each time. `style` belongs here as much as in `==`: it
+        // scales the font, so leaving it out would hand WordFlowLayout's cache
+        // body-sized measurements for heading-sized words.
         private var measurementVersion: Int {
             var hasher = Hasher()
             hasher.combine(itemsRevision)
             hasher.combine(fontSize)
             hasher.combine(fontFamily)
+            hasher.combine(style)
             return hasher.finalize()
+        }
+
+        private var resolvedFont: Font {
+            guard let style else { return fontSize.font(family: fontFamily) }
+            return fontSize.font(family: fontFamily, scale: style.scale, bold: style.isBold)
         }
 
         var body: some View {
@@ -1344,7 +1410,7 @@ struct ChapterPlayerView: View {
                     // radius reads as one continuous band rather than pills.
                     let isCurrentChunk = item.chunkIndex == currentChunkIndex
                     Text(item.text)
-                        .font(fontSize.font(family: fontFamily))
+                        .font(resolvedFont)
                         .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
@@ -1360,6 +1426,12 @@ struct ChapterPlayerView: View {
             // Padding kept even though the row no longer draws its own
             // background — dropping it would reflow every paragraph.
             .padding(6)
+            // A heading needs air above it to read as opening a section rather
+            // than as a loud first line. Scaled off how large the document made
+            // it, and applied as a modifier on the same view — an if/else
+            // around the row would change its structural identity and force a
+            // re-measure of everything below it in the LazyVStack.
+            .padding(.top, style.map { ($0.scale - 1) * 20 + 10 } ?? 0)
         }
     }
 
@@ -1405,7 +1477,11 @@ struct ChapterPlayerView: View {
                 tokens = timings.enumerated().map { ($1.word, $1.precedingSeparator, $0) }
             }
             for (i, token) in tokens.enumerated() {
-                let ownBreaks = token.precedingSeparator.filter { $0 == "\n" }.count
+                // `\.isNewline`, not `== "\n"`: Swift treats CRLF as a single
+                // Character that is not equal to "\n", so pasted Windows text
+                // rendered no breaks at all — and `computeChunkGaps` already
+                // uses `isNewline`, so the two halves disagreed.
+                let ownBreaks = token.precedingSeparator.filter(\.isNewline).count
                 let breaks: Int
                 if i > 0 {
                     breaks = ownBreaks
@@ -1428,7 +1504,7 @@ struct ChapterPlayerView: View {
     private func trailingNewlineCount(of text: String) -> Int {
         var count = 0
         for character in text.reversed() {
-            if character == "\n" {
+            if character.isNewline {
                 count += 1
             } else if character.isWhitespace {
                 continue
