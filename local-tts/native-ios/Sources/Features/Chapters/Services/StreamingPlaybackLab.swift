@@ -419,9 +419,9 @@ final class StreamingPlaybackLab: ObservableObject {
 
     // MARK: - WAV decoding
 
-    /// Kokoro hands back canonical 16-bit mono WAVs (see `WavConcatenator`),
-    /// but this still walks the RIFF chunk list rather than assuming a 44-byte
-    /// header, for the same reason that one does.
+    /// Kokoro hands back canonical 16-bit mono WAVs; this walks the RIFF
+    /// chunk list rather than assuming a fixed 44-byte header, since a
+    /// header of that exact size isn't guaranteed.
     private static func pcmBuffer(fromWAV wav: Data) -> AVAudioPCMBuffer? {
         let bytes = [UInt8](wav)
         guard bytes.count > 12,

@@ -72,7 +72,6 @@ struct ToolsView: View {
                 project: project,
                 library: libraryViewModel,
                 chapterPlayer: app.chapterPlayer,
-                generationStore: app.generationStore,
                 viewModel: app.tts,
                 previewPlayer: app.previewPlayer,
                 readingStats: app.readingStats)

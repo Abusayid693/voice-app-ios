@@ -31,6 +31,18 @@ struct WordFlowLayout: Layout {
     // fixed text can leave it at 0.
     var measurementVersion: Int = 0
 
+    /// Optional: when set, each child's placed frame is recorded here, keyed
+    /// by subview index — how `ChapterPlayerView` resolves a tap point to a
+    /// specific word without attaching a gesture to every one of them, which
+    /// would fight the row's own tap gesture and the ScrollView's drag.
+    /// A reference type so writing to it during layout doesn't invalidate
+    /// the view the way reassigning a `@State` value would — the same idiom
+    /// as `ChapterPlayerView`'s `groupHeightsBox`/`visibleParagraphsBox`.
+    final class FrameBox {
+        var frames: [Int: CGRect] = [:]
+    }
+    var frameBox: FrameBox?
+
     // Measured sizes, so the two passes below don't each independently
     // call `sizeThatFits(.unspecified)` on every subview — that was
     // measuring every word twice per layout pass. How much this saves
@@ -99,6 +111,7 @@ struct WordFlowLayout: Layout {
         var y = bounds.minY
         var lineHeight: CGFloat = 0
         var isFirstInLine = true
+        frameBox?.frames.removeAll(keepingCapacity: true)
         for (index, subview) in subviews.enumerated() {
             let size = size(at: index, subview: subview, cache: cache)
             let breaks = subview[LineBreaksBeforeKey.self]
@@ -114,6 +127,11 @@ struct WordFlowLayout: Layout {
             }
             if !isFirstInLine { x += horizontalSpacing }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            // Relative to `bounds.minOrigin`, matching the coordinate space a
+            // tap's `value.location` arrives in when the gesture is attached
+            // to this same layout's frame.
+            frameBox?.frames[index] = CGRect(
+                x: x - bounds.minX, y: y - bounds.minY, width: size.width, height: size.height)
             x += size.width
             lineHeight = max(lineHeight, size.height)
             isFirstInLine = false

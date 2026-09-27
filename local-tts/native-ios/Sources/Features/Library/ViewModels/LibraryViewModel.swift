@@ -102,8 +102,10 @@ final class LibraryViewModel: ObservableObject {
         try? data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
     }
 
-    /// Changes the project-wide voice and removes audio synthesized with the
-    /// previous voice so saved playback can never use stale narration.
+    /// Changes the project-wide voice. Playback is always synthesized on
+    /// demand (there is no persisted "Generate" audio to invalidate), so
+    /// this just rewrites metadata — the reader picks up the new voice the
+    /// next time it starts streaming.
     @discardableResult
     func updateVoice(_ voiceName: String, for projectID: UUID) -> Bool {
         guard var project = project(for: projectID) else { return false }
@@ -112,9 +114,6 @@ final class LibraryViewModel: ObservableObject {
         guard let data = try? JSONEncoder().encode(project) else { return false }
 
         do {
-            if FileManager.default.fileExists(atPath: project.audioDirectory.path) {
-                try FileManager.default.removeItem(at: project.audioDirectory)
-            }
             try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
             if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
                 savedGenerations[index] = project.summary
@@ -126,9 +125,9 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    /// Persists a book's Book Shelf orientation (cover vs. spine). Unlike
-    /// `updateVoice` this touches no audio — it's purely how the shelf draws
-    /// the book — so it just rewrites metadata and republishes the summary.
+    /// Persists a book's Book Shelf orientation (cover vs. spine) — purely how
+    /// the shelf draws the book, so it just rewrites metadata and republishes
+    /// the summary.
     @discardableResult
     func updateShelfDisplayMode(_ mode: ShelfDisplayMode, for projectID: UUID) -> Bool {
         guard var project = project(for: projectID) else { return false }

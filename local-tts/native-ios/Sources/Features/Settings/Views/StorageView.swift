@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Settings > Storage — a real on-disk breakdown (see issue #9): the Kokoro
-/// packs and generated chapter audio (Features/Chapters), each computed from
-/// the actual directories they're written to (DiskStorage.directorySize),
-/// not an estimate.
+/// Settings > Storage — a real on-disk breakdown (see issue #9) of the Kokoro
+/// packs, computed from the actual directories they're written to
+/// (DiskStorage.directorySize), not an estimate. Reader audio is never
+/// persisted (streamed and discarded per session), so there is nothing of
+/// its own to break out here.
 struct StorageView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
@@ -24,16 +25,8 @@ struct StorageView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
-    // Generated chapter audio (Features/Chapters) — merged WAVs saved
-    // under SavedGenerations/<project id>/, one per generated chapter.
-    // Absent from this breakdown until now (see docs/adr/0010's
-    // "Consequences" — flagged as a known gap when chapters shipped).
-    private var savedGenerationsBytes: Int64 {
-        DiskStorage.directorySize(at: SavedGeneration.baseDirectory)
-    }
-
     private var totalBytes: Int64 {
-        kokoroBytes + kokoroMandarinBytes + savedGenerationsBytes
+        kokoroBytes + kokoroMandarinBytes
     }
 
     var body: some View {
@@ -41,7 +34,6 @@ struct StorageView: View {
             Section {
                 row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
                 row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
-                row(title: "Generated chapters", bytes: savedGenerationsBytes)
             }
             .listRowBackground(Color.appSecondaryBackground)
 

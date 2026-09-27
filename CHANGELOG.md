@@ -13,6 +13,7 @@ All notable changes to this project are documented here. Format loosely follows 
 ### Removed
 - The old Kokoro multi-track playlist system (`KokoroGeneration`, the chunk-scanning background worker, `ReadAlongPlayerView`, `KokoroGenerationListView`) and the retired `TTSHomeView`/`TextEntrySheet` debug screen, replaced by the chapters flow above
 - Pocket TTS and voice cloning removed entirely — Kokoro-ANE is the only engine. `Engine.pocketTts` is gone with no legacy decode path, so any saved project still naming it will fail to decode
+- The "Generate" feature — persisting a page's audio as one merged WAV + timing manifest for real scrubbing/replay. Streaming (synthesize-and-play, chunk by chunk) is now the only playback path; nothing is written to disk. Removed with it: `ChapterGenerationStore`, `ChapterAudioStore`/`PageAudioStore`, `ChapterAudioManifest`, `WavConcatenator`, the reader header's Generate/progress/cancel control, and `SavedGeneration`'s generated-audio file paths. `updateVoice` no longer deletes a per-project audio directory (there's nothing to delete), and Settings > Storage no longer shows a "Generated chapters" row. See `docs/adr/0010-chapters-and-per-chapter-saved-audio.md`, updated to note the supersession
 
 ## [0.1.0] - 2026-09-12
 

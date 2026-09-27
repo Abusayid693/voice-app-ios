@@ -3,22 +3,20 @@ import FluidAudio
 import Foundation
 
 /// Owns Kokoro chapter synthesis: resolving which variant's manager a
-/// voice belongs to, warming it up, running the actual `synthesize()`
-/// calls, and merging a chapter's chunks into one saved WAV. Used both for
-/// streaming (one chunk at a time, via `synthesizeChunkDetailed`) and for a
-/// chapter's Generate button (`generateAndSave`, the whole chapter as one
-/// job) — both funnel through `synthesizeOneChunk`, the shared per-chunk
+/// voice belongs to, warming it up, and running the actual `synthesize()`
+/// calls — one chunk at a time, via `synthesizeChunkDetailed`, which is
+/// what `ChapterAudioPlayer.stream` retains in memory for the session.
+/// Nothing here is persisted to disk (there is no "Generate" feature —
+/// removed, see CHANGELOG); `synthesizeOneChunk` is the shared per-chunk
 /// logic (English gets real word timings via `synthesizeDetailed`;
 /// non-English just audio).
 ///
 /// `KokoroAneManager` is itself an actor, so concurrent `synthesize()`
-/// calls from two callers are memory-safe on their own — but without
-/// ordering, a 35-chunk Generate and a stream request would just
-/// interleave unpredictably, making the stream's next chunk arrive
-/// whenever the manager gets to it. `runSerially` gives requests a FIFO
-/// queue instead, so a Play tapped while a Generate is running waits
-/// behind it predictably (surfaced in the UI as "waiting", not an
-/// indefinite spinner) rather than fighting it chunk-by-chunk.
+/// calls are memory-safe on their own, but `runSerially` still gives
+/// requests a FIFO queue — the reader's bounded-lookahead pump and an
+/// on-demand "Play from here" tap both submit here, and without ordering
+/// the two would interleave unpredictably rather than the tap waiting
+/// behind at most one chunk already in flight.
 @MainActor
 final class ChapterSynthesisService {
     private let kokoroServices: [KokoroVariant: KokoroEngineService]
@@ -30,8 +28,7 @@ final class ChapterSynthesisService {
 
     /// Synthesizes one chunk with word-level timing data — the streaming
     /// path (`ChapterAudioPlayer.stream`), which retains the result itself
-    /// for in-session seeking. Not persisted to disk; that only happens via
-    /// `generateAndSave`.
+    /// for in-session seeking. Never persisted to disk.
     func synthesizeChunkDetailed(
         chunkText: String, voice: String
     ) async throws -> (data: Data, wordTimings: [WordTiming], duration: TimeInterval) {
@@ -58,53 +55,8 @@ final class ChapterSynthesisService {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// Synthesizes every chunk of a chapter, staging each to disk as it
-    /// finishes (so a cancelled or interrupted attempt resumes rather than
-    /// restarts), then merges them into the chapter's final saved WAV +
-    /// sidecar manifest. `onProgress(done, total)` fires after every chunk,
-    /// including ones already staged from a prior attempt.
-    func generateAndSave(
-        ref: ReaderPageRef, project: SavedGeneration, page: ReaderPage, voice: String,
-        onProgress: @escaping (Int, Int) -> Void
-    ) async throws {
-        try await runSerially {
-            try Task.checkCancellation()
-            let service = try self.service(forVoice: voice)
-            try await service.ensureReady(voice: voice)
-
-            let chunkTexts = KokoroTextChunker.chunk(page.text)
-            var stagedChunks = PageAudioStore.loadStagedChunks(ref, project: project)
-            var stagedWordTimings = PageAudioStore.loadStagedWordTimings(
-                ref, project: project, count: stagedChunks.count)
-            onProgress(stagedChunks.count, chunkTexts.count)
-
-            for index in stagedChunks.count..<chunkTexts.count {
-                try Task.checkCancellation()
-                let (data, wordTimings, _) = try await Self.synthesizeOneChunk(
-                    chunkText: chunkTexts[index], voice: voice, service: service)
-                try Task.checkCancellation()
-                try PageAudioStore.saveStagedChunk(data, ref: ref, project: project, chunkIndex: index)
-                try PageAudioStore.saveStagedWordTimings(
-                    wordTimings, ref: ref, project: project, chunkIndex: index)
-                stagedChunks.append(data)
-                stagedWordTimings.append(wordTimings)
-                onProgress(stagedChunks.count, chunkTexts.count)
-            }
-
-            let (merged, chunkStarts) = try WavConcatenator.merge(stagedChunks)
-            let mergedPlayer = try? AVAudioPlayer(data: merged)
-
-            let manifest = ChapterAudioManifest(
-                schemaVersion: ChapterAudioManifest.currentSchemaVersion,
-                sampleRate: mergedPlayer?.format.sampleRate ?? 24_000,
-                totalDuration: mergedPlayer?.duration ?? 0, chunkTexts: chunkTexts,
-                chunkStarts: chunkStarts, wordTimings: stagedWordTimings)
-            try PageAudioStore.saveFinal(audio: merged, manifest: manifest, ref: ref, project: project)
-        }
-    }
-
-    /// The shared per-chunk synthesis logic both `generateAndSave` and
-    /// `synthesizeChunkDetailed` funnel through. English voices get exact
+    /// The shared per-chunk synthesis logic `synthesizeChunkDetailed` funnels
+    /// through. English voices get exact
     /// word-level timings (see `WordTimingDeriver`) via `synthesizeDetailed`
     /// instead of the plain `synthesize`, since only that call exposes the
     /// real per-token duration data used to render the audio. Non-English

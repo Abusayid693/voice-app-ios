@@ -12,7 +12,6 @@ struct KokoroAneTestApp: App {
     // ChapterSynthesisService needs viewModel.kokoroServices, so these are
     // built after viewModel rather than as bare property initializers.
     private let chapterSynthesisService: ChapterSynthesisService
-    private let chapterGenerationStore: ChapterGenerationStore
     private let chapterPlayer: ChapterAudioPlayer
     private let navigationChrome = NavigationChromeVisibility()
     // Owned by ChapterAudioPlayer (Kokoro), the only engine that reaches
@@ -26,7 +25,6 @@ struct KokoroAneTestApp: App {
         readingStatsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         viewModel = TTSViewModel(dependencies: dependencies)
         chapterSynthesisService = ChapterSynthesisService(kokoroServices: viewModel.kokoroServices)
-        chapterGenerationStore = ChapterGenerationStore(synthesisService: chapterSynthesisService)
         chapterPlayer = ChapterAudioPlayer(
             synthesisService: chapterSynthesisService, statsTracker: readingStatsTracker)
         // Off-main, fire-and-forget — closes out any session left open by a
@@ -40,7 +38,7 @@ struct KokoroAneTestApp: App {
         AppEnvironment(
             tts: viewModel, library: libraryViewModel,
             pdfImports: pdfImportManager, previewPlayer: previewPlayer, chapterPlayer: chapterPlayer,
-            generationStore: chapterGenerationStore, readingStats: dependencies.readingStatsStore,
+            readingStats: dependencies.readingStatsStore,
             navigationChrome: navigationChrome)
     }
 

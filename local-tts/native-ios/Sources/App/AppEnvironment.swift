@@ -26,7 +26,6 @@ struct AppEnvironment {
     let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
-    let generationStore: ChapterGenerationStore
     let readingStats: ReadingStatsStore
     // Not "pass-through" like the others above — a live flag Home writes
     // to and RootTabView observes, so RootTabView's floating Explore/Add
@@ -50,7 +49,6 @@ extension AppEnvironment {
             tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
             chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis, statsTracker: statsTracker),
-            generationStore: ChapterGenerationStore(synthesisService: synthesis),
             readingStats: dependencies.readingStatsStore,
             navigationChrome: NavigationChromeVisibility())
     }

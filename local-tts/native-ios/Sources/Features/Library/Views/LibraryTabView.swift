@@ -59,7 +59,6 @@ struct LibraryTabView: View {
             ChapterPlayerView(
                 project: project, library: viewModel,
                 chapterPlayer: app.chapterPlayer,
-                generationStore: app.generationStore,
                 viewModel: app.tts,
                 previewPlayer: app.previewPlayer,
                 readingStats: app.readingStats)

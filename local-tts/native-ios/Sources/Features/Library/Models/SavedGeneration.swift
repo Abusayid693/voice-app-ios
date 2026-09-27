@@ -120,21 +120,6 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
             shelfDisplayMode: shelfDisplayMode)
     }
 
-    var audioDirectory: URL {
-        Self.baseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
-    }
-
-    func pageAudioFileURL(index: Int) -> URL {
-        audioDirectory.appendingPathComponent("page_\(index).wav")
-    }
-
-    func pageSidecarFileURL(index: Int) -> URL {
-        audioDirectory.appendingPathComponent("page_\(index).json")
-    }
-
-    func hasGeneratedAudio(pageIndex: Int) -> Bool {
-        FileManager.default.fileExists(atPath: pageAudioFileURL(index: pageIndex).path)
-    }
 }
 
 extension SavedGeneration {

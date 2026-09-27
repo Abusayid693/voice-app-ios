@@ -127,15 +127,21 @@ private struct PageNumberSlider: View {
 /// bottom (elapsed/total time on top, avatar + −10s/play-pause/+10s
 /// below) — text keeps scrolling underneath it, it doesn't reserve its own
 /// space.
-/// Opens at the project's saved page position (or page 1 when unavailable)
-/// and supports both saved playback (`playSaved`) and unsaved streaming (`stream`) — the
-/// two feed identical playback/highlighting behavior through
-/// `ChapterAudioPlayer`'s shared published surface (`duration`/`elapsed`/
-/// `wordTimings(forChunk:)`/etc.), which is kept correct for both modes
-/// internally; this view doesn't know or care which one is active. The one
-/// real difference during streaming: `duration` grows as chunks arrive
-/// rather than being known upfront, and seeking is clamped to what's
-/// already been synthesized — both handled inside `ChapterAudioPlayer`.
+/// Opens at the project's saved page position (or page 1 when unavailable).
+/// Playback is always synthesize-and-play (`chapterPlayer.stream`) — there
+/// is no persisted "Generate" audio anymore (removed, see CHANGELOG), so
+/// this view never asks which mode is active. `duration` is an *estimate*
+/// of the current page's full length rather than a running sum of retained
+/// audio (bounded lookahead means that sum would freeze at ~2 chunks'
+/// worth), and seeking anywhere triggers on-demand synthesis rather than
+/// being clamped — both handled inside `ChapterAudioPlayer`.
+///
+/// With continuous playback on, `ChapterAudioPlayer` can advance to the next
+/// page on its own mid-session (prefetching across the boundary), which
+/// this view observes via `chapterPlayer.activeRef` rather than driving —
+/// see the `.onChange(of: chapterPlayer.activeRef)` handler, which updates
+/// `currentPageIndex`/scroll position without the `stop()` a manually
+/// requested page change goes through.
 ///
 /// The read-along pauses auto-follow after any manual scroll and resumes it
 /// only when the user taps the floating current-word pill. Highlighting is
@@ -150,7 +156,6 @@ struct ChapterPlayerView: View {
     let previewPlayer: VoicePreviewPlayer
     let readingStats: ReadingStatsStore
     @ObservedObject var chapterPlayer: ChapterAudioPlayer
-    @ObservedObject var generationStore: ChapterGenerationStore
     @ObservedObject var viewModel: TTSViewModel
 
     @State private var currentPageIndex: Int
@@ -165,9 +170,9 @@ struct ChapterPlayerView: View {
     @State private var completedPageIndices: Set<Int> = []
 
     @State private var isAutoScrollPaused = false
-    // Reference type, not @State, for the same reason as groupHeightsBox
-    // below: rows cross the scroll-visibility threshold constantly during
-    // a flick, and as @State every one of those crossings re-evaluated
+    // Reference type, not @State: rows cross the scroll-visibility
+    // threshold constantly during a flick, and as @State every one of
+    // those crossings re-evaluated
     // this whole view — the entire ForEach over every paragraph — on top
     // of the 4Hz ticker and the 12.5Hz highlight poll already running.
     // That made scrolling-while-highlighting janky. Its only consumer is
@@ -186,11 +191,9 @@ struct ChapterPlayerView: View {
     // Fixed once, so the TimelineViews below get a stable schedule value
     // instead of a fresh one built from `.now` on every body pass.
     @State private var pollAnchor = Date()
-    @State private var isPlayerCollapsed = false
     @State private var displayedIsPlaying = false
     @State private var playPauseScale: CGFloat = 1
     @State private var playPauseAnimationTask: Task<Void, Never>?
-    @Namespace private var floatingPlayerNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Chunks that belong to the same paragraph in the chapter's own source
     // text, grouped so they render as one continuous Text — one row per
@@ -233,20 +236,11 @@ struct ChapterPlayerView: View {
     // isCurrentGroup was the unrelated change that finally forced a
     // rebuild).
     @State private var revisionCounter = 0
-    // Reference type, not @State — the tap-position-estimate height
-    // measurement in readAlong's GeometryReader fires on layout, not on a
-    // meaningful content change, so writing it must not invalidate the
-    // view either; these measurements are bookkeeping, not visible state.
-    private final class GroupHeightsBox {
-        var heights: [Int: CGFloat] = [:]
-    }
-    @State private var groupHeightsBox = GroupHeightsBox()
     // A spinning ring in the highlight color rings the play/pause button
     // while nothing is playable yet (chapterPlayer.isBuffering — true
     // entering the player before streaming's first chunk lands, or between
     // chunks if playback ever catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
-    @State private var bufferingRingRotation: Double = 0
     @State private var isOptionsSheetPresented = false
     @State private var isPagePickerPresented = false
     @State private var isVoiceSelectionPresented = false
@@ -265,12 +259,46 @@ struct ChapterPlayerView: View {
     /// Shows the imported document's own page instead of the extracted text.
     /// Only reachable for PDF projects that kept a copy of their source.
     @AppStorage("chapterPlayerShowsOriginalPage") private var showsOriginalPage = false
+    /// Whether playback advances into the next page on its own at the end of
+    /// this one. Mirrored into `chapterPlayer` (which has no `@AppStorage` of
+    /// its own) on appear and whenever it changes.
+    @AppStorage("chapterPlayerContinuousPlayback") private var continuousPlaybackEnabled = true
+
+    // The word a tap most recently resolved to, awaiting a second tap on its
+    // "Play from here" confirm button — never acted on immediately, so a
+    // mis-tap while reading doesn't jump playback. Tapping the same word
+    // again clears it; tapping blank space (the background catcher in
+    // readAlong) also clears it.
+    private struct SelectedWordTarget: Equatable {
+        let groupIndex: Int
+        let itemIndex: Int
+    }
+    @State private var selectedWordTarget: SelectedWordTarget?
+    // One WordFlowLayout.FrameBox per paragraph group, created lazily and
+    // kept for the group's lifetime. Reference type, not a @State value —
+    // frames land during layout, not on a meaningful content change, so
+    // writing to the box must not itself invalidate the view (the same
+    // reasoning as visibleParagraphsBox above).
+    private final class ParagraphFrameBoxes {
+        private var boxes: [Int: WordFlowLayout.FrameBox] = [:]
+        func box(for groupIndex: Int) -> WordFlowLayout.FrameBox {
+            if let existing = boxes[groupIndex] { return existing }
+            let created = WordFlowLayout.FrameBox()
+            boxes[groupIndex] = created
+            return created
+        }
+    }
+    @State private var paragraphFrameBoxes = ParagraphFrameBoxes()
+    // Set just before assigning currentPageIndex from the activeRef handler
+    // below, so the currentPageIndex onChange it triggers can tell a
+    // continuous-playback advance (content already swapped, nothing further
+    // to do) apart from every other, user-driven page change.
+    @State private var isProgrammaticPageChange = false
 
     init(
         project: SavedGeneration, initialPageIndex: Int? = nil,
         library: LibraryViewModel,
         chapterPlayer: ChapterAudioPlayer,
-        generationStore: ChapterGenerationStore,
         viewModel: TTSViewModel,
         previewPlayer: VoicePreviewPlayer,
         readingStats: ReadingStatsStore
@@ -280,7 +308,6 @@ struct ChapterPlayerView: View {
         self.previewPlayer = previewPlayer
         self.readingStats = readingStats
         _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
-        _generationStore = ObservedObject(wrappedValue: generationStore)
         _viewModel = ObservedObject(wrappedValue: viewModel)
         let requestedIndex = initialPageIndex ?? project.lastReadPageIndex
         let hasValidRequestedIndex = project.pageCount > 0
@@ -329,7 +356,7 @@ struct ChapterPlayerView: View {
                 pdfURL: sourcePDFURL, pageIndex: currentPageIndex,
                 highlights: currentChunkPageRects, theme: readerTheme)
                 .padding(.horizontal, 12)
-                .padding(.bottom, showFloatingPlayer ? 96 : 12)
+                .padding(.bottom, showFloatingPlayer ? 68 : 12)
         } else {
             readAlong
         }
@@ -347,9 +374,7 @@ struct ChapterPlayerView: View {
             // guaranteed to draw on top of both.
             .overlay(alignment: .bottom) {
                 if showFloatingPlayer, hasReadableText {
-                    // Same bottom padding either state — collapsing must not
-                    // shift the card's position.
-                    floatingPlayer.padding(.bottom, 18)
+                    floatingPlayer.padding(.bottom, 11)
                 }
             }
         .navigationTitle("")
@@ -360,7 +385,6 @@ struct ChapterPlayerView: View {
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
                 if canShowOriginalPage { originalPageToolbarControl }
-                generationToolbarControl
                 Button {
                     isOptionsSheetPresented = true
                 } label: {
@@ -374,6 +398,7 @@ struct ChapterPlayerView: View {
                 showFloatingPlayer: $showFloatingPlayer,
                 autoScrollEnabled: $autoScrollEnabled,
                 wordHighlightEnabled: $wordHighlightEnabled,
+                continuousPlaybackEnabled: $continuousPlaybackEnabled,
                 fontSize: $readerFontSize,
                 fontFamily: $readerFontFamily,
                 theme: $readerTheme)
@@ -410,11 +435,13 @@ struct ChapterPlayerView: View {
                 isAutoScrollPaused = false
             }
         }
-        // Fires once per chunk as streaming synthesizes it (duration only
-        // grows in that mode — see ChapterAudioPlayer.stream), which is
-        // exactly when a paragraph's words need to upgrade from the plain-
-        // text fallback to real word timings. Not a per-frame cost.
-        .onChange(of: chapterPlayer.duration) { _, _ in
+        // Bumped once per chunk landing (see ChapterAudioPlayer.synthesisRevision),
+        // which is exactly when a paragraph's words need to upgrade from the
+        // plain-text fallback to real word timings. Not a per-frame cost.
+        // `duration` alone isn't reliable for this now that it's an estimate
+        // that can occasionally recompute to the same value between two
+        // arrivals — see that property's own doc comment.
+        .onChange(of: chapterPlayer.synthesisRevision) { _, _ in
             if isCurrentKokoroPageActive { recomputeWordItems() }
         }
         // Grouping was computed only in .onAppear, so entering the player
@@ -429,11 +456,35 @@ struct ChapterPlayerView: View {
         }
         .onChange(of: currentPageIndex) { oldValue, newValue in
             guard oldValue != newValue else { return }
+            // Content already swapped by the activeRef handler below when
+            // this index change originated from continuous playback — this
+            // handler only needs to consume the flag, not tear playback down
+            // a second time.
+            if isProgrammaticPageChange {
+                isProgrammaticPageChange = false
+                return
+            }
             guard moveToPage(newValue) else {
                 currentPageIndex = oldValue
                 return
             }
             library.recordLastReadPage(index: newValue, for: project.id)
+        }
+        // The one signal that the player advanced *on its own* — a manual
+        // page change always updates currentPageIndex first (selectPage/the
+        // picker/the swipe), which stops playback and nils this out before
+        // any new value lands, so activeRef and currentPageIndex briefly
+        // disagreeing only ever means continuous playback just promoted to
+        // the next page. Swaps in the new content without chapterPlayer
+        // .stop(), which would end the very session that's continuing.
+        .onChange(of: chapterPlayer.activeRef) { _, newRef in
+            guard let newRef, newRef.projectID == project.id, newRef.pageIndex != currentPageIndex
+            else { return }
+            isProgrammaticPageChange = true
+            pageNumberTransitionDirection = .forward
+            currentPageIndex = newRef.pageIndex
+            _ = loadPage(newRef.pageIndex)
+            library.recordLastReadPage(index: newRef.pageIndex, for: project.id)
         }
         // ChapterAudioPlayer doesn't get a new @Published "just completed"
         // signal (would re-render every visible ParagraphRow on every
@@ -443,12 +494,19 @@ struct ChapterPlayerView: View {
         .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
             if !isPlaying { refreshCompletedPages() }
         }
+        .onChange(of: continuousPlaybackEnabled) { _, newValue in
+            chapterPlayer.setContinuousPlaybackEnabled(newValue)
+        }
         .onAppear {
             isAutoScrollPaused = false
-            isPlayerCollapsed = false
             refreshCompletedPages()
             displayedIsPlaying = false
             playPauseScale = 1
+            chapterPlayer.configureContinuousPlayback(
+                enabled: continuousPlaybackEnabled,
+                nextPageProvider: { [library, project] index in
+                    library.page(for: project, index: index)
+                })
             _ = moveToPage(currentPageIndex)
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
@@ -462,75 +520,60 @@ struct ChapterPlayerView: View {
         }
     }
 
-    /// Shared by `pageNavigator` (the bottom bar) and `expandedPageControls`
-    /// (the same controls repeated inside the expanded player card, since
-    /// that card's own height now hides the bar underneath it) — same
-    /// layout, sized down a step for the card.
-    private func pageControlsRow(
-        buttonSize: CGFloat, iconSize: CGFloat, cornerRadius: CGFloat, pagesRowHeight: CGFloat
+    /// Leading: choose-page and change-voice. Trailing: previous/next page.
+    /// Every control is the same 40pt rounded square so the row reads as one
+    /// set — the voice avatar is a circle because it's artwork rather than
+    /// chrome, and Pages is an icon alone (its "Pages" label was the only
+    /// text in the bar).
+    private func pageBarButton(
+        systemImage: String, label: String, isEnabled: Bool = true,
+        action: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 12) {
-            Button {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 40, height: 40)
+                .background(
+                    readerTheme.controlBackground,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(readerTheme.primaryText)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.35)
+        .accessibilityLabel(label)
+    }
+
+    private func pageControlsRow() -> some View {
+        HStack(spacing: 8) {
+            pageBarButton(systemImage: "list.bullet", label: "Choose page") {
                 refreshCompletedPages()
                 isPagePickerPresented = true
-            } label: {
-                Label("Pages", systemImage: "list.bullet")
-                    .font(AppTextStyle.label.font)
-                    .frame(height: pagesRowHeight)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(readerTheme.primaryText)
-            .accessibilityLabel("Choose page")
+
+            voiceButton
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 8) {
-                Button {
-                    selectPage(currentPageIndex - 1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: iconSize, weight: .semibold))
-                        .frame(width: buttonSize, height: buttonSize)
-                        .background(
-                            readerTheme.controlBackground,
-                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(readerTheme.primaryText)
-                .disabled(currentPageIndex == 0)
-                .opacity(currentPageIndex == 0 ? 0.35 : 1)
-                .accessibilityLabel("Previous page")
+            pageBarButton(
+                systemImage: "chevron.left", label: "Previous page",
+                isEnabled: currentPageIndex > 0
+            ) {
+                selectPage(currentPageIndex - 1)
+            }
 
-                Button {
-                    selectPage(currentPageIndex + 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: iconSize, weight: .semibold))
-                        .frame(width: buttonSize, height: buttonSize)
-                        .background(
-                            readerTheme.controlBackground,
-                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(readerTheme.primaryText)
-                .disabled(currentPageIndex >= project.pageCount - 1)
-                .opacity(currentPageIndex >= project.pageCount - 1 ? 0.35 : 1)
-                .accessibilityLabel("Next page")
+            pageBarButton(
+                systemImage: "chevron.right", label: "Next page",
+                isEnabled: currentPageIndex < project.pageCount - 1
+            ) {
+                selectPage(currentPageIndex + 1)
             }
         }
     }
 
-    /// The same page controls, scaled down to sit inside the expanded
-    /// player card rather than the full-width bottom bar.
-    private var expandedPageControls: some View {
-        pageControlsRow(buttonSize: 34, iconSize: 14, cornerRadius: 9, pagesRowHeight: 34)
-    }
-
     private var pageNavigator: some View {
-        pageControlsRow(buttonSize: 40, iconSize: 16, cornerRadius: 10, pagesRowHeight: 40)
+        pageControlsRow()
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
         .background {
@@ -633,48 +676,10 @@ struct ChapterPlayerView: View {
         .accessibilityLabel(showsOriginalPage ? "Show extracted text" : "Show original page")
     }
 
-    @ViewBuilder
-    private var generationToolbarControl: some View {
-        if let page = currentPage, hasReadableText {
-            switch generationStore.state(for: pageRef) {
-            case .queued:
-                Button { generationStore.cancel(pageRef) } label: {
-                    ProgressView().tint(readerTheme.primaryText)
-                }
-                .accessibilityLabel("Cancel page generation")
-            case let .running(done, total):
-                Button { generationStore.cancel(pageRef) } label: {
-                    ProgressView(value: Double(done), total: Double(max(total, 1)))
-                        .tint(readerTheme.primaryText)
-                        .frame(width: 24)
-                }
-                .accessibilityLabel("Cancel page generation, \(done) of \(total) parts complete")
-            case .failed:
-                Button("Retry") { generate(page) }
-                    .font(AppTextStyle.label.font)
-            case nil:
-                if PageAudioStore.isGenerated(pageRef, project: project) {
-                    LucideIcon(.circleCheck, size: 20, color: readerTheme.primaryText)
-                        .accessibilityLabel("Page audio generated")
-                } else {
-                    Button("Generate") { generate(page) }
-                        .font(AppTextStyle.label.font)
-                        .foregroundStyle(readerTheme.primaryText)
-                }
-            }
-        }
-    }
-
-    private func generate(_ page: ReaderPage) {
-        generationStore.generate(
-            ref: pageRef, project: project, page: page, voice: selectedVoiceName)
-    }
-
     private func changeVoice(_ voiceName: String) {
         guard voiceName != selectedVoiceName else { return }
 
         chapterPlayer.stop()
-        generationStore.cancelAll(for: project.id)
         playPauseAnimationTask?.cancel()
         displayedIsPlaying = false
         playPauseScale = 1
@@ -689,15 +694,25 @@ struct ChapterPlayerView: View {
 
     @discardableResult
     private func moveToPage(_ index: Int) -> Bool {
-        guard let page = library.page(for: project, index: index) else { return false }
         chapterPlayer.stop()
         playPauseAnimationTask?.cancel()
         displayedIsPlaying = false
         playPauseScale = 1
         isPulsingPlayButton = false
+        return loadPage(index)
+    }
+
+    /// The content swap alone, without stopping playback — what a
+    /// continuous-playback advance needs (it's the session being
+    /// continued), and what `moveToPage` layers the teardown on top of for
+    /// every user-driven page change.
+    @discardableResult
+    private func loadPage(_ index: Int) -> Bool {
+        guard let page = library.page(for: project, index: index) else { return false }
         isAutoScrollPaused = false
         visibleParagraphsBox = VisibleParagraphsBox()
-        groupHeightsBox = GroupHeightsBox()
+        selectedWordTarget = nil
+        paragraphFrameBoxes = ParagraphFrameBoxes()
 
         currentPage = page
         idleChunkTexts = KokoroTextChunker.chunk(page.text)
@@ -709,25 +724,21 @@ struct ChapterPlayerView: View {
         return true
     }
 
-    // The ring's own rotation is a separate `.linear.repeatForever` drive —
-    // 0 to 360 rather than back-and-forth, so it spins one direction rather
-    // than pulsing in place. `isPulsingPlayButton` just shows/hides it; once
-    // it's hidden the ring leaves the view tree, which cancels the
-    // in-progress repeatForever with it, so there's nothing to stop by hand.
+    // Only fades the ring in/out now — its rotation is driven independently
+    // by bufferingRingAngle(at:), so there's nothing to start/stop here.
     private func updatePlayButtonPulse(isBuffering: Bool) {
-        if isBuffering {
-            bufferingRingRotation = 0
-            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
-                bufferingRingRotation = 360
-            }
-            withAnimation(.easeOut(duration: 0.2)) {
-                isPulsingPlayButton = true
-            }
-        } else {
-            withAnimation(.easeOut(duration: 0.2)) {
-                isPulsingPlayButton = false
-            }
+        withAnimation(.easeOut(duration: 0.2)) {
+            isPulsingPlayButton = isBuffering
         }
+    }
+
+    // One full turn per second, purely a function of the current time — see
+    // the ring's own overlay for why this replaced a repeatForever state
+    // animation.
+    private func bufferingRingAngle(at date: Date) -> Double {
+        let period = 1.0
+        let elapsed = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period)
+        return (elapsed / period) * 360
     }
 
     private func recomputeWordItems() {
@@ -881,76 +892,31 @@ struct ChapterPlayerView: View {
 
     // MARK: - Floating player
 
+    /// One pill, no expanded state — ±10s either side of play/pause. The
+    /// expanded card it replaced carried the voice avatar, the page controls
+    /// and an elapsed/total readout; the first two moved into `pageNavigator`
+    /// (which the card used to cover, hence the duplicate set it carried) and
+    /// the readout is gone.
     private var floatingPlayer: some View {
-        ZStack(alignment: .bottom) {
-            if isPlayerCollapsed {
-                compactPlayer
-                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-            } else {
-                expandedPlayer
-                    .transition(.scale(scale: 0.96, anchor: .bottom).combined(with: .opacity))
+        HStack(spacing: 2) {
+            skipButton(icon: .rotateCcw, label: "10") {
+                chapterPlayer.skipBackward()
+            }
+
+            playPauseButton
+
+            skipButton(icon: .rotateCw, label: "10") {
+                chapterPlayer.skipForward()
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 10)
+        .background { playerBackground(cornerRadius: 34) }
+        .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+        // Absorbs taps on the pill's own padding so they don't fall through
+        // to the read-along underneath it.
+        .onTapGesture { }
         .padding(.bottom, 8)
         .offset(y: 25)
-    }
-
-    private var expandedPlayer: some View {
-        VStack(spacing: 0) {
-            // 56pt header + 64pt transport row - 4pt overlap = 116pt,
-            // approximately 70% of the previous 166pt card, without
-            // shrinking any of the enlarged control hit targets.
-            VStack(spacing: -4) {
-                durationHeader
-                transportRow
-            }
-
-            // pageNavigator sits underneath this card now that the card's
-            // own height covers it, so its controls are unreachable while
-            // expanded without a copy in here too.
-            expandedPageControls
-                .padding(.top, 2)
-                .padding(.bottom, 12)
-        }
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .background { playerBackground(cornerRadius: 20) }
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .onTapGesture { }
-    }
-
-    private var durationHeader: some View {
-        ZStack(alignment: .trailing) {
-            Text("\(Self.formatTime(chapterPlayer.elapsed)) | \(Self.formatTime(chapterPlayer.duration))")
-                .appText(.meta)
-                .foregroundStyle(readerTheme.secondaryText)
-                .monospacedDigit()
-                .frame(maxWidth: .infinity)
-
-            Button {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                    isPlayerCollapsed = true
-                }
-            } label: {
-                LucideIcon(.x, size: 20, color: readerTheme.primaryText)
-                    .frame(width: 56, height: 56)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Collapse player")
-        }
-        .frame(height: 56)
-    }
-
-    // Collapsed to just the play/pause control — the separate expand chevron
-    // is gone, and this button now does both jobs at once (see
-    // `playPauseButton(alsoExpands:)`).
-    private var compactPlayer: some View {
-        playPauseButton(alsoExpands: true)
-            .background { playerBackground(cornerRadius: 32) }
-            .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            .onTapGesture { }
     }
 
     // Liquid Glass is only available on iOS 26+. Its tint follows the
@@ -964,55 +930,14 @@ struct ChapterPlayerView: View {
                     .regular.tint(readerTheme.controlBackground),
                     in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 )
-                .matchedGeometryEffect(id: "playerBackground", in: floatingPlayerNamespace)
         } else {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(readerTheme.controlBackground)
-                .matchedGeometryEffect(id: "playerBackground", in: floatingPlayerNamespace)
-        }
-    }
-
-    private var transportRow: some View {
-        HStack {
-            avatar
-
-            Spacer()
-
-            HStack(spacing: 28) {
-                skipButton(icon: .rotateCcw, label: "10") {
-                    chapterPlayer.skipBackward()
-                }
-
-                playPauseButton
-
-                skipButton(icon: .rotateCw, label: "10") {
-                    chapterPlayer.skipForward()
-                }
-            }
-
-            Spacer()
-
-            // Balances the avatar's width so the transport controls above
-            // stay visually centered in the bar rather than skewed toward
-            // the trailing edge.
-            Color.clear.frame(width: 44, height: 1)
         }
     }
 
     private var playPauseButton: some View {
-        playPauseButton(alsoExpands: false)
-    }
-
-    /// `alsoExpands` is what the collapsed pill uses: one tap both expands
-    /// the player and toggles playback, since the chevron that used to do
-    /// the expanding on its own is gone.
-    private func playPauseButton(alsoExpands: Bool) -> some View {
         Button {
-            if alsoExpands {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                    isPlayerCollapsed = false
-                }
-            }
             toggleKokoroPlayback()
         } label: {
             (displayedIsPlaying ? Hugeicons.pause : Hugeicons.play)
@@ -1032,15 +957,27 @@ struct ChapterPlayerView: View {
         .disabled(!hasReadableText)
         .overlay {
             if isPulsingPlayButton {
-                Circle()
-                    .trim(from: 0, to: 0.72)
-                    .stroke(
-                        readerTheme.wordHighlightBackground,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: 72, height: 72)
-                    .rotationEffect(.degrees(bufferingRingRotation))
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
+                // Date-driven, not a repeatForever state animation: the ring
+                // only enters the tree once isPulsingPlayButton flips true,
+                // a moment *after* the rotation used to start — a view that
+                // wasn't mounted yet when a `withAnimation` began doesn't
+                // retroactively animate with it, so it read one static
+                // interpolated angle and sat there. Reading the wall clock
+                // instead can't desync from when the view happens to mount.
+                TimelineView(.animation) { context in
+                    Circle()
+                        .trim(from: 0, to: 0.72)
+                        .stroke(
+                            readerTheme.wordHighlightBackground,
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        // Inside the 64pt button, not around the whole pill —
+                        // at 72pt (bigger than the button's own frame) nothing
+                        // clipped it, so it visibly overflowed the pill.
+                        .frame(width: 58, height: 58)
+                        .rotationEffect(.degrees(bufferingRingAngle(at: context.date)))
+                }
+                .transition(.opacity)
+                .allowsHitTesting(false)
             }
         }
         .onAppear {
@@ -1050,15 +987,12 @@ struct ChapterPlayerView: View {
         .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
             updatePlayButtonPulse(isBuffering: isCurrentKokoroPageActive && isBuffering)
         }
-        .matchedGeometryEffect(id: "playPauseButton", in: floatingPlayerNamespace)
     }
 
     private func toggleKokoroPlayback() {
         guard let page = currentPage, hasReadableText else { return }
         if chapterPlayer.isActive(pageRef) {
             chapterPlayer.togglePlayPause()
-        } else if PageAudioStore.isGenerated(pageRef, project: project) {
-            chapterPlayer.playSaved(pageRef, project: project, voice: selectedVoiceName)
         } else {
             chapterPlayer.stream(
                 pageRef, page: page, voice: selectedVoiceName, bookTitle: project.title)
@@ -1091,14 +1025,14 @@ struct ChapterPlayerView: View {
         }
     }
 
-    private var avatar: some View {
+    private var voiceButton: some View {
         Button {
             presentVoiceSelection()
         } label: {
             Image(VoiceCoverArt.assetName(for: selectedVoiceName))
                 .resizable()
                 .scaledToFill()
-                .frame(width: 44, height: 44)
+                .frame(width: 40, height: 40)
                 .clipShape(Circle())
                 .contentShape(Circle())
         }
@@ -1130,11 +1064,6 @@ struct ChapterPlayerView: View {
         .buttonStyle(.plain)
     }
 
-    private static func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
-        let total = Int(seconds)
-        return String(format: "%02d:%02d", total / 60, total % 60)
-    }
 
     // MARK: - Read-along text
 
@@ -1158,25 +1087,8 @@ struct ChapterPlayerView: View {
                     } else {
                         LazyVStack(alignment: .leading, spacing: 16) {
                             ForEach(effectiveGroups.indices, id: \.self) { groupIndex in
-                                let group = effectiveGroups[groupIndex]
                                 paragraphRowView(groupIndex: groupIndex)
                                     .id(groupIndex)
-                                    .background(
-                                        GeometryReader { geo in
-                                            Color.clear
-                                                .onAppear { groupHeightsBox.heights[groupIndex] = geo.size.height }
-                                                .onChange(of: geo.size.height) { _, newValue in
-                                                    groupHeightsBox.heights[groupIndex] = newValue
-                                                }
-                                        }
-                                    )
-                                    .gesture(
-                                        SpatialTapGesture().onEnded { value in
-                                            handleParagraphTap(
-                                                group: group, groupIndex: groupIndex,
-                                                localY: value.location.y)
-                                        }
-                                    )
                                     .modifier(
                                         ReaderScrollVisibilityObserver { isVisible in
                                             if isVisible {
@@ -1187,10 +1099,23 @@ struct ChapterPlayerView: View {
                                         })
                             }
                         }
+                        // Tapping a word is handled inside ParagraphRow, on
+                        // the WordFlowLayout itself (see its own doc comment
+                        // for why: it needs the tap in the same coordinate
+                        // space its word frames are recorded in). This
+                        // background sits behind every row, so it only ever
+                        // catches a tap no row already claimed — the gaps
+                        // between paragraphs — and clears a pending "Play
+                        // from here" selection there.
+                        .background(
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedWordTarget = nil }
+                        )
                         .padding()
                         .padding(
                             .bottom,
-                            showFloatingPlayer ? (isPlayerCollapsed ? 48 : 100) : 0)
+                            showFloatingPlayer ? 56 : 0)
                     }
                 }
             }
@@ -1204,6 +1129,27 @@ struct ChapterPlayerView: View {
                 guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
                 guard let (groupIndex, anchor) = scrollTarget(forChunk: chunkIndex) else { return }
                 withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
+            }
+            // Toggling the original-page view swaps this whole ScrollView out
+            // and back (it's the other branch of `readingSurface`), so coming
+            // back mounts a fresh one at the top while audio carries on
+            // somewhere else. The onChange above can't cover it: a just-mounted
+            // view doesn't fire it for a value that hasn't changed. Not gated
+            // on autoScrollEnabled — this is restoring position on mount, not
+            // following playback, and there is no prior scroll position left
+            // to respect either way.
+            .onAppear {
+                guard isCurrentKokoroPageActive else { return }
+                // One run loop later: at onAppear the LazyVStack hasn't laid
+                // its rows out yet and scrollTo can silently no-op.
+                Task { @MainActor in
+                    guard let (groupIndex, anchor) = scrollTarget(
+                        forChunk: chapterPlayer.currentChunkIndex)
+                    else { return }
+                    // Unanimated — animating a jump from the top of the page
+                    // would be a long visible sweep, not a restore.
+                    proxy.scrollTo(groupIndex, anchor: anchor)
+                }
             }
             .overlay(alignment: .top) {
                 // Both conditions here are @State that flip once per scroll,
@@ -1370,6 +1316,9 @@ struct ChapterPlayerView: View {
         // it. Only the tick interval varies now; a non-playing row's
         // schedule never fires in practice, and `.equatable()` still gates
         // the body either way.
+        let selectedItemIndex =
+            selectedWordTarget?.groupIndex == groupIndex ? selectedWordTarget?.itemIndex : nil
+
         return TimelineView(.periodic(from: pollAnchor, by: isPolling ? 0.08 : 3600)) { _ in
             ParagraphRow(
                 items: items, itemsRevision: revision,
@@ -1382,7 +1331,13 @@ struct ChapterPlayerView: View {
                 fontFamily: readerFontFamily,
                 style: paragraphStyles.indices.contains(groupIndex)
                     ? paragraphStyles[groupIndex] : nil,
-                theme: readerTheme
+                theme: readerTheme,
+                selectedItemIndex: selectedItemIndex,
+                frameBox: paragraphFrameBoxes.box(for: groupIndex),
+                onWordTap: { itemIndex in handleWordTap(groupIndex: groupIndex, itemIndex: itemIndex) },
+                onConfirmPlay: { itemIndex in
+                    handleConfirmPlay(groupIndex: groupIndex, itemIndex: itemIndex)
+                }
             ).equatable()
         }
     }
@@ -1423,6 +1378,25 @@ struct ChapterPlayerView: View {
         /// nil for body text.
         let style: ReaderTextStyle?
         let theme: ReaderTheme
+        /// Which word (index into `items`) is awaiting a confirming tap on
+        /// its "Play from here" button, or nil. Part of `==`: it changes
+        /// which button (if any) is visible, but never a word's measured
+        /// size, so it stays out of `measurementVersion`.
+        let selectedItemIndex: Int?
+        /// Where each word actually landed, written by `WordFlowLayout`
+        /// during placement and read back here to resolve a tap — see the
+        /// gesture attached to `WordFlowLayout` below. Reference-type side
+        /// channel, deliberately excluded from `==`: its contents change on
+        /// every layout pass, which is not a reason to re-render.
+        let frameBox: WordFlowLayout.FrameBox
+        /// Reports which word a tap resolved to. Excluded from `==` — see
+        /// `paragraphRowView`: a fresh closure every render is fine here,
+        /// since it only ever captures this row's fixed `groupIndex` and
+        /// reads `@State` fresh at call time regardless of which render's
+        /// closure ends up wired to the gesture.
+        let onWordTap: (Int) -> Void
+        /// Fires when the visible "Play from here" button is tapped.
+        let onConfirmPlay: (Int) -> Void
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.itemsRevision == rhs.itemsRevision && lhs.highlightedChunkIndex == rhs.highlightedChunkIndex
@@ -1430,6 +1404,7 @@ struct ChapterPlayerView: View {
                 && lhs.currentChunkIndex == rhs.currentChunkIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
                 && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily
                 && lhs.style == rhs.style && lhs.theme == rhs.theme
+                && lhs.selectedItemIndex == rhs.selectedItemIndex
         }
 
         // The inputs that can change a word's measured size. Colors (which is
@@ -1455,15 +1430,22 @@ struct ChapterPlayerView: View {
         var body: some View {
             WordFlowLayout(
                 horizontalSpacing: 2, verticalSpacing: 2, paragraphExtraSpacing: 6,
-                measurementVersion: measurementVersion
+                measurementVersion: measurementVersion, frameBox: frameBox
             ) {
                 // items.indices, not Array(items.enumerated()) — the
                 // latter allocates a fresh tuple array on every body run,
                 // which for the playing paragraph is 12x/sec.
                 ForEach(items.indices, id: \.self) { index in
                     let item = items[index]
+                    // `highlightedWordIndex != nil` is load-bearing, not
+                    // belt-and-braces: both sides of the comparison below are
+                    // `Int?`, so while a tapped-ahead chunk buffers — no
+                    // timings yet, so every item's index and the highlighted
+                    // one are all nil — `nil == nil` matched *every* word in
+                    // the chunk and lit the whole thing in the word color.
                     let isHighlighted =
                         isCurrentGroup && item.chunkIndex == highlightedChunkIndex
+                            && highlightedWordIndex != nil
                             && item.wordIndexInChunk == highlightedWordIndex
                     // A row is a paragraph *group*, which can be several
                     // chunks; backing the whole row lit every chunk in it at
@@ -1480,11 +1462,35 @@ struct ChapterPlayerView: View {
                         .background(
                             isHighlighted
                                 ? theme.wordHighlightBackground
-                                : (isCurrentChunk ? theme.chunkHighlightBackground : Color.clear),
+                                : (isCurrentChunk ? theme.chunkHighlightBackground
+                                    : (selectedItemIndex == index
+                                        ? theme.chunkHighlightBackground.opacity(0.7) : Color.clear)),
                             in: RoundedRectangle(cornerRadius: isHighlighted ? 4 : 3))
                         .lineBreaksBefore(item.lineBreaksBefore)
                 }
             }
+            // Attached here, not on the row after its own padding: a tap's
+            // `value.location` needs to land in the exact same coordinate
+            // space `WordFlowLayout` recorded frames in, which is this
+            // view's own bounds before any outer padding shifts them.
+            .gesture(
+                SpatialTapGesture().onEnded { value in
+                    guard let index = resolveTappedItem(at: value.location) else { return }
+                    onWordTap(index)
+                }
+            )
+            .overlay(alignment: .topLeading) {
+                if let selectedItemIndex, let frame = frameBox.frames[selectedItemIndex] {
+                    playFromHereButton { onConfirmPlay(selectedItemIndex) }
+                        .offset(x: frame.minX, y: frame.maxY + 4)
+                        // A small rise-and-fade rather than a hard cut in
+                        // either direction — `.move` composes with the
+                        // static positioning offset above, adding a slide
+                        // just for the in/out transition itself.
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeOut(duration: 0.16), value: selectedItemIndex)
             .frame(maxWidth: .infinity, alignment: .leading)
             // Padding kept even though the row no longer draws its own
             // background — dropping it would reflow every paragraph.
@@ -1495,6 +1501,62 @@ struct ChapterPlayerView: View {
             // around the row would change its structural identity and force a
             // re-measure of everything below it in the LazyVStack.
             .padding(.top, style.map { ($0.scale - 1) * 20 + 10 } ?? 0)
+        }
+
+        /// The word whose frame contains the tap, or — taps often land in
+        /// the small gaps between words/lines — the nearest one.
+        private func resolveTappedItem(at location: CGPoint) -> Int? {
+            if let hit = frameBox.frames.first(where: { $0.value.contains(location) }) {
+                return hit.key
+            }
+            guard !frameBox.frames.isEmpty else { return nil }
+            return frameBox.frames.min {
+                distanceSquared(from: location, to: $0.value)
+                    < distanceSquared(from: location, to: $1.value)
+            }?.key
+        }
+
+        private func distanceSquared(from point: CGPoint, to rect: CGRect) -> CGFloat {
+            let dx = max(rect.minX - point.x, 0, point.x - rect.maxX)
+            let dy = max(rect.minY - point.y, 0, point.y - rect.maxY)
+            return dx * dx + dy * dy
+        }
+
+        private func playFromHereButton(action: @escaping () -> Void) -> some View {
+            Button(action: action) {
+                HStack(spacing: 5) {
+                    // 70% of the 1.3x pass (14.3/18.2) — icon and font
+                    // scaled together so the label still reads as one unit.
+                    LucideIcon(.play, size: 10, color: theme.primaryText)
+                    Text("Play from here")
+                        .font(.system(size: 12.7, weight: .regular))
+                        .foregroundStyle(theme.primaryText)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .background { playFromHereBackground }
+            // Above the paragraph text and, since WordFlowLayout's own
+            // frame otherwise clips to its measured size, wide enough that
+            // the button isn't cut off against the row's right edge.
+            .zIndex(1)
+            .fixedSize()
+        }
+
+        // Liquid Glass on iOS 26+, matching the floating player's own
+        // background; the translucent theme surface below that. Same
+        // fallback pair as `ChapterPlayerView.playerBackground`.
+        @ViewBuilder
+        private var playFromHereBackground: some View {
+            if #available(iOS 26.0, *) {
+                // No tint — plain glass, not a colored pill.
+                Color.clear.glassEffect(.regular, in: Capsule())
+            } else {
+                // Same untinted-material precedent as currentWordResumeButton's
+                // own pre-26 fallback.
+                Capsule().fill(.ultraThinMaterial)
+            }
         }
     }
 
@@ -1513,6 +1575,14 @@ struct ChapterPlayerView: View {
         let text: String
         let chunkIndex: Int
         let wordIndexInChunk: Int?
+        /// This word's position within its chunk, always known — unlike
+        /// `wordIndexInChunk`, which is nil until the chunk has real word
+        /// timings. Both come from `splitPreservingSeparators`, the same
+        /// splitter `WordTimingDeriver` derives timings with, so ordinal N
+        /// here is timing N once that chunk is synthesized. That's what lets
+        /// "Play from here" target the tapped *word* on a chunk that hasn't
+        /// been synthesized yet, rather than falling back to its start.
+        let ordinalInChunk: Int
         let lineBreaksBefore: Int
     }
 
@@ -1558,6 +1628,7 @@ struct ChapterPlayerView: View {
                     FlowWordItem(
                         text: token.word, chunkIndex: chunkIndex,
                         wordIndexInChunk: token.wordIndexInChunk,
+                        ordinalInChunk: i,
                         lineBreaksBefore: min(2, breaks)))
             }
         }
@@ -1578,35 +1649,29 @@ struct ChapterPlayerView: View {
         return count
     }
 
-    private func handleParagraphTap(group: [Int], groupIndex: Int, localY: CGFloat) {
-        guard isCurrentKokoroPageActive else { return }
-        let target: Int
-        if group.count > 1 {
-            let height = groupHeightsBox.heights[groupIndex] ?? 0
-            let proportion = height > 0 ? Double(max(0, min(localY, height)) / height) : 0
-            target = estimatedChunk(inGroup: group, atProportion: proportion)
-        } else {
-            target = group[0]
-        }
-        guard let start = chapterPlayer.startTime(forChunk: target) else { return }
-        chapterPlayer.seek(to: start)
+    /// A tap on a word selects it (showing "Play from here") rather than
+    /// seeking immediately — a mis-tap while reading must not jump
+    /// playback. Tapping the same word again deselects it. Deliberately
+    /// works on an idle page too (no `isCurrentKokoroPageActive` guard,
+    /// unlike the old paragraph-tap-to-seek this replaced): `playFromWord`
+    /// starts playback itself when nothing is active yet.
+    private func handleWordTap(groupIndex: Int, itemIndex: Int) {
+        let target = SelectedWordTarget(groupIndex: groupIndex, itemIndex: itemIndex)
+        selectedWordTarget = selectedWordTarget == target ? nil : target
     }
 
-    // Maps a vertical tap position (0...1 down the paragraph) to a chunk
-    // index, weighted by each chunk's character length — an estimate, not
-    // exact (assumes fairly even text density), but far more useful on a
-    // couple-of-pages paragraph than always seeking to its start.
-    private func estimatedChunk(inGroup group: [Int], atProportion proportion: Double) -> Int {
-        let texts = visibleChunkTexts
-        let lengths = group.map { texts.indices.contains($0) ? Double(texts[$0].count) : 0 }
-        let total = lengths.reduce(0, +)
-        guard total > 0 else { return group.first ?? 0 }
-        let target = proportion * total
-        var cumulative: Double = 0
-        for (i, length) in lengths.enumerated() {
-            cumulative += length
-            if target <= cumulative { return group[i] }
-        }
-        return group.last ?? 0
+    private func handleConfirmPlay(groupIndex: Int, itemIndex: Int) {
+        selectedWordTarget = nil
+        guard let page = currentPage else { return }
+        let group = effectiveGroups.indices.contains(groupIndex) ? effectiveGroups[groupIndex] : []
+        let items =
+            paragraphWordItems.indices.contains(groupIndex)
+            ? paragraphWordItems[groupIndex] : wordItems(for: group)
+        guard items.indices.contains(itemIndex) else { return }
+        let item = items[itemIndex]
+        chapterPlayer.playFromWord(
+            ref: pageRef, page: page,
+            chunkIndex: item.chunkIndex, wordIndex: item.ordinalInChunk,
+            voice: selectedVoiceName, bookTitle: project.title)
     }
 }

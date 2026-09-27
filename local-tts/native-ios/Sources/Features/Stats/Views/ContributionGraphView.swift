@@ -12,7 +12,11 @@ struct ContributionGraphView: View {
     let onSelectDay: (Date) -> Void
 
     private let cellSize: CGFloat = 11.2
-    private let cellSpacing: CGFloat = 10
+    // 70% of the original 10pt — same value drives both row and column
+    // gaps (the grid's own `spacing:` and each GridItem's), so they stay
+    // equal per the "row spacing matches column spacing" rule this was
+    // originally tuned to.
+    private let cellSpacing: CGFloat = 7
     private let columnsPerRow = 18
 
     // Entrance animation tuning — kept small/fast on purpose so it reads as
