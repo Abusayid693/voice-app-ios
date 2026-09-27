@@ -191,10 +191,6 @@ struct ChapterPlayerView: View {
     // Fixed once, so the TimelineViews below get a stable schedule value
     // instead of a fresh one built from `.now` on every body pass.
     @State private var pollAnchor = Date()
-    @State private var displayedIsPlaying = false
-    @State private var playPauseScale: CGFloat = 1
-    @State private var playPauseAnimationTask: Task<Void, Never>?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Chunks that belong to the same paragraph in the chapter's own source
     // text, grouped so they render as one continuous Text — one row per
     // paragraph, not one row per ~350-char synthesis chunk (see
@@ -427,9 +423,6 @@ struct ChapterPlayerView: View {
         .onChange(of: keepScreenOn) { _, newValue in
             UIApplication.shared.isIdleTimerDisabled = newValue
         }
-        .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
-            animatePlayPauseIcon(to: isCurrentKokoroPageActive && isPlaying)
-        }
         .onChange(of: autoScrollEnabled) { _, isEnabled in
             if !isEnabled {
                 isAutoScrollPaused = false
@@ -500,8 +493,6 @@ struct ChapterPlayerView: View {
         .onAppear {
             isAutoScrollPaused = false
             refreshCompletedPages()
-            displayedIsPlaying = false
-            playPauseScale = 1
             chapterPlayer.configureContinuousPlayback(
                 enabled: continuousPlaybackEnabled,
                 nextPageProvider: { [library, project] index in
@@ -511,7 +502,6 @@ struct ChapterPlayerView: View {
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
         .onDisappear {
-            playPauseAnimationTask?.cancel()
             chapterPlayer.stop()
             // Unconditional, not just "if keepScreenOn" — this is a
             // process-global flag, and leaving with the toggle on must not
@@ -680,9 +670,6 @@ struct ChapterPlayerView: View {
         guard voiceName != selectedVoiceName else { return }
 
         chapterPlayer.stop()
-        playPauseAnimationTask?.cancel()
-        displayedIsPlaying = false
-        playPauseScale = 1
         isPulsingPlayButton = false
 
         guard library.updateVoice(voiceName, for: project.id) else {
@@ -695,9 +682,6 @@ struct ChapterPlayerView: View {
     @discardableResult
     private func moveToPage(_ index: Int) -> Bool {
         chapterPlayer.stop()
-        playPauseAnimationTask?.cancel()
-        displayedIsPlaying = false
-        playPauseScale = 1
         isPulsingPlayButton = false
         return loadPage(index)
     }
@@ -937,22 +921,23 @@ struct ChapterPlayerView: View {
     }
 
     private var playPauseButton: some View {
-        Button {
-            toggleKokoroPlayback()
-        } label: {
-            (displayedIsPlaying ? Hugeicons.pause : Hugeicons.play)
+        PlayPauseBounceButton(
+            isPlaying: isCurrentKokoroPageActive && chapterPlayer.isPlaying,
+            action: toggleKokoroPlayback
+        ) { isPlaying in
+            (isPlaying ? Hugeicons.pause : Hugeicons.play)
                 .image()
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
                 .foregroundStyle(readerTheme.primaryText)
-                .contentTransition(.identity)
                 .frame(width: 44, height: 44)
-                .scaleEffect(playPauseScale)
-                .frame(width: 64, height: 64)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // A hard reset (no bounce) whenever the page or voice changes —
+        // both already call `chapterPlayer.stop()` first, so `isPlaying`
+        // reads false the instant this identity change recreates the
+        // button's state. See PlayPauseBounceButton's own doc comment.
+        .id("\(currentPageIndex)-\(selectedVoiceName)")
         .accessibilityLabel(isCurrentKokoroPageActive && chapterPlayer.isPlaying ? "Pause" : "Play")
         .disabled(!hasReadableText)
         .overlay {
@@ -996,32 +981,6 @@ struct ChapterPlayerView: View {
         } else {
             chapterPlayer.stream(
                 pageRef, page: page, voice: selectedVoiceName, bookTitle: project.title)
-        }
-    }
-
-    private func animatePlayPauseIcon(to isPlaying: Bool) {
-        playPauseAnimationTask?.cancel()
-
-        guard !reduceMotion else {
-            displayedIsPlaying = isPlaying
-            playPauseScale = 1
-            return
-        }
-
-        withAnimation(.easeIn(duration: 0.09)) {
-            playPauseScale = 0.76
-        }
-
-        playPauseAnimationTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 90_000_000)
-            guard !Task.isCancelled else { return }
-
-            // Swap without animation at the compressed midpoint so the two
-            // PDF assets never cross-fade through one another.
-            displayedIsPlaying = isPlaying
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.52)) {
-                playPauseScale = 1
-            }
         }
     }
 

@@ -26,6 +26,10 @@ struct AppEnvironment {
     let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
     let chapterPlayer: ChapterAudioPlayer
+    /// Music-style continuous playback (`Features/Listening/`) — a second,
+    /// independent playback owner alongside `chapterPlayer`. See
+    /// `docs/adr/0012-two-playback-engines.md` for why.
+    let bookPlayer: BookAudioPlayer
     let readingStats: ReadingStatsStore
     // Not "pass-through" like the others above — a live flag Home writes
     // to and RootTabView observes, so RootTabView's floating Explore/Add
@@ -42,6 +46,7 @@ extension AppEnvironment {
     static func preview() -> AppEnvironment {
         let dependencies = DependencyContainer()
         let statsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
+        let bookStatsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         let tts = TTSViewModel(dependencies: dependencies)
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
         let library = LibraryViewModel()
@@ -49,6 +54,7 @@ extension AppEnvironment {
             tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
             chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis, statsTracker: statsTracker),
+            bookPlayer: BookAudioPlayer(synthesis: synthesis, statsTracker: bookStatsTracker),
             readingStats: dependencies.readingStatsStore,
             navigationChrome: NavigationChromeVisibility())
     }

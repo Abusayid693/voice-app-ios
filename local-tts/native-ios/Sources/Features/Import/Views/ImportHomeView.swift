@@ -31,10 +31,11 @@ struct ImportHomeView: View {
                 library: libraryViewModel,
                 pdfImports: app.pdfImports,
                 readingStats: app.readingStats,
-                isDetailPresented: $isBookDetailPresented
-            ) { book in
-                openProject = libraryViewModel.project(for: book.id)
-            }
+                isDetailPresented: $isBookDetailPresented,
+                onOpenBook: { book in
+                    openProject = libraryViewModel.project(for: book.id)
+                },
+                onListen: startListening)
             // Home draws its own header controls instead of using the
             // navigation bar: a `ToolbarItem` renders through nav-bar
             // chrome (Liquid Glass on iOS 26, plus bar-button padding
@@ -91,6 +92,13 @@ struct ImportHomeView: View {
             guard oldValue != nil, newValue == nil else { return }
             Task { await loadRecentActivity() }
         }
+        // The single writer of `isReaderOpen`, same convention as
+        // `tabRootChrome`'s own `isAtTabRoot` above — see that property's
+        // doc comment for why a pushed screen must not write this itself.
+        .onAppear { app.navigationChrome.isReaderOpen = openProject != nil }
+        .onChange(of: openProject) { _, newValue in
+            app.navigationChrome.isReaderOpen = newValue != nil
+        }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: app.tts)
         }
@@ -98,6 +106,26 @@ struct ImportHomeView: View {
         // `.environment` above: light for the shelf, dark while an Explore
         // destination is on top of it.
         .preferredColorScheme(exploreDestination == nil ? .light : .dark)
+    }
+
+    /// Starts music-mode playback of a book — the shelf's "Listen" button.
+    /// Resumes at `project.lastReadPageIndex`, the same position read-along
+    /// would open at, and hands the player closures it needs to keep that
+    /// position and `ReadingStatsStore` in sync as it advances (it has no
+    /// `LibraryViewModel` of its own — see `BookAudioPlayer`'s own doc
+    /// comment).
+    private func startListening(_ book: SavedGenerationSummary) {
+        guard let project = libraryViewModel.project(for: book.id) else { return }
+        let startIndex = project.lastReadPageIndex
+        guard let page = libraryViewModel.page(for: project, index: startIndex) else { return }
+        app.bookPlayer.start(
+            project: project, page: page, startIndex: startIndex,
+            pageProvider: { [libraryViewModel] index in
+                libraryViewModel.page(for: project, index: index)
+            },
+            positionWriter: { [libraryViewModel] index in
+                libraryViewModel.recordLastReadPage(index: index, for: project.id)
+            })
     }
 
     @ViewBuilder

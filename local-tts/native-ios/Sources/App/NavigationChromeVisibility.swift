@@ -33,6 +33,16 @@ import SwiftUI
 @MainActor
 final class NavigationChromeVisibility: ObservableObject {
     @Published var isAtTabRoot = true
+    /// True while the reader (`ChapterPlayerView`) is the pushed screen —
+    /// distinct from `isAtTabRoot` (which is false for *any* pushed screen).
+    /// `RootTabView`'s floating mini player (`Features/Listening/`) reads
+    /// this to hide itself specifically inside the reader, which already has
+    /// its own floating transport and bottom page bar; it stays visible on
+    /// every other pushed screen (Library, Voices, Tools, Reading Stats),
+    /// unlike `CustomTabBar`. Written by the same single site as
+    /// `isAtTabRoot` — see that property's own reasoning for why a second
+    /// writer would reintroduce a race.
+    @Published var isReaderOpen = false
 }
 
 extension View {

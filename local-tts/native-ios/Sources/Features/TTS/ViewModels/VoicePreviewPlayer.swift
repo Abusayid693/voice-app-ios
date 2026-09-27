@@ -43,7 +43,19 @@ final class VoicePreviewPlayer: ObservableObject {
         guard let url = Self.clipURL(voiceName: voiceName, engine: engine) else { return }
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
+            // Matches BookAudioPlayer/StreamingPlaybackLab's own category —
+            // a bare `.playback` here used to silently downgrade whatever
+            // fuller category either of those had already set for the rest
+            // of the launch (AVAudioSession is one shared, global session;
+            // the last `setCategory` call anywhere wins). Same
+            // policy-less fallback for older systems that reject
+            // `.longFormAudio`.
+            do {
+                try AVAudioSession.sharedInstance().setCategory(
+                    .playback, mode: .spokenAudio, policy: .longFormAudio)
+            } catch {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+            }
             try AVAudioSession.sharedInstance().setActive(true)
             let player = try AVAudioPlayer(contentsOf: url)
             player.isMeteringEnabled = true

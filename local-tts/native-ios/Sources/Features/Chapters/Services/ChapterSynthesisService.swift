@@ -4,19 +4,20 @@ import Foundation
 
 /// Owns Kokoro chapter synthesis: resolving which variant's manager a
 /// voice belongs to, warming it up, and running the actual `synthesize()`
-/// calls — one chunk at a time, via `synthesizeChunkDetailed`, which is
-/// what `ChapterAudioPlayer.stream` retains in memory for the session.
-/// Nothing here is persisted to disk (there is no "Generate" feature —
-/// removed, see CHANGELOG); `synthesizeOneChunk` is the shared per-chunk
-/// logic (English gets real word timings via `synthesizeDetailed`;
-/// non-English just audio).
+/// calls — one chunk at a time. Two entry points share one FIFO:
+/// `synthesizeChunkDetailed`, which `ChapterAudioPlayer.stream` retains in
+/// memory for the session (real word timings via `synthesizeDetailed`,
+/// English only), and `synthesizeChunkSamples`, which `BookAudioPlayer`
+/// (`Features/Listening/`) feeds straight into an `AVAudioPCMBuffer` and
+/// has no use for word timings or WAV encoding. Nothing here is persisted
+/// to disk (there is no "Generate" feature — removed, see CHANGELOG).
 ///
 /// `KokoroAneManager` is itself an actor, so concurrent `synthesize()`
 /// calls are memory-safe on their own, but `runSerially` still gives
-/// requests a FIFO queue — the reader's bounded-lookahead pump and an
-/// on-demand "Play from here" tap both submit here, and without ordering
-/// the two would interleave unpredictably rather than the tap waiting
-/// behind at most one chunk already in flight.
+/// requests a FIFO queue — the reader's bounded-lookahead pump, an
+/// on-demand "Play from here" tap, and music-mode's own pump all submit
+/// here, and without ordering they'd interleave unpredictably rather than
+/// each waiting behind at most one chunk already in flight.
 @MainActor
 final class ChapterSynthesisService {
     private let kokoroServices: [KokoroVariant: KokoroEngineService]
@@ -36,6 +37,32 @@ final class ChapterSynthesisService {
             let service = try self.service(forVoice: voice)
             try await service.ensureReady(voice: voice)
             return try await Self.synthesizeOneChunk(chunkText: chunkText, voice: voice, service: service)
+        }
+    }
+
+    /// Synthesizes one chunk audio-only — for `BookAudioPlayer`, which feeds
+    /// an `AVAudioPCMBuffer` directly and has no use for word timings. Same
+    /// FIFO, same `ensureReady`, same text normalization as
+    /// `synthesizeChunkDetailed`; the difference is what it skips. English
+    /// voices route to `synthesizeDetailed` for its raw `.samples` and stop
+    /// there — no `AudioWAV` encode, no G2P/`WordTimingDeriver` alignment
+    /// pass, both pure waste when nothing renders words. Non-English voices
+    /// still go through plain `synthesize` (WAV), since alignment aside,
+    /// there's no `synthesizeDetailed` path proven safe for them yet — the
+    /// caller decodes that WAV back into samples itself.
+    func synthesizeChunkSamples(
+        chunkText: String, voice: String
+    ) async throws -> (samples: [Float], sampleRate: Int, duration: TimeInterval) {
+        try await runSerially {
+            let service = try self.service(forVoice: voice)
+            try await service.ensureReady(voice: voice)
+            let spoken = Self.spokenText(chunkText)
+            guard VoiceCatalog.variant(forCode: voice) == .english else {
+                let data = try await service.synthesize(text: spoken, voice: voice)
+                return try Self.samples(fromWAV: data)
+            }
+            let result = try await service.synthesizeDetailed(text: spoken, voice: voice)
+            return (result.samples, result.sampleRate, result.durationSeconds)
         }
     }
 
@@ -107,6 +134,63 @@ final class ChapterSynthesisService {
             spaceTokenId: spaceTokenId, groupCount: { counts[$0] ?? 1 })
     }
 
+    /// Decodes a canonical 16-bit mono WAV (what `synthesize()` always
+    /// returns) back into `[Float]` samples — only the non-English fallback
+    /// in `synthesizeChunkSamples` needs this; English stays on
+    /// `synthesizeDetailed`'s samples and never touches WAV at all. Walks
+    /// the RIFF chunk list rather than assuming a fixed 44-byte header, same
+    /// approach as `StreamingPlaybackLab.pcmBuffer(fromWAV:)` (which parses
+    /// the same shape of WAV into an `AVAudioPCMBuffer` instead — a
+    /// player-layer concern this service doesn't own).
+    private static func samples(
+        fromWAV wav: Data
+    ) throws -> (samples: [Float], sampleRate: Int, duration: TimeInterval) {
+        let bytes = [UInt8](wav)
+        guard bytes.count > 12, Array(bytes[0..<4]) == Array("RIFF".utf8),
+              Array(bytes[8..<12]) == Array("WAVE".utf8)
+        else { throw SynthesisError.malformedWAV }
+
+        var offset = 12
+        var sampleRate = 0
+        var bitsPerSample = 0
+        var pcm: ArraySlice<UInt8>?
+        while offset + 8 <= bytes.count {
+            let identifier = Array(bytes[offset..<(offset + 4)])
+            let size = Int(readUInt32LE(bytes, at: offset + 4))
+            let body = offset + 8
+            guard size >= 0, body + size <= bytes.count else { break }
+            if identifier == Array("fmt ".utf8), size >= 16 {
+                sampleRate = Int(readUInt32LE(bytes, at: body + 4))
+                bitsPerSample = Int(readUInt16LE(bytes, at: body + 14))
+            } else if identifier == Array("data".utf8) {
+                pcm = bytes[body..<(body + size)]
+            }
+            offset = body + size + (size % 2)  // RIFF chunks are word aligned
+        }
+
+        guard bitsPerSample == 16, sampleRate > 0, let pcm, !pcm.isEmpty
+        else { throw SynthesisError.malformedWAV }
+
+        let frameCount = pcm.count / 2
+        var samples = [Float](repeating: 0, count: frameCount)
+        let base = pcm.startIndex
+        for frame in 0..<frameCount {
+            let index = base + frame * 2
+            let raw = UInt16(pcm[index]) | (UInt16(pcm[index + 1]) << 8)
+            samples[frame] = Float(Int16(bitPattern: raw)) / 32768
+        }
+        return (samples, sampleRate, Double(frameCount) / Double(sampleRate))
+    }
+
+    private static func readUInt16LE(_ bytes: [UInt8], at offset: Int) -> UInt16 {
+        UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+    }
+
+    private static func readUInt32LE(_ bytes: [UInt8], at offset: Int) -> UInt32 {
+        UInt32(bytes[offset]) | (UInt32(bytes[offset + 1]) << 8)
+            | (UInt32(bytes[offset + 2]) << 16) | (UInt32(bytes[offset + 3]) << 24)
+    }
+
     private func service(forVoice voice: String) throws -> KokoroEngineService {
         guard let variant = VoiceCatalog.variant(forCode: voice), let service = kokoroServices[variant]
         else { throw SynthesisError.unknownVoice(voice) }
@@ -129,5 +213,6 @@ final class ChapterSynthesisService {
 
     enum SynthesisError: Error {
         case unknownVoice(String)
+        case malformedWAV
     }
 }

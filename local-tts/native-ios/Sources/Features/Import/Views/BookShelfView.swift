@@ -43,6 +43,11 @@ struct BookShelfView: View {
     let readingStats: ReadingStatsStore
     @Binding var isDetailPresented: Bool
     let onOpenBook: (SavedGenerationSummary) -> Void
+    /// Starts music-mode playback (`Features/Listening/`) without opening
+    /// the reader — unlike `onOpenBook`, this doesn't wait for the modal's
+    /// hero to fly back down first; the now-playing screen presents
+    /// immediately and the modal dismisses underneath it.
+    let onListen: (SavedGenerationSummary) -> Void
 
     @State private var selectedBook: SavedGenerationSummary?
     // Fraction of pages completed for the currently-open book's detail
@@ -173,7 +178,8 @@ struct BookShelfView: View {
                         showsDetails: showsModalDetails,
                         progress: selectedBookProgress,
                         onDismiss: { dismissDetail() },
-                        onRead: openSelectedBook)
+                        onRead: openSelectedBook,
+                        onListen: startListening)
                     .zIndex(1)
                 }
             }
@@ -598,6 +604,16 @@ struct BookShelfView: View {
             onOpenBook(book)
         }
     }
+
+    /// Unlike `openSelectedBook`, doesn't wait for the hero to fly back down
+    /// first — the now-playing screen presents immediately and the modal
+    /// dismisses underneath it, since starting music mode isn't a
+    /// navigation the modal needs to get out of the way for.
+    private func startListening() {
+        guard let book = selectedBook else { return }
+        onListen(book)
+        dismissDetail()
+    }
 }
 
 /// Softens shelf content beneath the floating bottom controls without a solid
@@ -998,6 +1014,7 @@ private struct BookShelfDetailModal: View {
     let progress: Double
     let onDismiss: () -> Void
     let onRead: () -> Void
+    let onListen: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var modalCardSize: CGSize = .zero
@@ -1205,16 +1222,29 @@ private struct BookShelfDetailModal: View {
                 }
                 .padding(.vertical, 2)
 
-                Button(action: onRead) {
-                    Text("Read this")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(BookShelfPalette.primaryText, in: Capsule())
+                HStack(spacing: 12) {
+                    Button(action: onRead) {
+                        Text("Read this")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(BookShelfPalette.primaryText, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Closes book details and opens the reader")
+
+                    Button(action: onListen) {
+                        LucideIcon(.headphones, size: 20, color: BookShelfPalette.primaryText)
+                            .frame(width: 52, height: 52)
+                            .background {
+                                Circle().strokeBorder(BookShelfPalette.primaryText, lineWidth: 1.5)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Listen")
+                    .accessibilityHint("Starts continuous audio playback of this book")
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Closes book details and opens the reader")
             }
             .opacity(showsDetails ? 1 : 0)
             .allowsHitTesting(showsDetails)
@@ -1359,6 +1389,7 @@ private struct GlassBookShelf: View {
             pdfImports: app.pdfImports,
             readingStats: app.readingStats,
             isDetailPresented: .constant(false),
-            onOpenBook: { _ in })
+            onOpenBook: { _ in },
+            onListen: { _ in })
     }
 }

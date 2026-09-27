@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ## [Unreleased]
 
+### Added
+- Music mode (`Features/Listening/`): continuous, lock-screen-surviving playback of a whole book, separate from read-along — cover art, a whole-book progress bar, a draggable per-page scrubber, and lock-screen/Control Centre transport (play/pause, ±15s, scrub, next/previous page). Reached from the Book Shelf detail modal's headphones button beside "Read this"; minimises to an Apple-Music-style floating mini player above the Explore/Add Books bar. Shares reading position and Reading Stats with the reader, and the two are mutually exclusive — starting one pauses (never stops) the other — but are otherwise fully independent engines; see `docs/adr/0012-two-playback-engines.md`
+
 ### Changed
 - Generate no longer synthesizes audio directly — it saves the text split into chapters (≤2000 words each), and a new chapters list lets each chapter be streamed on demand (any engine) or, for Kokoro, generated and saved as one real file with a proper music-player screen (artwork, scrubber, real elapsed/duration) — see `docs/adr/0010-chapters-and-per-chapter-saved-audio.md` (supersedes ADR 4)
 - Library and Home's Projects row now open the same chapters list for every engine, not just Kokoro

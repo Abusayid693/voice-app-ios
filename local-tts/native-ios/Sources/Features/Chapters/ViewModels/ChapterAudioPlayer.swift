@@ -140,6 +140,20 @@ final class ChapterAudioPlayer: ObservableObject {
 
     private let synthesisService: ChapterSynthesisService
     private let statsTracker: ReadingStatsTracker
+    /// Called just before this player starts or resumes audio — wired in
+    /// `KokoroAneTestApp` to `BookAudioPlayer.pauseIfPlaying()`, so tapping
+    /// play in the reader suspends music mode rather than the two engines
+    /// ever sounding at once. See `Features/Listening/`'s mutual-exclusion
+    /// note.
+    var willStartPlaying: (() -> Void)?
+    /// Set while this player has yielded the audio session to music mode
+    /// (`pauseIfPlaying`), cleared the next time playback is started or
+    /// resumed here. Without it, a chunk that was already in flight when the
+    /// yield happened lands in `startPlayer` and resumes reader audio *on
+    /// top of* music mode — the pause alone isn't enough, because a player
+    /// that was merely buffering had `isPlaying == false` and so nothing for
+    /// `pauseIfPlaying` to pause.
+    private var isYielded = false
 
     init(synthesisService: ChapterSynthesisService, statsTracker: ReadingStatsTracker) {
         self.synthesisService = synthesisService
@@ -242,6 +256,8 @@ final class ChapterAudioPlayer: ObservableObject {
         _ ref: ReaderPageRef, page: ReaderPage, voice: String, bookTitle: String,
         startingAt startIndex: Int = 0, wordIndex: Int? = nil
     ) {
+        willStartPlaying?()
+        isYielded = false
         stop()
         activeRef = ref
         activeVoice = voice
@@ -354,6 +370,14 @@ final class ChapterAudioPlayer: ObservableObject {
             delegate = newDelegate
             isBuffering = false
             bufferingForIndex = nil
+            // Prepared at the right offset but deliberately not started:
+            // music mode owns the audio right now, and resuming here would
+            // put both engines through the speaker at once. A later resume
+            // plays this same prepared player from where it was left.
+            guard !isYielded else {
+                isPlaying = false
+                return
+            }
             isPlaying = true
             newPlayer.play()
         } catch {
@@ -595,6 +619,16 @@ final class ChapterAudioPlayer: ObservableObject {
 
     // MARK: - Shared transport
 
+    /// Pauses without stopping — the yield half of read-along/music mode's
+    /// mutual exclusion (see `Features/Listening/ViewModels/BookAudioPlayer.swift`).
+    /// `stop()` would end the stats session and discard retained chunks;
+    /// this keeps both intact so resuming here is instant.
+    func pauseIfPlaying() {
+        isYielded = true
+        guard isPlaying else { return }
+        togglePlayPause()
+    }
+
     func togglePlayPause() {
         guard let player else { return }
         if isPlaying {
@@ -602,6 +636,8 @@ final class ChapterAudioPlayer: ObservableObject {
             isPlaying = false
             statsTracker.pauseListening()
         } else {
+            willStartPlaying?()
+            isYielded = false
             // Tapping play on a finished page restarts it from the top, so
             // the held end-of-chunk highlight has to be released.
             hasFinishedPlayback = false
