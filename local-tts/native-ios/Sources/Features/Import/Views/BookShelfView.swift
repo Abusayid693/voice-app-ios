@@ -136,6 +136,13 @@ struct BookShelfView: View {
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
 
+                ShelfBottomBlur()
+                    .frame(height: 180 + geometry.safeAreaInsets.bottom)
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .offset(y: geometry.safeAreaInsets.bottom)
+                    .ignoresSafeArea(edges: .bottom)
+
                 // Tap-anywhere-else dismissal for the arrange menu. Clear
                 // rather than dimmed — the book stays the focus, and the
                 // shelf behind it shouldn't read as modal.
@@ -590,6 +597,29 @@ struct BookShelfView: View {
         dismissDetail {
             onOpenBook(book)
         }
+    }
+}
+
+/// A transparent-to-material gradient that softens shelf content beneath the
+/// floating bottom controls without introducing a solid footer.
+private struct ShelfBottomBlur: View {
+    var body: some View {
+        Rectangle()
+            .fill(.regularMaterial)
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black.opacity(0.12), location: 0.22),
+                        .init(color: .black.opacity(0.42), location: 0.48),
+                        .init(color: .black.opacity(0.78), location: 0.72),
+                        .init(color: .black, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

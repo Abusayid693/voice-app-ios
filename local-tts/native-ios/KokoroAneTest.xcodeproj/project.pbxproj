@@ -73,6 +73,7 @@
 		94E9CB2D8332E37CE0AB236A /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78F11F32483887CED73D022F /* Spacing.swift */; };
 		9B54A51873AC0F03B8DEE96E /* ThinkingOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC67F8DD1499FD208A8BCB8 /* ThinkingOrb.swift */; };
 		9E408C97CB25D574413B12F7 /* WordTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBA1F9F87BCA6AE81651C5C3 /* WordTiming.swift */; };
+		A4103294F7763CDF41DC6E85 /* GooeyVerticalMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 618F4CF20F46643208D0068B /* GooeyVerticalMenu.swift */; };
 		A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */; };
 		A7905DAC415E66EA5DA07BA2 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9302EAF5459A6CDDA5CCE8EB /* ButtonStyles.swift */; };
 		AA769E6B751D9894A65C6E4C /* DiskStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BAE7E9D89415A6C4E26A629 /* DiskStorage.swift */; };
@@ -159,6 +160,7 @@
 		53E1EBEEA3D87A28330ED0B3 /* VoicePackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePackStore.swift; sourceTree = "<group>"; };
 		55D4942BB8DDCD39FE3689BC /* ReaderPagePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPagePickerSheet.swift; sourceTree = "<group>"; };
 		5D1118094C4B055386486F9B /* BundledMandarinVoices */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BundledMandarinVoices; sourceTree = SOURCE_ROOT; };
+		618F4CF20F46643208D0068B /* GooeyVerticalMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooeyVerticalMenu.swift; sourceTree = "<group>"; };
 		62AD94F95142992881570C3F /* Core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Core.swift; sourceTree = "<group>"; };
 		65604DB113B07F3010CB46DC /* ReaderPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPage.swift; sourceTree = "<group>"; };
 		6A49DCA04BC09FEEBE942A24 /* ChapterPlayerOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPlayerOptionsSheet.swift; sourceTree = "<group>"; };
@@ -495,6 +497,7 @@
 				9302EAF5459A6CDDA5CCE8EB /* ButtonStyles.swift */,
 				251025C4FD0961EB5F194C37 /* Colors.swift */,
 				EFD3F1ADF3670B6A4DCDC3E7 /* GenerationRow.swift */,
+				618F4CF20F46643208D0068B /* GooeyVerticalMenu.swift */,
 				725C7E7034B4C34315AA827C /* OrbCoverArt.swift */,
 				A99FAE1E3F3B1F4FFF86CE2F /* PreviewVoiceCard.swift */,
 				379658E17CC6D7117E9D341F /* RotatingBookFaces.swift */,
@@ -757,6 +760,7 @@
 				053D0602DD5FD7DF1D7E16F4 /* Engine.swift in Sources */,
 				C1427F4F7A181DE8479532A2 /* FileNameFormatter.swift in Sources */,
 				386E7A481632819095A592CC /* GenerationRow.swift in Sources */,
+				A4103294F7763CDF41DC6E85 /* GooeyVerticalMenu.swift in Sources */,
 				189031250D2B1C2643CD0657 /* HuggingFaceTreeSizeFetcher.swift in Sources */,
 				CE0F938C8D1EBE908E680B15 /* ImportHomeView.swift in Sources */,
 				A5E81EA4FEA65A2CD5B5DF23 /* KokoroAneTestApp.swift in Sources */,
