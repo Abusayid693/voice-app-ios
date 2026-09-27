@@ -137,7 +137,7 @@ struct BookShelfView: View {
                 .accessibilityHidden(selectedBook != nil)
 
                 ShelfBottomBlur()
-                    .frame(height: 180 + geometry.safeAreaInsets.bottom)
+                    .frame(height: 120 + geometry.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .offset(y: geometry.safeAreaInsets.bottom)
@@ -600,26 +600,41 @@ struct BookShelfView: View {
     }
 }
 
-/// A transparent-to-material gradient that softens shelf content beneath the
-/// floating bottom controls without introducing a solid footer.
+/// Softens shelf content beneath the floating bottom controls without a solid
+/// footer — the bottom counterpart to `ShelfTopBlur`, same technique: one
+/// masked `.ultraThinMaterial` band, not several stacked ones. Stacking
+/// several masked-Material layers to fake a ramping blur *radius* was tried
+/// here first and didn't read as blur at all — a masked `Material` mostly
+/// contributes translucent tint once it isn't the one thing sitting directly
+/// on live content, so four of them plus the paper wash on top just looked
+/// like a flat gradient. One real blur band, same as the top edge.
+///
+/// The paper wash on top is still needed, though: unlike the top edge (which
+/// only has to fade into the shelf), the bar's dark capsules need a light
+/// ground to sit on, and blur alone still lets cover artwork read through at
+/// the very bottom.
 private struct ShelfBottomBlur: View {
     var body: some View {
-        Rectangle()
-            .fill(.regularMaterial)
-            .mask {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black.opacity(0.12), location: 0.22),
-                        .init(color: .black.opacity(0.42), location: 0.48),
-                        .init(color: .black.opacity(0.78), location: 0.72),
-                        .init(color: .black, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom)
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask(
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.5), .black],
+                        startPoint: .top,
+                        endPoint: .bottom))
+
+            LinearGradient(
+                stops: [
+                    .init(color: .white.opacity(0), location: 0),
+                    .init(color: .white.opacity(0.55), location: 0.55),
+                    .init(color: .white, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

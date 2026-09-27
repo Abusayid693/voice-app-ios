@@ -11,7 +11,6 @@ struct CustomTabBar: View {
     let onAddBooks: () -> Void
 
     private let exploreSize: CGFloat = 60
-    private let barForeground = BookShelfPalette.primaryText
     private let exploreForeground = Color.appPrimaryText
 
     private var exploreItems: [ExploreDestination] {
@@ -39,10 +38,16 @@ struct CustomTabBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            exploreMenu
+        // Add Books centers on the bar's own full width, not on the space
+        // left over after Explore — a plain HStack with a Spacer either side
+        // centers within the *remaining* space, which Explore's own width
+        // skews off the bar's true midpoint. Overlaying Explore instead
+        // (pinned leading) leaves this frame's own centering unaffected by it.
+        ZStack {
             addBooksButton
         }
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .leading) { exploreMenu }
         .padding(.horizontal, 19)
         .padding(.top, 9)
         .padding(.bottom, max(safeAreaBottom - 31, 8))
@@ -82,31 +87,23 @@ struct CustomTabBar: View {
         }
     }
 
+    // Solid dark, the same `.appBackground`/`.appPrimaryText` pair the
+    // Explore button uses, so the two read as one family rather than a dark
+    // circle beside a glass pill. It is still not part of the Explore menu's
+    // filtered Canvas/metaball animation.
     private var addBooksButton: some View {
         Button(action: onAddBooks) {
             Text("Add Books")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(barForeground)
-            .frame(maxWidth: .infinity)
-            .frame(height: exploreSize)
+                .foregroundStyle(exploreForeground)
+                .padding(.horizontal, 32)
+                .frame(height: exploreSize)
         }
         .buttonStyle(.plain)
-        .background(addBooksBackground)
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.22), radius: 8, y: 4)
+        .background(Capsule().fill(Color.appBackground))
+        .shadow(color: .black.opacity(0.22), radius: 9, y: 4)
         .accessibilityLabel("Add Books")
         .accessibilityHint("Choose a PDF to add to your shelf")
-    }
-
-    // Add Books deliberately keeps its original glass implementation. It is
-    // not part of the Explore menu's filtered Canvas/metaball animation.
-    @ViewBuilder
-    private var addBooksBackground: some View {
-        if #available(iOS 26.0, *) {
-            Capsule().fill(.clear).glassEffect(.regular.interactive(), in: Capsule())
-        } else {
-            Capsule().fill(.ultraThinMaterial)
-        }
     }
 }
 
