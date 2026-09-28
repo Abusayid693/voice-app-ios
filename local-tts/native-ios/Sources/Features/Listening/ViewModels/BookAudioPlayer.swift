@@ -383,6 +383,7 @@ final class BookAudioPlayer: ObservableObject {
         MPRemoteCommandCenter.shared().nextTrackCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().previousTrackCommand.removeTarget(nil)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
 
         statsTracker.endListening(pageCompleted: false)
 
@@ -952,6 +953,16 @@ final class BookAudioPlayer: ObservableObject {
         else { return lastResolvedPosition }
 
         let sample = playerTime.sampleTime
+        // Spans fully behind the playhead can never be resolved against
+        // again, and this runs at the highlight's ~12Hz poll: a starvation
+        // stretch appends two silence spans a second, so without pruning
+        // the scan below grows for as long as the page plays.
+        if scheduledSpans.count > 64,
+           let lastConsumed = scheduledSpans.lastIndex(where: {
+               $0.startSample + $0.frameCount <= sample
+           }), lastConsumed > 0 {
+            scheduledSpans.removeFirst(lastConsumed)
+        }
         guard let span = scheduledSpans.last(where: { $0.startSample <= sample }) else {
             return lastResolvedPosition
         }
@@ -1203,6 +1214,7 @@ final class BookAudioPlayer: ObservableObject {
     }
 
     private func updateNowPlaying() {
+        let center = MPNowPlayingInfoCenter.default()
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = activeRef.map { "Page \($0.pageIndex + 1) of \(pageCount)" }
         info[MPMediaItemPropertyAlbumTitle] = bookTitle
@@ -1210,13 +1222,34 @@ final class BookAudioPlayer: ObservableObject {
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedNow()
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        // Posted alongside the rate so the lock screen knows this is a
+        // 1.0x-when-playing source and extrapolates the elapsed time
+        // correctly between our 1Hz updates.
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
         if duration > 0 {
             info[MPMediaItemPropertyPlaybackDuration] = duration
         }
         if let artwork {
             info[MPMediaItemPropertyArtwork] = artwork
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        center.nowPlayingInfo = info
+        // **Required, not belt-and-braces.** `nowPlayingInfo`'s playback
+        // rate alone does not drive the lock screen's play/pause button for
+        // an app that isn't backing Now Playing with an `AVPlayer` — iOS
+        // reads `playbackState` for that, and without it the button keeps
+        // whatever state it last inferred while the app's real state moves
+        // on underneath it.
+        center.playbackState = playbackStateForNowPlaying
+    }
+
+    /// Kept in lockstep with the playback rate posted alongside it —
+    /// reporting `.playing` while the rate is 0 (during a buffer, say) tells
+    /// the lock screen two different things at once, and it believes
+    /// whichever it read last. Buffering therefore reads as paused, which is
+    /// also just true: no audio is coming out.
+    private var playbackStateForNowPlaying: MPNowPlayingPlaybackState {
+        guard activeRef != nil else { return .stopped }
+        return isPlaying ? .playing : .paused
     }
 
     private static func loadArtwork(url: URL?) -> MPMediaItemArtwork? {
