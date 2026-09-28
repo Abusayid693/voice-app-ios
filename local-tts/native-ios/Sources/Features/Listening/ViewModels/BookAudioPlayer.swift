@@ -102,6 +102,16 @@ final class BookAudioPlayer: ObservableObject {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
     private var isConnected = false
+    /// Whether `node` is currently attached to `engine`. Tracked separately
+    /// from `isConnected`, which only turns true once a buffer has actually
+    /// been scheduled: attach/detach has to balance on its own terms.
+    /// `detach` used to be conditional on `isConnected`, so a session
+    /// started and abandoned before its first chunk landed left the node
+    /// attached while `isConnected` read false — and the next `start()`
+    /// attached the same node to the same engine a second time. Whether
+    /// AVAudioEngine tolerates that is undocumented either way; leaving the
+    /// engine owning a node nothing releases is wrong regardless.
+    private var isAttached = false
     private var format: AVAudioFormat?
     private var isFinishedBook = false
     private var observers: [NSObjectProtocol] = []
@@ -270,7 +280,10 @@ final class BookAudioPlayer: ObservableObject {
         }
         configureRemoteCommands()
         observeSystemEvents()
-        engine.attach(node)
+        if !isAttached {
+            engine.attach(node)
+            isAttached = true
+        }
         startedAt = Date()
         isFinishedBook = false
 
@@ -392,10 +405,16 @@ final class BookAudioPlayer: ObservableObject {
         if isConnected {
             node.stop()
             engine.stop()
-            engine.detach(node)
             isConnected = false
+            // Only release the session when something actually played —
+            // deactivating one we never used would tell other apps a
+            // playback session just ended when none had begun.
             try? AVAudioSession.sharedInstance().setActive(
                 false, options: .notifyOthersOnDeactivation)
+        }
+        if isAttached {
+            engine.detach(node)
+            isAttached = false
         }
         MPRemoteCommandCenter.shared().playCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().pauseCommand.removeTarget(nil)

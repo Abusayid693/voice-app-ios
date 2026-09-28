@@ -194,7 +194,7 @@ struct NowPlayingSurface: View {
     /// zero until the first chunk lands.
     private var bookProgress: Double {
         guard pageCount > 0 else { return 0 }
-        if isActive { return bookProgress }
+        if isActive { return player.bookProgress }
         return Double(pageIndex) / Double(pageCount)
     }
 
