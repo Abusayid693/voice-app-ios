@@ -328,8 +328,7 @@ final class BookAudioPlayer: ObservableObject {
                 // node stops rendering, and this is what the clock holds at
                 // for the duration of the pause.
                 _ = resolvedPosition()
-                node.pause()
-                isNodeRunning = false
+                pauseEngine()
             }
             isUserPaused = true
             isPlaying = false
@@ -348,10 +347,34 @@ final class BookAudioPlayer: ObservableObject {
         updateNowPlaying()
     }
 
+    /// Starts the node, restarting the engine first if a pause stopped it.
+    ///
+    /// **Pausing has to stop the engine, not just the node.** On iOS the
+    /// Now Playing state is derived from the app's audio session — see
+    /// `MPNowPlayingInfoCenter.playbackState`, whose own header says it
+    /// "only applies on macOS, where playback state cannot be determined by
+    /// the application's audio session". Pausing the player node alone
+    /// leaves the engine running and the session live, so iOS keeps showing
+    /// the app as playing however the now-playing dictionary is posted, and
+    /// the lock screen's button stops following in-app play/pause.
     private func startNodeIfNeeded() {
         guard isConnected, !isNodeRunning else { return }
+        if !engine.isRunning {
+            do {
+                try engine.start()
+            } catch {
+                log("engine restart failed: \(error.localizedDescription)")
+                return
+            }
+        }
         node.play()
         isNodeRunning = true
+    }
+
+    private func pauseEngine() {
+        node.pause()
+        engine.pause()
+        isNodeRunning = false
     }
 
     func stop() {
@@ -383,7 +406,6 @@ final class BookAudioPlayer: ObservableObject {
         MPRemoteCommandCenter.shared().nextTrackCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().previousTrackCommand.removeTarget(nil)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        MPNowPlayingInfoCenter.default().playbackState = .stopped
 
         statsTracker.endListening(pageCompleted: false)
 
@@ -1154,7 +1176,7 @@ final class BookAudioPlayer: ObservableObject {
         switch type {
         case .began:
             log("interruption began")
-            isNodeRunning = false
+            pauseEngine()
             isPlaying = false
         case .ended:
             let shouldResume =
@@ -1171,7 +1193,6 @@ final class BookAudioPlayer: ObservableObject {
             }
             log("interruption ended — resuming")
             try? AVAudioSession.sharedInstance().setActive(true)
-            if !engine.isRunning { try? engine.start() }
             startNodeIfNeeded()
             isPlaying = true
         @unknown default:
@@ -1187,10 +1208,7 @@ final class BookAudioPlayer: ObservableObject {
               AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable, isPlaying
         else { return }
         log("route changed — output device unavailable, pausing")
-        if isNodeRunning {
-            node.pause()
-            isNodeRunning = false
-        }
+        if isNodeRunning { pauseEngine() }
         // Latched, so the next chunk landing doesn't quietly resume audio
         // through the speaker the user just unplugged from.
         isUserPaused = true
@@ -1200,17 +1218,13 @@ final class BookAudioPlayer: ObservableObject {
 
     private func handleConfigurationChange() {
         log("engine configuration changed")
-        guard isConnected, !engine.isRunning else { return }
-        do {
-            try engine.start()
-            if isPlaying {
-                isNodeRunning = false
-                startNodeIfNeeded()
-            }
-            log("engine restarted")
-        } catch {
-            log("engine restart failed: \(error.localizedDescription)")
-        }
+        // Only resume an engine that *should* be running: it is now also
+        // stopped deliberately while paused, and restarting it here would
+        // put the session back to "playing" behind the user's back.
+        guard isConnected, isPlaying, !engine.isRunning else { return }
+        isNodeRunning = false
+        startNodeIfNeeded()
+        log("engine restarted")
     }
 
     private func updateNowPlaying() {
@@ -1233,23 +1247,11 @@ final class BookAudioPlayer: ObservableObject {
             info[MPMediaItemPropertyArtwork] = artwork
         }
         center.nowPlayingInfo = info
-        // **Required, not belt-and-braces.** `nowPlayingInfo`'s playback
-        // rate alone does not drive the lock screen's play/pause button for
-        // an app that isn't backing Now Playing with an `AVPlayer` — iOS
-        // reads `playbackState` for that, and without it the button keeps
-        // whatever state it last inferred while the app's real state moves
-        // on underneath it.
-        center.playbackState = playbackStateForNowPlaying
-    }
-
-    /// Kept in lockstep with the playback rate posted alongside it —
-    /// reporting `.playing` while the rate is 0 (during a buffer, say) tells
-    /// the lock screen two different things at once, and it believes
-    /// whichever it read last. Buffering therefore reads as paused, which is
-    /// also just true: no audio is coming out.
-    private var playbackStateForNowPlaying: MPNowPlayingPlaybackState {
-        guard activeRef != nil else { return .stopped }
-        return isPlaying ? .playing : .paused
+        // Deliberately no `center.playbackState`: its own header says it
+        // "only applies on macOS, where playback state cannot be determined
+        // by the application's audio session". On iOS it is a no-op, and
+        // the session *is* the state — which is why pausing stops the
+        // engine rather than only the node (see `startNodeIfNeeded`).
     }
 
     private static func loadArtwork(url: URL?) -> MPMediaItemArtwork? {
