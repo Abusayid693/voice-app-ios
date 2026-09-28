@@ -27,6 +27,24 @@ enum ReaderSurfaceMode: String, CaseIterable {
 /// a separate feature; see `docs/adr/0013-unified-player.md`.
 struct NowPlayingSurface: View {
     @ObservedObject var player: BookAudioPlayer
+    /// Book identity comes from the reader, not the player: this surface is
+    /// reachable *before* anything is playing (the shelf's headphones button
+    /// opens straight onto it), and the player carries no book at all until
+    /// `start(...)` runs. Reading cover and title off the player left this
+    /// screen blank on exactly that path.
+    let coverURL: URL?
+    let title: String
+    let pageIndex: Int
+    let pageCount: Int
+    /// Whether the player's live values (playing, buffering, elapsed,
+    /// duration) describe *this* page. False when nothing is playing yet, or
+    /// when the player is on some other book.
+    let isActive: Bool
+    /// Routed back to the reader rather than calling the player directly,
+    /// so play starts a session when there isn't one — `togglePlayPause`
+    /// alone no-ops against an idle player.
+    let onTogglePlayPause: () -> Void
+    let onSelectPage: (Int) -> Void
 
     @State private var coverImage: UIImage?
     @State private var scrubberValue: Double = 0
@@ -56,8 +74,8 @@ struct NowPlayingSurface: View {
         // an oversized width and every row inside spilled off both edges.
         // A `.background` can never influence its host's size.
         .background { ambientBackground }
-        .task(id: player.coverURL) {
-            coverImage = player.coverURL.flatMap { UIImage(contentsOfFile: $0.path) }
+        .task(id: coverURL) {
+            coverImage = coverURL.flatMap { UIImage(contentsOfFile: $0.path) }
         }
         .onChange(of: player.elapsed) { _, newValue in
             guard !isScrubbing else { return }
@@ -114,7 +132,7 @@ struct NowPlayingSurface: View {
 
     private func cover(height: CGFloat) -> some View {
         SavedProjectCover(
-            coverURL: player.coverURL, title: player.bookTitle,
+            coverURL: coverURL, title: title,
             size: CGSize(width: height * 2 / 3, height: height), cornerRadius: 12)
             .shadow(color: .black.opacity(0.4), radius: 28, y: 14)
     }
@@ -124,16 +142,14 @@ struct NowPlayingSurface: View {
     private var titleBlock: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(player.bookTitle)
+                Text(title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.appPrimaryText)
                     .lineLimit(1)
-                if let ref = player.activeRef {
-                    Text("Page \(ref.pageIndex + 1) of \(player.pageCount)")
-                        .font(.system(size: 17))
-                        .foregroundStyle(Color.appPrimaryText.opacity(0.65))
-                        .lineLimit(1)
-                }
+                Text("Page \(pageIndex + 1) of \(pageCount)")
+                    .font(.system(size: 17))
+                    .foregroundStyle(Color.appPrimaryText.opacity(0.65))
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
@@ -145,7 +161,7 @@ struct NowPlayingSurface: View {
         VStack(spacing: 2) {
             PlaybackScrubber(
                 value: $scrubberValue,
-                range: 0...max(player.duration, 1),
+                range: 0...max(duration, 1),
                 onEditingChanged: { editing in
                     if editing {
                         isScrubbing = true
@@ -156,13 +172,13 @@ struct NowPlayingSurface: View {
                     }
                 }
             )
-            .disabled(player.duration <= 0)
-            .opacity(player.duration <= 0 ? 0.4 : 1)
+            .disabled(duration <= 0)
+            .opacity(duration <= 0 ? 0.4 : 1)
 
             HStack {
                 Text(Self.formatted(displayedElapsed))
                 Spacer()
-                Text("-\(Self.formatted(max(player.duration - displayedElapsed, 0)))")
+                Text("-\(Self.formatted(max(duration - displayedElapsed, 0)))")
             }
             .font(.system(size: 12, weight: .medium))
             .monospacedDigit()
@@ -170,8 +186,20 @@ struct NowPlayingSurface: View {
         }
     }
 
+    private var isPlaying: Bool { isActive && player.isPlaying }
+    private var duration: TimeInterval { isActive ? player.duration : 0 }
+
+    /// Whole-book fraction. Falls back to the page the reader is showing so
+    /// the bar is meaningful before playback starts, rather than sitting at
+    /// zero until the first chunk lands.
+    private var bookProgress: Double {
+        guard pageCount > 0 else { return 0 }
+        if isActive { return bookProgress }
+        return Double(pageIndex) / Double(pageCount)
+    }
+
     private var displayedElapsed: TimeInterval {
-        isScrubbing ? scrubberValue : player.elapsed
+        isScrubbing ? scrubberValue : (isActive ? player.elapsed : 0)
     }
 
     // MARK: - Transport
@@ -184,16 +212,16 @@ struct NowPlayingSurface: View {
     private var transport: some View {
         HStack(spacing: 0) {
             transportButton("backward.end.fill", size: 20, accessibilityLabel: "Previous page") {
-                guard let ref = player.activeRef, ref.pageIndex > 0 else { return }
-                player.jumpToPage(ref.pageIndex - 1)
+                onSelectPage(pageIndex - 1)
             }
-            .disabled((player.activeRef?.pageIndex ?? 0) <= 0)
+            .disabled(pageIndex <= 0)
 
             Spacer(minLength: 0)
 
             transportButton("gobackward.15", size: 30, accessibilityLabel: "Back 15 seconds") {
                 player.skipBackward()
             }
+            .disabled(!isActive)
 
             Spacer(minLength: 0)
 
@@ -204,28 +232,28 @@ struct NowPlayingSurface: View {
             transportButton("goforward.15", size: 30, accessibilityLabel: "Forward 15 seconds") {
                 player.skipForward()
             }
+            .disabled(!isActive)
 
             Spacer(minLength: 0)
 
             transportButton("forward.end.fill", size: 20, accessibilityLabel: "Next page") {
-                guard let ref = player.activeRef, ref.pageIndex + 1 < player.pageCount else { return }
-                player.jumpToPage(ref.pageIndex + 1)
+                onSelectPage(pageIndex + 1)
             }
-            .disabled((player.activeRef?.pageIndex ?? 0) + 1 >= player.pageCount)
+            .disabled(pageIndex + 1 >= pageCount)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var playPauseButton: some View {
         PlayPauseBounceButton(
-            isPlaying: player.isPlaying, tapTargetSize: 68, action: player.togglePlayPause
+            isPlaying: isPlaying, tapTargetSize: 68, action: onTogglePlayPause
         ) { isPlaying in
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: 38, weight: .medium))
                 .foregroundStyle(Color.appPrimaryText)
         }
         .overlay {
-            if player.isBuffering {
+            if isActive, player.isBuffering {
                 // Date-driven rather than a `repeatForever` state animation,
                 // for the reason `ChapterPlayerView`'s own buffering ring
                 // documents: a view that mounts after such an animation
@@ -242,7 +270,7 @@ struct NowPlayingSurface: View {
                 .allowsHitTesting(false)
             }
         }
-        .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(isPlaying ? "Pause" : "Play")
     }
 
     /// SF Symbols rather than this app's usual Lucide set for the transport
@@ -281,11 +309,11 @@ struct NowPlayingSurface: View {
                         .fill(Color.appPrimaryText.opacity(0.22))
                     Capsule()
                         .fill(Color.appPrimaryText.opacity(0.7))
-                        .frame(width: geometry.size.width * CGFloat(min(max(player.bookProgress, 0), 1)))
+                        .frame(width: geometry.size.width * CGFloat(min(max(bookProgress, 0), 1)))
                 }
             }
             .frame(height: 4)
-            Text("\(Int((min(max(player.bookProgress, 0), 1) * 100).rounded()))%")
+            Text("\(Int((min(max(bookProgress, 0), 1) * 100).rounded()))%")
                 .font(.system(size: 11, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(Color.appPrimaryText.opacity(0.55))
@@ -293,7 +321,7 @@ struct NowPlayingSurface: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Book progress")
-        .accessibilityValue("\(Int((min(max(player.bookProgress, 0), 1) * 100).rounded())) percent")
+        .accessibilityValue("\(Int((min(max(bookProgress, 0), 1) * 100).rounded())) percent")
     }
 
     private func bufferingRingAngle(at date: Date) -> Double {
@@ -310,5 +338,7 @@ struct NowPlayingSurface: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return NowPlayingSurface(player: app.player)
+    return NowPlayingSurface(
+        player: app.player, coverURL: nil, title: "A Book", pageIndex: 2, pageCount: 326,
+        isActive: false, onTogglePlayPause: {}, onSelectPage: { _ in })
 }

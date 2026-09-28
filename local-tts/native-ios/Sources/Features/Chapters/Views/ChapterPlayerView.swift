@@ -361,7 +361,15 @@ struct ChapterPlayerView: View {
     private var readingSurface: some View {
         switch surfaceMode {
         case .audio:
-            NowPlayingSurface(player: player)
+            NowPlayingSurface(
+                player: player,
+                coverURL: SavedGeneration.existingCoverURL(id: project.id),
+                title: project.title,
+                pageIndex: currentPageIndex,
+                pageCount: project.pageCount,
+                isActive: isCurrentKokoroPageActive,
+                onTogglePlayPause: toggleKokoroPlayback,
+                onSelectPage: changeAudioPage)
         case .originalPage:
             if let sourcePDFURL {
                 ReaderPDFPageView(
@@ -1032,6 +1040,21 @@ struct ChapterPlayerView: View {
         }
         .onChange(of: player.isBuffering) { _, isBuffering in
             updatePlayButtonPulse(isBuffering: isCurrentKokoroPageActive && isBuffering)
+        }
+    }
+
+    /// Next/previous page from the audio surface. Routed through the player
+    /// while it's playing this book, so a page change there behaves like a
+    /// music player's next-track — it keeps playing, and the reader follows
+    /// via its `activeRef` handler. `selectPage` alone would go through
+    /// `moveToPage`, which stops playback; that's right for a deliberate
+    /// page turn while reading, wrong for a transport button.
+    private func changeAudioPage(to index: Int) {
+        guard (0..<project.pageCount).contains(index) else { return }
+        if isCurrentKokoroPageActive {
+            player.jumpToPage(index)
+        } else {
+            selectPage(index)
         }
     }
 
