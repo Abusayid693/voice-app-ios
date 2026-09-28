@@ -9,6 +9,9 @@ struct ImportHomeView: View {
     /// Driven by the Explore menu in `RootTabView`'s floating bar — Library,
     /// Voices and Tools are pushed here rather than mounted as peer tabs.
     @Binding var exploreDestination: ExploreDestination?
+    /// Set by `RootTabView`'s mini player to reopen whatever is playing on
+    /// the audio surface. Consumed here, since Home owns the only stack.
+    @Binding var openBookRequest: OpenBookRequest?
     /// RootTabView owns the PDF file importer (it's global, reachable from
     /// Add Books too) — forwarded into Tools' "Upload File" row so it
     /// triggers the exact same picker rather than a second one.
@@ -17,6 +20,12 @@ struct ImportHomeView: View {
     @State private var isSettingsPresented = false
     @State private var isAvatarPickerPresented = false
     @State private var openProject: SavedGeneration?
+    /// Which surface the pending push should open on — nil means "use the
+    /// reader's stored preference".
+    @State private var openSurfaceMode: ReaderSurfaceMode?
+    /// Page to open at, when the push came from somewhere that knows one
+    /// (the mini player). Nil falls back to the project's saved position.
+    @State private var openPageIndex: Int?
     @State private var isBookDetailPresented = false
     @State private var isReadingStatsPresented = false
     // Seeded with 7 zero-activity days so the strip never flashes empty
@@ -33,9 +42,16 @@ struct ImportHomeView: View {
                 readingStats: app.readingStats,
                 isDetailPresented: $isBookDetailPresented,
                 onOpenBook: { book in
+                    openSurfaceMode = nil
                     openProject = libraryViewModel.project(for: book.id)
                 },
-                onListen: startListening)
+                onListen: { book in
+                    // Same push as "Read this", only landing on the audio
+                    // surface — one screen, one player, two surfaces.
+                    openSurfaceMode = .audio
+                    openPageIndex = nil
+                    openProject = libraryViewModel.project(for: book.id)
+                })
             // Home draws its own header controls instead of using the
             // navigation bar: a `ToolbarItem` renders through nav-bar
             // chrome (Liquid Glass on iOS 26, plus bar-button padding
@@ -56,9 +72,11 @@ struct ImportHomeView: View {
             .navigationDestination(item: $openProject) { project in
                 ChapterPlayerView(
                     project: project,
+                    initialPageIndex: openPageIndex,
+                    initialSurfaceMode: openSurfaceMode,
                     library: libraryViewModel,
-                    chapterPlayer: app.chapterPlayer,
-                        viewModel: app.tts,
+                    player: app.player,
+                    viewModel: app.tts,
                     previewPlayer: app.previewPlayer,
                     readingStats: app.readingStats)
             }
@@ -92,6 +110,17 @@ struct ImportHomeView: View {
             guard oldValue != nil, newValue == nil else { return }
             Task { await loadRecentActivity() }
         }
+        // The mini player asked for a book: load it and push, on the audio
+        // surface. Cleared immediately so tapping it again after popping
+        // back re-triggers.
+        .onChange(of: openBookRequest) { _, request in
+            guard let request, let project = libraryViewModel.project(for: request.projectID)
+            else { return }
+            openPageIndex = request.pageIndex
+            openSurfaceMode = request.surfaceMode
+            openProject = project
+            openBookRequest = nil
+        }
         // The single writer of `isReaderOpen`, same convention as
         // `tabRootChrome`'s own `isAtTabRoot` above — see that property's
         // doc comment for why a pushed screen must not write this itself.
@@ -106,26 +135,6 @@ struct ImportHomeView: View {
         // `.environment` above: light for the shelf, dark while an Explore
         // destination is on top of it.
         .preferredColorScheme(exploreDestination == nil ? .light : .dark)
-    }
-
-    /// Starts music-mode playback of a book — the shelf's "Listen" button.
-    /// Resumes at `project.lastReadPageIndex`, the same position read-along
-    /// would open at, and hands the player closures it needs to keep that
-    /// position and `ReadingStatsStore` in sync as it advances (it has no
-    /// `LibraryViewModel` of its own — see `BookAudioPlayer`'s own doc
-    /// comment).
-    private func startListening(_ book: SavedGenerationSummary) {
-        guard let project = libraryViewModel.project(for: book.id) else { return }
-        let startIndex = project.lastReadPageIndex
-        guard let page = libraryViewModel.page(for: project, index: startIndex) else { return }
-        app.bookPlayer.start(
-            project: project, page: page, startIndex: startIndex,
-            pageProvider: { [libraryViewModel] index in
-                libraryViewModel.page(for: project, index: index)
-            },
-            positionWriter: { [libraryViewModel] index in
-                libraryViewModel.recordLastReadPage(index: index, for: project.id)
-            })
     }
 
     @ViewBuilder
@@ -312,5 +321,5 @@ extension Array {
     let app = AppEnvironment.preview()
     return ImportHomeView(
         libraryViewModel: app.library, app: app, exploreDestination: .constant(nil),
-        onAddBooks: {})
+        openBookRequest: .constant(nil), onAddBooks: {})
 }

@@ -128,18 +128,18 @@ private struct PageNumberSlider: View {
 /// below) — text keeps scrolling underneath it, it doesn't reserve its own
 /// space.
 /// Opens at the project's saved page position (or page 1 when unavailable).
-/// Playback is always synthesize-and-play (`chapterPlayer.stream`) — there
+/// Playback is always synthesize-and-play (`player.stream`) — there
 /// is no persisted "Generate" audio anymore (removed, see CHANGELOG), so
 /// this view never asks which mode is active. `duration` is an *estimate*
 /// of the current page's full length rather than a running sum of retained
 /// audio (bounded lookahead means that sum would freeze at ~2 chunks'
 /// worth), and seeking anywhere triggers on-demand synthesis rather than
-/// being clamped — both handled inside `ChapterAudioPlayer`.
+/// being clamped — both handled inside `BookAudioPlayer`.
 ///
-/// With continuous playback on, `ChapterAudioPlayer` can advance to the next
+/// With continuous playback on, the player can advance to the next
 /// page on its own mid-session (prefetching across the boundary), which
-/// this view observes via `chapterPlayer.activeRef` rather than driving —
-/// see the `.onChange(of: chapterPlayer.activeRef)` handler, which updates
+/// this view observes via `player.activeRef` rather than driving —
+/// see the `.onChange(of: player.activeRef)` handler, which updates
 /// `currentPageIndex`/scroll position without the `stop()` a manually
 /// requested page change goes through.
 ///
@@ -155,7 +155,7 @@ struct ChapterPlayerView: View {
     let library: LibraryViewModel
     let previewPlayer: VoicePreviewPlayer
     let readingStats: ReadingStatsStore
-    @ObservedObject var chapterPlayer: ChapterAudioPlayer
+    @ObservedObject var player: BookAudioPlayer
     @ObservedObject var viewModel: TTSViewModel
 
     @State private var currentPageIndex: Int
@@ -209,7 +209,7 @@ struct ChapterPlayerView: View {
     // this, every group's words were rebuilt from scratch on every 4Hz
     // publish from chapterPlayer's ticker, whether or not that group's
     // content changed. Recomputed on appear and whenever a new chunk's
-    // words become available (streaming — see the chapterPlayer.duration
+    // words become available (streaming — see the player.duration
     // onChange).
     //
     // Revisions are per group, not one shared counter: a streaming chunk
@@ -233,7 +233,7 @@ struct ChapterPlayerView: View {
     // rebuild).
     @State private var revisionCounter = 0
     // A spinning ring in the highlight color rings the play/pause button
-    // while nothing is playable yet (chapterPlayer.isBuffering — true
+    // while nothing is playable yet (player.isBuffering — true
     // entering the player before streaming's first chunk lands, or between
     // chunks if playback ever catches up to the synthesis frontier).
     @State private var isPulsingPlayButton = false
@@ -252,9 +252,14 @@ struct ChapterPlayerView: View {
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
     @AppStorage("chapterPlayerFontFamily") private var readerFontFamily: ReaderFontFamily = .sfProText
     @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
-    /// Shows the imported document's own page instead of the extracted text.
-    /// Only reachable for PDF projects that kept a copy of their source.
-    @AppStorage("chapterPlayerShowsOriginalPage") private var showsOriginalPage = false
+    /// Which of the three surfaces this screen is showing. All three are
+    /// branches of one view over one player, so switching is a view change
+    /// and never touches playback — see `readingSurface`.
+    @AppStorage("chapterPlayerSurfaceMode") private var surfaceMode: ReaderSurfaceMode = .text
+    /// Set by a push that wants a specific surface regardless of the stored
+    /// preference — the mini player opens straight into `.audio`. Applied
+    /// once on appear.
+    private let initialSurfaceMode: ReaderSurfaceMode?
     /// Whether playback advances into the next page on its own at the end of
     /// this one. Mirrored into `chapterPlayer` (which has no `@AppStorage` of
     /// its own) on appear and whenever it changes.
@@ -293,17 +298,19 @@ struct ChapterPlayerView: View {
 
     init(
         project: SavedGeneration, initialPageIndex: Int? = nil,
+        initialSurfaceMode: ReaderSurfaceMode? = nil,
         library: LibraryViewModel,
-        chapterPlayer: ChapterAudioPlayer,
+        player: BookAudioPlayer,
         viewModel: TTSViewModel,
         previewPlayer: VoicePreviewPlayer,
         readingStats: ReadingStatsStore
     ) {
         self.project = project
+        self.initialSurfaceMode = initialSurfaceMode
         self.library = library
         self.previewPlayer = previewPlayer
         self.readingStats = readingStats
-        _chapterPlayer = ObservedObject(wrappedValue: chapterPlayer)
+        _player = ObservedObject(wrappedValue: player)
         _viewModel = ObservedObject(wrappedValue: viewModel)
         let requestedIndex = initialPageIndex ?? project.lastReadPageIndex
         let hasValidRequestedIndex = project.pageCount > 0
@@ -322,12 +329,12 @@ struct ChapterPlayerView: View {
     }
 
     private var isCurrentKokoroPageActive: Bool {
-        chapterPlayer.isActive(pageRef)
+        player.isActive(pageRef)
     }
 
     private var visibleChunkTexts: [String] {
-        isCurrentKokoroPageActive && !chapterPlayer.chunkTexts.isEmpty
-            ? chapterPlayer.chunkTexts : idleChunkTexts
+        isCurrentKokoroPageActive && !player.chunkTexts.isEmpty
+            ? player.chunkTexts : idleChunkTexts
     }
 
     // Falls back to one group per chunk before .onAppear populates
@@ -345,22 +352,40 @@ struct ChapterPlayerView: View {
 
     private var canShowOriginalPage: Bool { sourcePDFURL != nil }
 
+    /// The three presentations of one playback session. Deliberately
+    /// branches of a single view rather than separate screens: switching
+    /// re-renders a branch, so it cannot re-run `.onAppear` and cannot
+    /// disturb the player — the audio keeps going, at the same position,
+    /// through every toggle.
     @ViewBuilder
     private var readingSurface: some View {
-        if showsOriginalPage, let sourcePDFURL {
-            ReaderPDFPageView(
-                pdfURL: sourcePDFURL, pageIndex: currentPageIndex,
-                highlights: currentChunkPageRects, theme: readerTheme)
-                .padding(.horizontal, 12)
-                .padding(.bottom, showFloatingPlayer ? 68 : 12)
-        } else {
+        switch surfaceMode {
+        case .audio:
+            NowPlayingSurface(player: player)
+        case .originalPage:
+            if let sourcePDFURL {
+                ReaderPDFPageView(
+                    pdfURL: sourcePDFURL, pageIndex: currentPageIndex,
+                    highlights: currentChunkPageRects, theme: readerTheme)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, showFloatingPlayer ? 68 : 12)
+            } else {
+                readAlong
+            }
+        case .text:
             readAlong
         }
     }
 
+    /// The audio surface carries its own transport and page readout, so the
+    /// reader's floating pill and bottom page bar would only duplicate it.
+    private var showsReaderChrome: Bool { surfaceMode != .audio }
+
     var body: some View {
         readingSurface
-            .safeAreaInset(edge: .bottom, spacing: 0) { pageNavigator }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if showsReaderChrome { pageNavigator }
+            }
             .background(readerTheme.background.ignoresSafeArea())
             // `.overlay`, not a shared ZStack with readAlong: `.safeAreaInset`
             // content composites on top of its own main view, so a ZStack
@@ -369,7 +394,7 @@ struct ChapterPlayerView: View {
             // into that region. An overlay applied after the inset is
             // guaranteed to draw on top of both.
             .overlay(alignment: .bottom) {
-                if showFloatingPlayer, hasReadableText {
+                if showsReaderChrome, showFloatingPlayer, hasReadableText {
                     floatingPlayer.padding(.bottom, 11)
                 }
             }
@@ -380,7 +405,8 @@ struct ChapterPlayerView: View {
                 animatedPageTitle
             }
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if canShowOriginalPage { originalPageToolbarControl }
+                surfaceModeToolbarControl
+                if canShowOriginalPage, surfaceMode != .audio { originalPageToolbarControl }
                 Button {
                     isOptionsSheetPresented = true
                 } label: {
@@ -428,19 +454,19 @@ struct ChapterPlayerView: View {
                 isAutoScrollPaused = false
             }
         }
-        // Bumped once per chunk landing (see ChapterAudioPlayer.synthesisRevision),
+        // Bumped once per chunk landing (see BookAudioPlayer.synthesisRevision),
         // which is exactly when a paragraph's words need to upgrade from the
         // plain-text fallback to real word timings. Not a per-frame cost.
         // `duration` alone isn't reliable for this now that it's an estimate
         // that can occasionally recompute to the same value between two
         // arrivals — see that property's own doc comment.
-        .onChange(of: chapterPlayer.synthesisRevision) { _, _ in
+        .onChange(of: player.synthesisRevision) { _, _ in
             if isCurrentKokoroPageActive { recomputeWordItems() }
         }
         // Grouping was computed only in .onAppear, so entering the player
         // before the chunker had run (chunkTexts still empty) left the whole
         // session on the per-chunk fallback, never grouped into paragraphs.
-        .onChange(of: chapterPlayer.chunkTexts.count) { _, _ in
+        .onChange(of: player.chunkTexts.count) { _, _ in
             if isCurrentKokoroPageActive {
                 paragraphGroups = computeParagraphGroups()
                 paragraphStyles = computeParagraphStyles(groups: effectiveGroups)
@@ -470,39 +496,55 @@ struct ChapterPlayerView: View {
         // disagreeing only ever means continuous playback just promoted to
         // the next page. Swaps in the new content without chapterPlayer
         // .stop(), which would end the very session that's continuing.
-        .onChange(of: chapterPlayer.activeRef) { _, newRef in
+        .onChange(of: player.activeRef) { _, newRef in
             guard let newRef, newRef.projectID == project.id, newRef.pageIndex != currentPageIndex
             else { return }
             isProgrammaticPageChange = true
             pageNumberTransitionDirection = .forward
             currentPageIndex = newRef.pageIndex
             _ = loadPage(newRef.pageIndex)
-            library.recordLastReadPage(index: newRef.pageIndex, for: project.id)
+            // No `recordLastReadPage` here: the player writes the position
+            // itself on every promotion (via `positionWriter`), because it
+            // advances whether or not this screen is on-screen to see it.
+            // Only *user-driven* page changes are this view's to persist.
         }
-        // ChapterAudioPlayer doesn't get a new @Published "just completed"
+        // The player doesn't get a new @Published "just completed"
         // signal (would re-render every visible ParagraphRow on every
         // change) — reacting to isPlaying turning false already covers
         // every real stop, natural finish included, at no extra publish
         // cost.
-        .onChange(of: chapterPlayer.isPlaying) { _, isPlaying in
+        .onChange(of: player.isPlaying) { _, isPlaying in
             if !isPlaying { refreshCompletedPages() }
         }
         .onChange(of: continuousPlaybackEnabled) { _, newValue in
-            chapterPlayer.setContinuousPlaybackEnabled(newValue)
+            player.setContinuousPlaybackEnabled(newValue)
         }
         .onAppear {
+            if let initialSurfaceMode { surfaceMode = initialSurfaceMode }
             isAutoScrollPaused = false
             refreshCompletedPages()
-            chapterPlayer.configureContinuousPlayback(
+            player.configureContinuousPlayback(
                 enabled: continuousPlaybackEnabled,
                 nextPageProvider: { [library, project] index in
                     library.page(for: project, index: index)
                 })
-            _ = moveToPage(currentPageIndex)
+            // Adopt a session already running on this page rather than
+            // restarting it: with one shared player, opening the reader on
+            // the book that's currently playing (from the mini player, say)
+            // must not stop the audio. `moveToPage` tears playback down, so
+            // it's only for pages the player isn't already on.
+            if player.isActive(pageRef) {
+                _ = loadPage(currentPageIndex)
+            } else {
+                _ = moveToPage(currentPageIndex)
+            }
             UIApplication.shared.isIdleTimerDisabled = keepScreenOn
         }
         .onDisappear {
-            chapterPlayer.stop()
+            // Deliberately does **not** stop playback: leaving the reader
+            // hands off to the floating mini player, which is the whole
+            // point of it. Playback now ends only on an explicit stop, a
+            // different book starting, or the end of this one.
             // Unconditional, not just "if keepScreenOn" — this is a
             // process-global flag, and leaving with the toggle on must not
             // keep the rest of the app from ever auto-locking.
@@ -652,24 +694,43 @@ struct ChapterPlayerView: View {
 
     /// Switches between the extracted text and the document's own page. Filled
     /// while original-page mode is on, so the control shows the current state
-    /// rather than only what tapping it would do.
+    /// rather than only what tapping it would do. Hidden in audio mode,
+    /// where there is no page image to show.
     private var originalPageToolbarControl: some View {
-        Button {
+        let isOn = surfaceMode == .originalPage
+        return Button {
             withAnimation(.easeInOut(duration: 0.2)) {
-                showsOriginalPage.toggle()
+                surfaceMode = isOn ? .text : .originalPage
             }
         } label: {
             LucideIcon(
-                showsOriginalPage ? .fileText : .file,
-                color: showsOriginalPage ? readerTheme.controlAccent : readerTheme.primaryText)
+                isOn ? .fileText : .file,
+                color: isOn ? readerTheme.controlAccent : readerTheme.primaryText)
         }
-        .accessibilityLabel(showsOriginalPage ? "Show extracted text" : "Show original page")
+        .accessibilityLabel(isOn ? "Show extracted text" : "Show original page")
+    }
+
+    /// Flips between listening and reading along. Both are the same playback
+    /// session — this only changes which surface renders it, so the audio
+    /// never stops, pauses or repositions across a toggle.
+    private var surfaceModeToolbarControl: some View {
+        let isAudio = surfaceMode == .audio
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                surfaceMode = isAudio ? .text : .audio
+            }
+        } label: {
+            LucideIcon(
+                isAudio ? .bookOpen : .headphones,
+                color: readerTheme.primaryText)
+        }
+        .accessibilityLabel(isAudio ? "Show read-along text" : "Show audio player")
     }
 
     private func changeVoice(_ voiceName: String) {
         guard voiceName != selectedVoiceName else { return }
 
-        chapterPlayer.stop()
+        player.stop()
         isPulsingPlayButton = false
 
         guard library.updateVoice(voiceName, for: project.id) else {
@@ -681,7 +742,7 @@ struct ChapterPlayerView: View {
 
     @discardableResult
     private func moveToPage(_ index: Int) -> Bool {
-        chapterPlayer.stop()
+        player.stop()
         isPulsingPlayButton = false
         return loadPage(index)
     }
@@ -834,7 +895,7 @@ struct ChapterPlayerView: View {
     private var currentChunkPageRects: [CGRect] {
         guard let page = currentPage, !page.lineRects.isEmpty else { return [] }
         let texts = visibleChunkTexts
-        let index = chapterPlayer.currentChunkIndex
+        let index = player.currentChunkIndex
         guard isCurrentKokoroPageActive, texts.indices.contains(index) else { return [] }
         let ranges = chunkRanges(in: page.text, texts: texts)
         guard ranges.indices.contains(index), let range = ranges[index] else { return [] }
@@ -884,13 +945,13 @@ struct ChapterPlayerView: View {
     private var floatingPlayer: some View {
         HStack(spacing: 2) {
             skipButton(icon: .rotateCcw, label: "10") {
-                chapterPlayer.skipBackward()
+                player.skipBackward()
             }
 
             playPauseButton
 
             skipButton(icon: .rotateCw, label: "10") {
-                chapterPlayer.skipForward()
+                player.skipForward()
             }
         }
         .padding(.horizontal, 10)
@@ -922,7 +983,7 @@ struct ChapterPlayerView: View {
 
     private var playPauseButton: some View {
         PlayPauseBounceButton(
-            isPlaying: isCurrentKokoroPageActive && chapterPlayer.isPlaying,
+            isPlaying: isCurrentKokoroPageActive && player.isPlaying,
             action: toggleKokoroPlayback
         ) { isPlaying in
             (isPlaying ? Hugeicons.pause : Hugeicons.play)
@@ -934,11 +995,11 @@ struct ChapterPlayerView: View {
                 .frame(width: 44, height: 44)
         }
         // A hard reset (no bounce) whenever the page or voice changes —
-        // both already call `chapterPlayer.stop()` first, so `isPlaying`
+        // both already call `player.stop()` first, so `isPlaying`
         // reads false the instant this identity change recreates the
         // button's state. See PlayPauseBounceButton's own doc comment.
         .id("\(currentPageIndex)-\(selectedVoiceName)")
-        .accessibilityLabel(isCurrentKokoroPageActive && chapterPlayer.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(isCurrentKokoroPageActive && player.isPlaying ? "Pause" : "Play")
         .disabled(!hasReadableText)
         .overlay {
             if isPulsingPlayButton {
@@ -967,20 +1028,37 @@ struct ChapterPlayerView: View {
         }
         .onAppear {
             updatePlayButtonPulse(
-                isBuffering: isCurrentKokoroPageActive && chapterPlayer.isBuffering)
+                isBuffering: isCurrentKokoroPageActive && player.isBuffering)
         }
-        .onChange(of: chapterPlayer.isBuffering) { _, isBuffering in
+        .onChange(of: player.isBuffering) { _, isBuffering in
             updatePlayButtonPulse(isBuffering: isCurrentKokoroPageActive && isBuffering)
         }
     }
 
     private func toggleKokoroPlayback() {
         guard let page = currentPage, hasReadableText else { return }
-        if chapterPlayer.isActive(pageRef) {
-            chapterPlayer.togglePlayPause()
+        if player.isActive(pageRef) {
+            player.togglePlayPause()
         } else {
-            chapterPlayer.stream(
-                pageRef, page: page, voice: selectedVoiceName, bookTitle: project.title)
+            player.start(
+                project: project, page: page, startIndex: currentPageIndex,
+                voice: selectedVoiceName,
+                pageProvider: pageProvider, positionWriter: positionWriter)
+        }
+    }
+
+    /// The player has no `LibraryViewModel`, so it's handed how to load a
+    /// page and how to persist the position as it advances. Both capture
+    /// `library`/`project` and nothing view-specific, so they stay valid for
+    /// the whole session — including after this screen is dismissed and
+    /// playback continues under the mini player.
+    private var pageProvider: (Int) -> ReaderPage? {
+        { [library, project] index in library.page(for: project, index: index) }
+    }
+
+    private var positionWriter: (Int) -> Void {
+        { [library, project] index in
+            library.recordLastReadPage(index: index, for: project.id)
         }
     }
 
@@ -1000,8 +1078,8 @@ struct ChapterPlayerView: View {
     }
 
     private func presentVoiceSelection() {
-        if chapterPlayer.isActive(pageRef), chapterPlayer.isPlaying {
-            chapterPlayer.togglePlayPause()
+        if player.isActive(pageRef), player.isPlaying {
+            player.togglePlayPause()
         }
         isVoiceSelectionPresented = true
     }
@@ -1084,7 +1162,7 @@ struct ChapterPlayerView: View {
                     .onChanged(handleReaderDragChanged)
                     .onEnded(handleReaderDragEnded)
             )
-            .onChange(of: chapterPlayer.currentChunkIndex) { _, chunkIndex in
+            .onChange(of: player.currentChunkIndex) { _, chunkIndex in
                 guard isCurrentKokoroPageActive, autoScrollEnabled, !isAutoScrollPaused else { return }
                 guard let (groupIndex, anchor) = scrollTarget(forChunk: chunkIndex) else { return }
                 withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
@@ -1103,7 +1181,7 @@ struct ChapterPlayerView: View {
                 // its rows out yet and scrollTo can silently no-op.
                 Task { @MainActor in
                     guard let (groupIndex, anchor) = scrollTarget(
-                        forChunk: chapterPlayer.currentChunkIndex)
+                        forChunk: player.currentChunkIndex)
                     else { return }
                     // Unanimated — animating a jump from the top of the page
                     // would be a long visible sweep, not a restore.
@@ -1122,7 +1200,7 @@ struct ChapterPlayerView: View {
                             currentWordResumeButton {
                                 isAutoScrollPaused = false
                                 if let (groupIndex, anchor) = scrollTarget(
-                                    forChunk: chapterPlayer.currentChunkIndex)
+                                    forChunk: player.currentChunkIndex)
                                 {
                                     withAnimation { proxy.scrollTo(groupIndex, anchor: anchor) }
                                 }
@@ -1180,15 +1258,15 @@ struct ChapterPlayerView: View {
     private var isCurrentParagraphOffscreen: Bool {
         guard isCurrentKokoroPageActive else { return false }
         guard let groupIndex = effectiveGroups.firstIndex(where: {
-            $0.contains(chapterPlayer.currentChunkIndex)
+            $0.contains(player.currentChunkIndex)
         }) else { return false }
         return !visibleParagraphsBox.indices.contains(groupIndex)
     }
 
     private var currentSpokenWord: String {
-        let timings = chapterPlayer.wordTimings(forChunk: chapterPlayer.currentChunkIndex)
+        let timings = player.wordTimings(forChunk: player.currentChunkIndex)
         guard
-            let wordIndex = chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime),
+            let wordIndex = player.currentWordIndex(),
             timings.indices.contains(wordIndex)
         else { return "Current" }
         return timings[wordIndex].word
@@ -1262,10 +1340,10 @@ struct ChapterPlayerView: View {
         // disappearing. What isPlaying actually decides is below: whether
         // this row needs to keep ticking to track a moving position.
         let isCurrentGroup = isCurrentKokoroPageActive
-            && group.contains(chapterPlayer.currentChunkIndex)
+            && group.contains(player.currentChunkIndex)
         let hasAnyWordTimings = items.contains { $0.wordIndexInChunk != nil }
         let showsWordHighlight = wordHighlightEnabled && hasAnyWordTimings && isCurrentGroup
-        let isPolling = showsWordHighlight && chapterPlayer.isPlaying
+        let isPolling = showsWordHighlight && player.isPlaying
 
         // One view type whether or not this row is the playing one. Putting
         // the TimelineView inside an if/else made the playing row a
@@ -1281,10 +1359,10 @@ struct ChapterPlayerView: View {
         return TimelineView(.periodic(from: pollAnchor, by: isPolling ? 0.08 : 3600)) { _ in
             ParagraphRow(
                 items: items, itemsRevision: revision,
-                highlightedChunkIndex: showsWordHighlight ? chapterPlayer.currentChunkIndex : nil,
+                highlightedChunkIndex: showsWordHighlight ? player.currentChunkIndex : nil,
                 highlightedWordIndex: showsWordHighlight
-                    ? chapterPlayer.currentWordIndex(atElapsed: chapterPlayer.currentPlaybackTime) : nil,
-                currentChunkIndex: isCurrentGroup ? chapterPlayer.currentChunkIndex : nil,
+                    ? player.currentWordIndex() : nil,
+                currentChunkIndex: isCurrentGroup ? player.currentChunkIndex : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
                 fontFamily: readerFontFamily,
@@ -1560,7 +1638,7 @@ struct ChapterPlayerView: View {
                 positionInGroup == 0
                 ? 0 : trailingNewlineCount(of: texts[group[positionInGroup - 1]])
             let timings = isCurrentKokoroPageActive
-                ? chapterPlayer.wordTimings(forChunk: chunkIndex) : []
+                ? player.wordTimings(forChunk: chunkIndex) : []
             let tokens: [(word: String, precedingSeparator: String, wordIndexInChunk: Int?)]
             if timings.isEmpty {
                 tokens = WordTimingDeriver.splitPreservingSeparators(texts[chunkIndex])
@@ -1628,9 +1706,10 @@ struct ChapterPlayerView: View {
             ? paragraphWordItems[groupIndex] : wordItems(for: group)
         guard items.indices.contains(itemIndex) else { return }
         let item = items[itemIndex]
-        chapterPlayer.playFromWord(
-            ref: pageRef, page: page,
+        player.playFromWord(
+            project: project, page: page, pageIndex: currentPageIndex,
+            voice: selectedVoiceName,
             chunkIndex: item.chunkIndex, wordIndex: item.ordinalInChunk,
-            voice: selectedVoiceName, bookTitle: project.title)
+            pageProvider: pageProvider, positionWriter: positionWriter)
     }
 }

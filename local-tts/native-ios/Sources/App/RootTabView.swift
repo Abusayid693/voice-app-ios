@@ -28,6 +28,17 @@ enum ExploreDestination: Hashable, CaseIterable, Identifiable {
     }
 }
 
+/// A book to open from outside Home's navigation stack, with the surface
+/// it should open on. `RootTabView` holds the state; `ImportHomeView` owns
+/// the stack that acts on it.
+struct OpenBookRequest: Identifiable, Hashable {
+    let projectID: UUID
+    let pageIndex: Int
+    var surfaceMode: ReaderSurfaceMode = .audio
+
+    var id: UUID { projectID }
+}
+
 /// App shell: Home plus the floating Explore/Add Books bar. Everything the
 /// Explore menu offers is pushed within Home's stack, so there is only one
 /// mounted root and no tab state to preserve.
@@ -36,17 +47,19 @@ struct RootTabView: View {
     @ObservedObject private var navigationChrome: NavigationChromeVisibility
     // Observed explicitly (not read off `app`) per this app's re-render rule
     // — see AppEnvironment's own doc comment. Needed to show/hide the mini
-    // player and drive the now-playing full-screen cover.
-    @ObservedObject private var bookPlayer: BookAudioPlayer
+    // player as playback starts and stops.
+    @ObservedObject private var player: BookAudioPlayer
     @State private var isExploreExpanded = false
     @State private var exploreDestination: ExploreDestination?
+    /// A request from outside Home's own stack to open a book — currently
+    /// only the mini player, which always wants the audio surface.
+    @State private var openBookRequest: OpenBookRequest?
     @State private var isDocumentPickerPresented = false
-    @State private var isNowPlayingPresented = false
 
     init(app: AppEnvironment) {
         self.app = app
         self.navigationChrome = app.navigationChrome
-        self.bookPlayer = app.bookPlayer
+        self.player = app.player
     }
 
     var body: some View {
@@ -55,6 +68,7 @@ struct RootTabView: View {
                 libraryViewModel: app.library,
                 app: app,
                 exploreDestination: $exploreDestination,
+                openBookRequest: $openBookRequest,
                 onAddBooks: presentDocumentPicker)
                 // Tapping anywhere on the page dismisses the open menu.
                 // Clear rather than dimmed: the menu is a small floating
@@ -77,8 +91,8 @@ struct RootTabView: View {
                     // comment gives for collapsing this app's tab-bar
                     // visibility down to one clock.
                     VStack(spacing: 12) {
-                        if bookPlayer.activeRef != nil, !navigationChrome.isReaderOpen {
-                            MiniPlayerBar(player: bookPlayer) { isNowPlayingPresented = true }
+                        if player.activeRef != nil, !navigationChrome.isReaderOpen {
+                            MiniPlayerBar(player: player) { openPlayingBook() }
                                 .padding(.horizontal, 19)
                                 // The Explore menu expands ~210pt *upward*
                                 // into this same space — fade the mini
@@ -106,7 +120,7 @@ struct RootTabView: View {
                 }
                 .animation(.easeInOut(duration: 0.22), value: navigationChrome.isAtTabRoot)
                 .animation(.easeInOut(duration: 0.22), value: navigationChrome.isReaderOpen)
-                .animation(.easeInOut(duration: 0.22), value: bookPlayer.activeRef)
+                .animation(.easeInOut(duration: 0.22), value: player.activeRef)
         }
         .fileImporter(
             isPresented: $isDocumentPickerPresented,
@@ -121,9 +135,16 @@ struct RootTabView: View {
                     voiceName: app.tts.kokoroVoice)
             }
         }
-        .fullScreenCover(isPresented: $isNowPlayingPresented) {
-            NowPlayingView(player: bookPlayer) { isNowPlayingPresented = false }
-        }
+    }
+
+    /// Tapping the mini player reopens whatever is playing, on the audio
+    /// surface — the reader is one screen with three surfaces now, so this
+    /// is an ordinary push with a requested mode rather than a modal of its
+    /// own. Pushing the book it is already playing adopts that session
+    /// rather than restarting it (see `ChapterPlayerView`'s `.onAppear`).
+    private func openPlayingBook() {
+        guard let ref = player.activeRef else { return }
+        openBookRequest = OpenBookRequest(projectID: ref.projectID, pageIndex: ref.pageIndex)
     }
 
     private func open(_ destination: ExploreDestination) {

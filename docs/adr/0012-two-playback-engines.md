@@ -1,6 +1,6 @@
 # 12. Two playback engines: read-along and music mode stay separate
 
-**Status:** Accepted
+**Status:** Superseded (2026-09-28) by `0013-unified-player.md` — the two engines were merged into one (`BookAudioPlayer`) with `ChapterAudioPlayer` deleted, and read-along and music mode became two surfaces of a single screen. The follow-up this ADR names in its last line ("unifying the two players onto one gapless engine") is what superseded it; the reasoning below for why the split was accepted *first* still explains how the code got here.
 **Date:** 2026-09-28
 
 ## Context

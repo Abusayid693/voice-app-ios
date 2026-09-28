@@ -90,7 +90,7 @@ struct MiniPlayerBar: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return MiniPlayerBar(player: app.bookPlayer, onExpand: {})
+    return MiniPlayerBar(player: app.player, onExpand: {})
         .padding(.horizontal, 19)
         .frame(maxHeight: .infinity, alignment: .bottom)
         .background(Color.whitePaper)

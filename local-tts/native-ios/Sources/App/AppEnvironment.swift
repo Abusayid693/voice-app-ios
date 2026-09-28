@@ -25,11 +25,11 @@ struct AppEnvironment {
     let library: LibraryViewModel
     let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
-    let chapterPlayer: ChapterAudioPlayer
-    /// Music-style continuous playback (`Features/Listening/`) — a second,
-    /// independent playback owner alongside `chapterPlayer`. See
-    /// `docs/adr/0012-two-playback-engines.md` for why.
-    let bookPlayer: BookAudioPlayer
+    /// The app's one playback owner, rendered either as read-along text or
+    /// as a music-style now-playing surface — see
+    /// `docs/adr/0013-unified-player.md`. Not pass-through: `RootTabView`
+    /// observes it directly for the floating mini player.
+    let player: BookAudioPlayer
     let readingStats: ReadingStatsStore
     // Not "pass-through" like the others above — a live flag Home writes
     // to and RootTabView observes, so RootTabView's floating Explore/Add
@@ -46,15 +46,13 @@ extension AppEnvironment {
     static func preview() -> AppEnvironment {
         let dependencies = DependencyContainer()
         let statsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
-        let bookStatsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         let tts = TTSViewModel(dependencies: dependencies)
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
         let library = LibraryViewModel()
         return AppEnvironment(
             tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
-            chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis, statsTracker: statsTracker),
-            bookPlayer: BookAudioPlayer(synthesis: synthesis, statsTracker: bookStatsTracker),
+            player: BookAudioPlayer(synthesis: synthesis, statsTracker: statsTracker),
             readingStats: dependencies.readingStatsStore,
             navigationChrome: NavigationChromeVisibility())
     }

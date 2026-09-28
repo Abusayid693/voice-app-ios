@@ -58,7 +58,7 @@ struct LibraryTabView: View {
         .navigationDestination(item: $openProject) { project in
             ChapterPlayerView(
                 project: project, library: viewModel,
-                chapterPlayer: app.chapterPlayer,
+                player: app.player,
                 viewModel: app.tts,
                 previewPlayer: app.previewPlayer,
                 readingStats: app.readingStats)

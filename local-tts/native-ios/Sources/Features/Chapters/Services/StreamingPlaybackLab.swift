@@ -6,7 +6,8 @@ import UIKit
 /// A self-contained experiment in continuous background playback: synthesise a
 /// long text chunk by chunk and keep it playing with the screen locked.
 ///
-/// Deliberately **not** built on `ChapterAudioPlayer`. That path creates one
+/// Deliberately **not** built on the app's own player. The per-chunk
+/// `AVAudioPlayer` design the reader used to have creates one
 /// `AVAudioPlayer` per chunk, so the audio genuinely stops at every boundary
 /// while the next player is constructed. Reading along that gap is barely
 /// noticeable; with the screen off it is the whole experience. It is also the

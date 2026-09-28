@@ -3,60 +3,63 @@ import Foundation
 import MediaPlayer
 import UIKit
 
-/// Music-style, continuous, lock-screen-surviving playback of a whole book —
-/// a second, independent playback owner alongside `ChapterAudioPlayer`
-/// (`Features/Chapters/`), not a replacement for it. Deliberately separate:
-/// see `docs/adr/0012-two-playback-engines.md` for why one player couldn't
-/// serve both read-along and this.
+/// The app's single playback owner: one book, one audio session, two
+/// interchangeable views. `ChapterPlayerView` renders it either as
+/// read-along text with chunk and word highlighting or as a music-style
+/// now-playing screen — switching between them is a view change only,
+/// never a playback change. Supersedes the two-engine split
+/// `docs/adr/0012-two-playback-engines.md` accepted; see
+/// `docs/adr/0013-unified-player.md`.
 ///
-/// The engine is `StreamingPlaybackLab` (`Features/Chapters/Services/
-/// StreamingPlaybackLab.swift`) promoted to a real feature: one
-/// `AVAudioPlayerNode` with buffers scheduled onto it, gapless, plus a
-/// silence keep-alive so a slow synthesis stretch can't leave the node
-/// silent long enough for iOS to suspend the app (once suspended, synthesis
-/// stops too, and it never recovers). The page model — bounded lookahead,
-/// cross-page prefetch, position/stats — is ported from `ChapterAudioPlayer`,
-/// deliberately simplified: no word timings, no play-from-word, because
-/// nothing here renders words.
+/// The engine came from `StreamingPlaybackLab` (`Features/Chapters/
+/// Services/StreamingPlaybackLab.swift`): one `AVAudioPlayerNode` with
+/// buffers scheduled onto it, gapless, plus a silence keep-alive so a slow
+/// synthesis stretch can't leave the node silent long enough for iOS to
+/// suspend the app (once suspended, synthesis stops too, and it never
+/// recovers). The page model — bounded lookahead, cross-page prefetch,
+/// position and stats — came from the `ChapterAudioPlayer` this replaced.
 ///
 /// **Scheduling vs. synthesis are two separate cursors.** A node's queue is
-/// strictly ordered — buffers can't be reordered or inserted once scheduled —
-/// so unlike `ChapterAudioPlayer` (one `AVAudioPlayer` per chunk, played on
-/// demand whenever it's ready) this retains a *whole page's* chunks (small —
-/// a page is ≤2,000 words, a handful of ~350-char chunks) rather than
-/// evicting, and keeps `scheduleCursor` (what's been handed to the node, in
-/// order) separate from the self-healing synthesis scan (what's been
-/// *retained*, which may land out of order within the lookahead window).
-/// Seeking flushes the node's queue (`node.stop()`) and restarts
-/// `scheduleCursor` from the target — a chunk already retained schedules
-/// immediately (sliced to the right frame offset for an intra-chunk seek);
-/// one that isn't triggers synthesis first, same `bufferingForIndex`/
-/// `pendingSeekOffset` shape `ChapterAudioPlayer` uses for the same problem.
+/// strictly ordered — buffers can't be reordered or inserted once scheduled
+/// — so this retains a *whole page's* chunks (small: a page is ≤2,000
+/// words, a handful of ~350-char chunks) rather than evicting, and keeps
+/// `scheduleCursor` (what's been handed to the node, in order) separate
+/// from the self-healing synthesis scan (what's been *retained*, which may
+/// land out of order within the lookahead window). Seeking flushes the
+/// queue (`node.stop()`) and restarts `scheduleCursor` from the target — a
+/// retained chunk schedules immediately, sliced to the right frame offset
+/// for an intra-chunk seek; one that isn't triggers synthesis first.
 ///
-/// **Elapsed time is wall-clock, not a queried playback position** — there
-/// is no per-node equivalent of `AVAudioPlayer.currentTime`. Because
-/// scheduling is gapless, wall-clock time since a page's audio started
-/// sounding (minus paused time) *is* exactly the elapsed position, the same
-/// technique `StreamingPlaybackLab.elapsedNow()` uses — just page-scoped and
-/// reset on every seek rather than book-scoped.
+/// **Position comes from the node's own render clock**, mapped through
+/// `scheduledSpans` — see `resolvedPosition()`. There is no
+/// `AVAudioPlayer.currentTime` equivalent on a node, and the wall clock
+/// this replaced was both the wrong shape (page-relative, where word
+/// timings are chunk-relative) and inexact: it counted silence keep-alive
+/// buffers as spoken time, so the position slid ahead of the audio after
+/// any starvation and never came back.
 @MainActor
 final class BookAudioPlayer: ObservableObject {
-    /// Same bound as `ChapterAudioPlayer.maxSynthesisLookahead` and the lab's
-    /// own — keeps the ANE idling between chunks rather than running flat
-    /// out, and caps how long a seek can wait behind synthesis already in
-    /// flight.
+    /// Keeps the ANE idling between chunks rather than running flat out,
+    /// and caps how long a seek can wait behind synthesis already in
+    /// flight — `ChapterSynthesisService.runSerially` is a FIFO with no
+    /// priority lane, so an unbounded march would queue a seek behind a
+    /// whole page of synthesis.
     static let maxSynthesisLookahead = 2
 
     @Published private(set) var activeRef: ReaderPageRef?
     @Published private(set) var isPlaying = false
     @Published private(set) var isBuffering = false
-    /// Elapsed within the *current page* — wall-clock while sounding, reset
-    /// on every seek. What the draggable page scrubber binds to.
+    /// Elapsed within the *current page*, derived from the node's own render
+    /// clock via `scheduledSpans` — what the draggable page scrubber binds
+    /// to. Republished by the 1Hz ticker, which is plenty for a scrubber;
+    /// the read-along's word highlighting polls `currentWordIndex()` at
+    /// ~12Hz instead, deliberately unpublished — publishing at that rate
+    /// would re-render every view observing this object (CLAUDE.md's
+    /// re-render rule).
     @Published private(set) var elapsed: TimeInterval = 0
-    /// Estimated length of the current page, refined as real chunks land —
-    /// see `ChapterAudioPlayer`'s own doc comment for why this is an
-    /// estimate, not a running sum: bounded lookahead means a sum of
-    /// retained audio would freeze at ~2 chunks' worth.
+    /// Estimated length of the current page, refined as real chunks land.
+    /// An estimate rather than a running sum of retained audio because
+    /// bounded lookahead would freeze that sum at ~2 chunks' worth.
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var pageIndex = 0
     @Published private(set) var pageCount = 0
@@ -72,11 +75,26 @@ final class BookAudioPlayer: ObservableObject {
     /// reading this after a long locked-screen run, not by guessing.
     @Published private(set) var events: [String] = []
 
-    /// Called just before this player starts or resumes audio — wired in
-    /// `KokoroAneTestApp` to `ChapterAudioPlayer.pauseIfPlaying()`, the other
-    /// half of the mutual-exclusion rule `willStartPlaying` on that class
-    /// documents.
-    var willStartPlaying: (() -> Void)?
+    /// The current page's chunk texts — the source `ChapterPlayerView`
+    /// derives its entire paragraph structure from. Published despite
+    /// changing rarely: while it was unpublished, that structure only
+    /// refreshed when some *other* property happened to publish, landing a
+    /// frame late or not at all.
+    @Published private(set) var chunkTexts: [String] = []
+    /// Which chunk is **sounding**, resolved from the node's render clock
+    /// rather than from the completion callback (which reports what has
+    /// *finished*). Drives the read-along's chunk highlight, so resolving it
+    /// from the clock removes the callback-latency lag the per-chunk
+    /// `AVAudioPlayer` design used to have.
+    @Published private(set) var currentChunkIndex = 0
+    /// Bumped once per chunk landing for the *current* page only (never for
+    /// next-page prefetch, which would make the displayed page recompute its
+    /// words for audio it isn't showing). `ChapterPlayerView` watches this
+    /// rather than `duration` to upgrade paragraphs from their plain-text
+    /// fallback to real word timings — `duration` is an estimate that can
+    /// compute the same value twice, and `onChange` only fires on a real
+    /// change.
+    @Published private(set) var synthesisRevision = 0
 
     private let synthesis: ChapterSynthesisService
     private let statsTracker: ReadingStatsTracker
@@ -115,8 +133,7 @@ final class BookAudioPlayer: ObservableObject {
     /// True only after an explicit pause (the user, an interruption, or a
     /// route change), as opposed to "hasn't started yet". A chunk landing
     /// must auto-start playback in the second case but must *not* resume it
-    /// in the first — the same "arriving chunk resumed audio on its own"
-    /// bug this app already fixed once in `ChapterAudioPlayer`.
+    /// in the first, or an arriving chunk resumes audio on its own.
     private var isUserPaused = false
 
     private var projectID: UUID?
@@ -130,16 +147,21 @@ final class BookAudioPlayer: ObservableObject {
     private var pageProvider: ((Int) -> ReaderPage?)?
     private var positionWriter: ((Int) -> Void)?
 
-    private var chunkTexts: [String] = []
     private struct RetainedChunk {
         let samples: [Float]
         let sampleRate: Int
         let duration: TimeInterval
+        /// Empty for non-English voices (no alignment path) and for a chunk
+        /// not yet synthesized — both fall back to chunk-level highlighting,
+        /// exactly as the reader has always done.
+        let wordTimings: [WordTiming]
     }
     private var retainedChunks: [Int: RetainedChunk] = [:]
-    /// Index into `chunkTexts` of the chunk currently sounding — advanced by
+    /// Index into `chunkTexts` of the chunk playback is *on* — advanced by
     /// the node's completion callback, and what the self-healing synthesis
-    /// scan reads from (mirrors `ChapterAudioPlayer.currentChunkIndex`).
+    /// scan and every seek read from. Distinct from the published
+    /// `currentChunkIndex`, which the render clock resolves for the UI:
+    /// this one is scheduling bookkeeping, that one is what you can hear.
     private var playingChunk = 0
     /// Index into `chunkTexts` of the next chunk to *schedule* on the node —
     /// distinct from `playingChunk` because the node's queue is strictly
@@ -151,6 +173,14 @@ final class BookAudioPlayer: ObservableObject {
     private var scheduleCursorFrameOffset = 0
     private var bufferingForIndex: Int?
     private var pendingSeekOffset: TimeInterval?
+    /// A word target waiting on the chunk that contains it — "play from
+    /// here" on text whose timings don't exist yet, which is exactly the
+    /// case tapping ahead is for. Resolved to a real offset the moment the
+    /// chunk lands; never set at the same time as `pendingSeekOffset`.
+    private var pendingSeekWord: Int?
+    /// The reader's "Continue to next page" preference, mirrored here.
+    /// Music mode always wants it; read-along lets the user turn it off.
+    private var continuesToNextPage = true
 
     private struct UpcomingPage {
         let ref: ReaderPageRef
@@ -164,9 +194,35 @@ final class BookAudioPlayer: ObservableObject {
     private var synthesizedDurationSoFar: TimeInterval = 0
     private var synthesizedCharsSoFar = 0
 
-    // Wall-clock elapsed tracking — see the type's own doc comment.
-    private var pageAccumulated: TimeInterval = 0
-    private var playingSince: Date?
+    /// One entry per buffer handed to the node since the last flush, in
+    /// play order — the map that turns the node's render clock into "which
+    /// chunk, and how far into it". `AVAudioPlayerNode` has no
+    /// `AVAudioPlayer.currentTime` equivalent, and the wall clock this
+    /// replaced was both the wrong shape (page-relative, where word timings
+    /// are chunk-relative) and inexact: it counted silence keep-alive
+    /// buffers as elapsed speech, so the position slid ahead of the audio
+    /// after any starvation and never recovered.
+    private struct ScheduledSpan {
+        let startSample: AVAudioFramePosition
+        let frameCount: AVAudioFramePosition
+        let chunkIndex: Int
+        /// Silence holds the position at the previous speech span's end
+        /// rather than advancing through it — see `resolvedPosition()`.
+        let isSilence: Bool
+        /// Where in the chunk this span begins; non-zero for the sliced
+        /// first buffer after a mid-chunk seek.
+        let chunkOffset: TimeInterval
+    }
+    private var scheduledSpans: [ScheduledSpan] = []
+    /// Running total of frames scheduled since the last flush — the next
+    /// span's `startSample`. `node.stop()` resets the node's own sample
+    /// clock to zero, and every flush bumps `playbackEpoch`, so this resets
+    /// at exactly the same moment.
+    private var scheduledFrames: AVAudioFramePosition = 0
+    /// Last position the clock successfully resolved. `lastRenderTime` is
+    /// nil whenever the node isn't rendering (paused, stopped, engine down),
+    /// so the position has to be held rather than collapsing to zero.
+    private var lastResolvedPosition: (chunkIndex: Int, offset: TimeInterval) = (0, 0)
     private var isScrubbing = false
 
     private var artwork: MPMediaItemArtwork?
@@ -180,20 +236,25 @@ final class BookAudioPlayer: ObservableObject {
 
     // MARK: - Control
 
-    /// Starts (or restarts) continuous playback of a book from `startIndex`
-    /// — always `project.lastReadPageIndex` at the call site, same source
-    /// `ChapterPlayerView.init` reads, so opening either surface after the
-    /// other resumes where it left off.
+    /// Starts (or restarts) playback of a book at `startIndex`, optionally
+    /// targeting a chunk/word rather than the page's beginning — the same
+    /// entry point serves a plain Play tap, the shelf's Listen button, and
+    /// "Play from here" on a page that wasn't active yet.
+    ///
+    /// `voice` is passed explicitly rather than read off `project`: the
+    /// reader's own selection is the fresher value, since `changeVoice`
+    /// persists to disk while whatever `SavedGeneration` the caller is
+    /// holding stays as it was when the screen was pushed.
     func start(
-        project: SavedGeneration, page: ReaderPage, startIndex: Int,
+        project: SavedGeneration, page: ReaderPage, startIndex: Int, voice: String,
+        startingAtChunk: Int = 0, wordIndex: Int? = nil,
         pageProvider: @escaping (Int) -> ReaderPage?,
         positionWriter: @escaping (Int) -> Void
     ) {
-        willStartPlaying?()
         stop()
 
         projectID = project.id
-        voice = project.voiceName
+        self.voice = voice
         bookTitle = project.title
         coverURL = SavedGeneration.existingCoverURL(id: project.id)
         pageCount = project.pageCount
@@ -213,10 +274,46 @@ final class BookAudioPlayer: ObservableObject {
         startedAt = Date()
         isFinishedBook = false
 
-        beginPage(ref: ReaderPageRef(projectID: project.id, pageIndex: startIndex), page: page)
+        beginPage(
+            ref: ReaderPageRef(projectID: project.id, pageIndex: startIndex), page: page,
+            startingAtChunk: startingAtChunk, wordIndex: wordIndex)
         log("start: \(bookTitle), page \(startIndex + 1) of \(pageCount)")
         startPump()
         startTicker()
+    }
+
+    /// "Play from here" — redirects the already-running player to this
+    /// chunk/word, or starts fresh targeting it when this page isn't the
+    /// active one.
+    func playFromWord(
+        project: SavedGeneration, page: ReaderPage, pageIndex: Int, voice: String,
+        chunkIndex: Int, wordIndex: Int?,
+        pageProvider: @escaping (Int) -> ReaderPage?,
+        positionWriter: @escaping (Int) -> Void
+    ) {
+        let ref = ReaderPageRef(projectID: project.id, pageIndex: pageIndex)
+        guard activeRef == ref else {
+            start(
+                project: project, page: page, startIndex: pageIndex, voice: voice,
+                startingAtChunk: chunkIndex, wordIndex: wordIndex,
+                pageProvider: pageProvider, positionWriter: positionWriter)
+            return
+        }
+        seekToChunk(chunkIndex, offset: 0, wordIndex: wordIndex)
+    }
+
+    /// Called by the reader once on appear and whenever its
+    /// continuous-playback preference changes. Safe at any time — the pump
+    /// reads both on its next iteration.
+    func configureContinuousPlayback(
+        enabled: Bool, nextPageProvider: @escaping (Int) -> ReaderPage?
+    ) {
+        continuesToNextPage = enabled
+        pageProvider = nextPageProvider
+    }
+
+    func setContinuousPlaybackEnabled(_ enabled: Bool) {
+        continuesToNextPage = enabled
     }
 
     /// Works before the first chunk has landed too — pausing while the
@@ -227,23 +324,23 @@ final class BookAudioPlayer: ObservableObject {
         guard activeRef != nil else { return }
         if isPlaying || (!isUserPaused && !isConnected) {
             if isNodeRunning {
+                // Resolve before pausing: `lastRenderTime` goes nil once the
+                // node stops rendering, and this is what the clock holds at
+                // for the duration of the pause.
+                _ = resolvedPosition()
                 node.pause()
                 isNodeRunning = false
             }
-            pageAccumulated = elapsedNow()
-            playingSince = nil
             isUserPaused = true
             isPlaying = false
             statsTracker.pauseListening()
         } else {
-            willStartPlaying?()
             isUserPaused = false
             // Nothing scheduled yet (paused through the initial buffer, or
             // resumed after a seek that's still waiting on synthesis) —
             // `schedule()` starts the node as soon as a buffer lands.
             if isConnected, pendingBuffers > 0 {
                 startNodeIfNeeded()
-                playingSince = Date()
                 isPlaying = true
             }
             statsTracker.resumeListening()
@@ -255,13 +352,6 @@ final class BookAudioPlayer: ObservableObject {
         guard isConnected, !isNodeRunning else { return }
         node.play()
         isNodeRunning = true
-    }
-
-    /// Pauses without stopping — the yield half of the mutual-exclusion rule
-    /// (`ChapterAudioPlayer.pauseIfPlaying` is the other half).
-    func pauseIfPlaying() {
-        guard isPlaying else { return }
-        togglePlayPause()
     }
 
     func stop() {
@@ -318,13 +408,18 @@ final class BookAudioPlayer: ObservableObject {
         scheduleCursorFrameOffset = 0
         bufferingForIndex = nil
         pendingSeekOffset = nil
+        pendingSeekWord = nil
         upcomingPages = []
         hasReachedEndOfBook = false
         pageTotalCharacters = 0
         synthesizedDurationSoFar = 0
         synthesizedCharsSoFar = 0
-        pageAccumulated = 0
-        playingSince = nil
+        scheduledSpans = []
+        scheduledFrames = 0
+        lastResolvedPosition = (0, 0)
+        currentChunkIndex = 0
+        chunkTexts = []
+        synthesisRevision = 0
     }
 
     // MARK: - Seek
@@ -363,28 +458,39 @@ final class BookAudioPlayer: ObservableObject {
         }
     }
 
-    private func seekToChunk(_ index: Int, offset: TimeInterval) {
+    private func seekToChunk(_ index: Int, offset: TimeInterval, wordIndex: Int? = nil) {
         guard chunkTexts.indices.contains(index) else { return }
         flushNode()
         playingChunk = index
         scheduleCursor = index
-        pageAccumulated = (startTime(forChunk: index) ?? 0) + offset
-        // Published immediately rather than waiting for the 1Hz ticker —
+        // A word target resolves against real timings when the chunk is
+        // already retained, and waits as `pendingSeekWord` when it isn't —
+        // targeting the chunk's start instead would silently lose up to a
+        // whole chunk of the position the user actually asked for.
+        var offset = offset
+        if let wordIndex, let retained = retainedChunks[index],
+           retained.wordTimings.indices.contains(wordIndex) {
+            offset = retained.wordTimings[wordIndex].start
+        }
+        // Seeded immediately rather than waiting for the 1Hz ticker —
         // otherwise the scrubber visibly snaps back to where it was for up
-        // to a second after the user lets go.
-        elapsed = pageAccumulated
+        // to a second after the user lets go. It is also what the clock
+        // reports until the node starts rendering the rescheduled buffer.
+        lastResolvedPosition = (index, offset)
+        currentChunkIndex = index
+        elapsed = (startTime(forChunk: index) ?? 0) + offset
         refreshBookProgress()
         if let retained = retainedChunks[index] {
             bufferingForIndex = nil
             pendingSeekOffset = nil
+            pendingSeekWord = nil
             scheduleCursorFrameOffset = frameOffset(forChunk: retained, at: offset)
-            playingSince = isPlaying ? Date() : nil
             scheduleReady()
         } else {
             isBuffering = true
             bufferingForIndex = index
-            pendingSeekOffset = offset
-            playingSince = nil
+            pendingSeekOffset = wordIndex == nil ? offset : nil
+            pendingSeekWord = wordIndex
         }
         updateNowPlaying()
     }
@@ -398,6 +504,10 @@ final class BookAudioPlayer: ObservableObject {
     private func flushNode() {
         playbackEpoch += 1
         pendingBuffers = 0
+        // `node.stop()` resets the node's own sample clock to zero, so the
+        // span map it is read against has to reset in the same breath.
+        scheduledSpans = []
+        scheduledFrames = 0
         guard isConnected else { return }
         node.stop()
         isNodeRunning = false
@@ -405,7 +515,9 @@ final class BookAudioPlayer: ObservableObject {
 
     // MARK: - Page lifecycle
 
-    private func beginPage(ref: ReaderPageRef, page: ReaderPage) {
+    private func beginPage(
+        ref: ReaderPageRef, page: ReaderPage, startingAtChunk: Int = 0, wordIndex: Int? = nil
+    ) {
         // Any buffer still outstanding belongs to the page being left.
         playbackEpoch += 1
         activeRef = ref
@@ -423,15 +535,21 @@ final class BookAudioPlayer: ObservableObject {
         upcomingPages = []
         hasReachedEndOfBook = false
         duration = 0
-        pageAccumulated = 0
-        playingSince = isPlaying ? Date() : nil
+        lastResolvedPosition = (0, 0)
+        currentChunkIndex = 0
         refreshBookProgress()
         positionWriter?(ref.pageIndex)
         statsTracker.beginListening(
             ref: ref, bookTitle: bookTitle, voice: voice, engine: .kokoroAne)
         guard !chunkTexts.isEmpty else { return }
+        let clamped = chunkTexts.indices.contains(startingAtChunk) ? startingAtChunk : 0
+        playingChunk = clamped
+        scheduleCursor = clamped
+        currentChunkIndex = clamped
+        lastResolvedPosition = (clamped, 0)
         isBuffering = true
-        bufferingForIndex = 0
+        bufferingForIndex = clamped
+        pendingSeekWord = wordIndex
     }
 
     /// The node's completion callback for the chunk at `index`. Guarded on
@@ -449,6 +567,10 @@ final class BookAudioPlayer: ObservableObject {
         let nextIndex = index + 1
         if nextIndex < chunkTexts.count {
             playingChunk = nextIndex
+            // Published here rather than waiting for the 1Hz ticker: this
+            // *is* the boundary, and the read-along's chunk highlight would
+            // otherwise sit on the previous paragraph for up to a second.
+            currentChunkIndex = nextIndex
             if pendingBuffers <= 0 {
                 log("STARVED at chunk \(nextIndex + 1) — synthesis fell behind")
                 scheduleSilence()
@@ -459,6 +581,12 @@ final class BookAudioPlayer: ObservableObject {
         // End of this page's chunks.
         guard let ref = activeRef else { return }
         statsTracker.endListening(pageCompleted: true)
+        guard continuesToNextPage else {
+            isPlaying = false
+            isBuffering = false
+            updateNowPlaying()
+            return
+        }
         if upcomingPages.isEmpty {
             guard let page = pageProvider?(ref.pageIndex + 1) else {
                 isPlaying = false
@@ -515,8 +643,8 @@ final class BookAudioPlayer: ObservableObject {
             synthesizedCharsSoFar += promoted.chunkTexts[index].count
         }
         refreshDurationEstimate()
-        pageAccumulated = 0
-        playingSince = isPlaying ? Date() : nil
+        lastResolvedPosition = (0, 0)
+        currentChunkIndex = 0
         refreshBookProgress()
         positionWriter?(promoted.ref.pageIndex)
         statsTracker.beginListening(
@@ -541,7 +669,7 @@ final class BookAudioPlayer: ObservableObject {
     }
 
     /// Self-healing scan from `playingChunk`, exactly
-    /// `ChapterAudioPlayer.nextSynthesisTarget()`'s shape — retains
+    /// the deleted `ChapterAudioPlayer.nextSynthesisTarget()`'s shape — retains
     /// everything within the lookahead window rather than evicting (a page
     /// is small enough that eviction buys nothing here), and spills across
     /// the page boundary once the window runs past the last chunk.
@@ -551,7 +679,7 @@ final class BookAudioPlayer: ObservableObject {
         for index in playingChunk...upper where chunkTexts.indices.contains(index) {
             if retainedChunks[index] == nil { return .current(index) }
         }
-        guard upper >= chunkTexts.count - 1 else { return nil }
+        guard continuesToNextPage, upper >= chunkTexts.count - 1 else { return nil }
         var remaining = upper - (chunkTexts.count - 1)
         guard remaining > 0, !hasReachedEndOfBook else { return nil }
 
@@ -589,15 +717,19 @@ final class BookAudioPlayer: ObservableObject {
         case .current(let index):
             guard chunkTexts.indices.contains(index) else { return }
             let text = chunkTexts[index]
-            let (samples, sampleRate, chunkDuration) =
+            let (samples, sampleRate, chunkDuration, wordTimings) =
                 try await synthesis.synthesizeChunkSamples(chunkText: text, voice: voice)
             guard activeRef != nil, chunkTexts.indices.contains(index), chunkTexts[index] == text
             else { return }
             retainedChunks[index] = RetainedChunk(
-                samples: samples, sampleRate: sampleRate, duration: chunkDuration)
+                samples: samples, sampleRate: sampleRate, duration: chunkDuration,
+                wordTimings: wordTimings)
             synthesizedDurationSoFar += chunkDuration
             synthesizedCharsSoFar += text.count
             refreshDurationEstimate()
+            // Tells the read-along this chunk's paragraph can upgrade from
+            // its plain-text fallback to real word timings.
+            synthesisRevision += 1
             if bufferingForIndex == index {
                 bufferingForIndex = nil
                 isBuffering = false
@@ -606,10 +738,19 @@ final class BookAudioPlayer: ObservableObject {
                 // unsynthesized chunk silently restarted it from its
                 // beginning — losing up to a whole chunk (~25s) of the
                 // position the user actually dragged to.
-                if let pendingSeekOffset, let retained = retainedChunks[index], index == playingChunk {
-                    scheduleCursorFrameOffset = frameOffset(forChunk: retained, at: pendingSeekOffset)
+                if let retained = retainedChunks[index], index == playingChunk {
+                    let target =
+                        pendingSeekWord.flatMap {
+                            retained.wordTimings.indices.contains($0)
+                                ? retained.wordTimings[$0].start : nil
+                        } ?? pendingSeekOffset
+                    if let target {
+                        scheduleCursorFrameOffset = frameOffset(forChunk: retained, at: target)
+                        lastResolvedPosition = (index, target)
+                    }
                 }
                 pendingSeekOffset = nil
+                pendingSeekWord = nil
             }
             scheduleReady()
         case .upcoming(let pageOffset, let chunkIndex):
@@ -617,14 +758,18 @@ final class BookAudioPlayer: ObservableObject {
                 upcomingPages[pageOffset].chunkTexts.indices.contains(chunkIndex)
             else { return }
             let text = upcomingPages[pageOffset].chunkTexts[chunkIndex]
-            let (samples, sampleRate, chunkDuration) =
+            let (samples, sampleRate, chunkDuration, wordTimings) =
                 try await synthesis.synthesizeChunkSamples(chunkText: text, voice: voice)
             guard upcomingPages.indices.contains(pageOffset),
                 upcomingPages[pageOffset].chunkTexts.indices.contains(chunkIndex),
                 upcomingPages[pageOffset].chunkTexts[chunkIndex] == text
             else { return }
             upcomingPages[pageOffset].retained[chunkIndex] = RetainedChunk(
-                samples: samples, sampleRate: sampleRate, duration: chunkDuration)
+                samples: samples, sampleRate: sampleRate, duration: chunkDuration,
+                wordTimings: wordTimings)
+            // Deliberately no `synthesisRevision` bump: this chunk belongs
+            // to a page that isn't displayed, and the revision exists to
+            // tell the *current* page's paragraphs to pick up timings.
         }
     }
 
@@ -667,12 +812,20 @@ final class BookAudioPlayer: ObservableObject {
             let startFrame = scheduleCursor == playingChunk ? scheduleCursorFrameOffset : 0
             scheduleCursorFrameOffset = 0
             guard let buffer = Self.makeBuffer(from: retained, startFrame: startFrame) else { return }
-            schedule(buffer, at: scheduleCursor)
+            // Where this buffer begins inside its own chunk — zero except
+            // for the sliced first buffer after a mid-chunk seek. The clock
+            // adds it back so word timings, which are measured from the
+            // chunk's true start, still line up.
+            let chunkOffset =
+                retained.sampleRate > 0 ? Double(startFrame) / Double(retained.sampleRate) : 0
+            schedule(buffer, at: scheduleCursor, chunkOffset: chunkOffset)
             scheduleCursor += 1
         }
     }
 
-    private func schedule(_ buffer: AVAudioPCMBuffer, at index: Int) {
+    private func schedule(
+        _ buffer: AVAudioPCMBuffer, at index: Int, chunkOffset: TimeInterval
+    ) {
         if !isConnected {
             engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
             format = buffer.format
@@ -687,6 +840,13 @@ final class BookAudioPlayer: ObservableObject {
         }
         pendingBuffers += 1
         let epoch = playbackEpoch
+        scheduledSpans.append(
+            ScheduledSpan(
+                startSample: scheduledFrames,
+                frameCount: AVAudioFramePosition(buffer.frameLength),
+                chunkIndex: index, isSilence: false,
+                chunkOffset: chunkOffset))
+        scheduledFrames += AVAudioFramePosition(buffer.frameLength)
         node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             Task { @MainActor [weak self] in self?.finishedChunk(index, epoch: epoch) }
         }
@@ -695,11 +855,6 @@ final class BookAudioPlayer: ObservableObject {
         guard !isUserPaused else { return }
         let wasRunning = isNodeRunning
         startNodeIfNeeded()
-        // Re-anchors the wall clock whenever audio resumes from a state that
-        // had none running. `isPlaying` alone can't gate this: a seek or a
-        // page jump *while playing* leaves it true with `playingSince` nil,
-        // which would freeze `elapsed` for the rest of the page.
-        if playingSince == nil { playingSince = Date() }
         if !isPlaying || !wasRunning {
             isPlaying = true
             if !wasRunning { log("playback started") }
@@ -714,6 +869,12 @@ final class BookAudioPlayer: ObservableObject {
         else { return }
         silence.frameLength = silence.frameCapacity
         pendingBuffers += 1
+        scheduledSpans.append(
+            ScheduledSpan(
+                startSample: scheduledFrames,
+                frameCount: AVAudioFramePosition(silence.frameLength),
+                chunkIndex: playingChunk, isSilence: true, chunkOffset: 0))
+        scheduledFrames += AVAudioFramePosition(silence.frameLength)
         let epoch = playbackEpoch
         node.scheduleBuffer(silence, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -762,6 +923,10 @@ final class BookAudioPlayer: ObservableObject {
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, !self.isScrubbing else { return }
+                let position = self.resolvedPosition()
+                if position.chunkIndex != self.currentChunkIndex {
+                    self.currentChunkIndex = position.chunkIndex
+                }
                 self.elapsed = self.elapsedNow()
                 self.refreshBookProgress()
                 self.updateNowPlaying()
@@ -769,8 +934,66 @@ final class BookAudioPlayer: ObservableObject {
         }
     }
 
+    // MARK: - The render clock
+
+    /// Where playback actually is, as `(chunk, offset within that chunk)`,
+    /// read from the node's own render clock against `scheduledSpans`.
+    ///
+    /// Chunk-relative on purpose: `WordTiming.start` is chunk-relative, so
+    /// this is the shape word highlighting needs. Silence spans report the
+    /// preceding speech span's end, so a starvation stretch *holds* the
+    /// highlight on the last spoken word instead of sliding past it.
+    /// `lastRenderTime` returns nil whenever the node isn't rendering, so
+    /// the last good answer is cached and returned while paused.
+    private func resolvedPosition() -> (chunkIndex: Int, offset: TimeInterval) {
+        guard isConnected, let renderTime = node.lastRenderTime,
+              let playerTime = node.playerTime(forNodeTime: renderTime),
+              playerTime.sampleRate > 0
+        else { return lastResolvedPosition }
+
+        let sample = playerTime.sampleTime
+        guard let span = scheduledSpans.last(where: { $0.startSample <= sample }) else {
+            return lastResolvedPosition
+        }
+        if span.isSilence {
+            // Hold at the end of the last real speech span rather than
+            // counting silence as spoken time.
+            return lastResolvedPosition
+        }
+        let into = Double(sample - span.startSample) / playerTime.sampleRate
+        let resolved = (span.chunkIndex, span.chunkOffset + max(0, into))
+        lastResolvedPosition = resolved
+        return resolved
+    }
+
+    /// This chunk's word timings — empty when none exist (non-English
+    /// voice, or a chunk not yet synthesized), which falls back to
+    /// highlighting the whole chunk.
+    func wordTimings(forChunk index: Int) -> [WordTiming] {
+        retainedChunks[index]?.wordTimings ?? []
+    }
+
+    /// The word to highlight right now. Takes no time argument on purpose:
+    /// it resolves the chunk *and* the offset from a single clock read, so
+    /// a chunk boundary can never match the new chunk's offset against the
+    /// old chunk's timings — which it would if the caller passed
+    /// a raw position while `currentChunkIndex` was still a publish behind.
+    func currentWordIndex() -> Int? {
+        let position = resolvedPosition()
+        let timings = wordTimings(forChunk: position.chunkIndex)
+        guard !timings.isEmpty else { return nil }
+        var index = 0
+        for (i, timing) in timings.enumerated() where timing.start <= position.offset {
+            index = i
+        }
+        return index
+    }
+
+    /// Page-relative elapsed, for the scrubber and Now Playing — the
+    /// sounding chunk's own start plus how far into it playback is.
     private func elapsedNow() -> TimeInterval {
-        pageAccumulated + (playingSince.map { Date().timeIntervalSince($0) } ?? 0)
+        let position = resolvedPosition()
+        return (startTime(forChunk: position.chunkIndex) ?? 0) + position.offset
     }
 
     private func refreshBookProgress() {
@@ -920,8 +1143,6 @@ final class BookAudioPlayer: ObservableObject {
         switch type {
         case .began:
             log("interruption began")
-            pageAccumulated = elapsedNow()
-            playingSince = nil
             isNodeRunning = false
             isPlaying = false
         case .ended:
@@ -941,7 +1162,6 @@ final class BookAudioPlayer: ObservableObject {
             try? AVAudioSession.sharedInstance().setActive(true)
             if !engine.isRunning { try? engine.start() }
             startNodeIfNeeded()
-            playingSince = Date()
             isPlaying = true
         @unknown default:
             break
@@ -960,8 +1180,6 @@ final class BookAudioPlayer: ObservableObject {
             node.pause()
             isNodeRunning = false
         }
-        pageAccumulated = elapsedNow()
-        playingSince = nil
         // Latched, so the next chunk landing doesn't quietly resume audio
         // through the speaker the user just unplugged from.
         isUserPaused = true

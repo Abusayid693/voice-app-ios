@@ -1,20 +1,32 @@
 import LucideSwift
 import SwiftUI
 
-/// Music-style full-screen playback, laid out like the system's own
-/// now-playing screen: artwork, a title block, a thin scrubber with its
+/// Which presentation `ChapterPlayerView` is showing. All three render the
+/// same playback session from the same player, so switching between them
+/// changes only what's on screen.
+enum ReaderSurfaceMode: String, CaseIterable {
+    /// Read-along text with chunk and word highlighting.
+    case text
+    /// The imported document's own page image, with the playing chunk
+    /// highlighted on it. Only reachable for PDFs that kept their source.
+    case originalPage
+    /// Music-style artwork, scrubber and transport.
+    case audio
+}
+
+/// The audio surface: artwork, a title block, a thin scrubber with its
 /// elapsed/remaining pair, transport, and — where a music player puts its
 /// volume slider — this book's whole-book progress instead, since a book is
 /// the thing being progressed through here and system volume already has a
 /// hardware control.
 ///
-/// Presented as a `.fullScreenCover` from `RootTabView` (this app's first —
-/// every other modal here is a `.sheet`; a now-playing screen is
-/// conventionally full-bleed, and it needs to keep presenting across
-/// whatever page the player advances to on its own).
-struct NowPlayingView: View {
+/// A *branch of* `ChapterPlayerView`, not a screen of its own: the toolbar
+/// above it, the navigation it sits in, and the player driving it all
+/// belong to the reader, so toggling to read-along is a view change that
+/// playback never notices. It was a `.fullScreenCover` while music mode was
+/// a separate feature; see `docs/adr/0013-unified-player.md`.
+struct NowPlayingSurface: View {
     @ObservedObject var player: BookAudioPlayer
-    let onDismiss: () -> Void
 
     @State private var coverImage: UIImage?
     @State private var scrubberValue: Double = 0
@@ -23,8 +35,6 @@ struct NowPlayingView: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                header
-                Spacer(minLength: 8)
                 cover(height: coverHeight(in: geometry))
                 Spacer(minLength: 16)
                 titleBlock
@@ -53,7 +63,6 @@ struct NowPlayingView: View {
             guard !isScrubbing else { return }
             scrubberValue = newValue
         }
-        .preferredColorScheme(.dark)
     }
 
     /// Whatever's left once the fixed rows below the artwork have taken
@@ -99,33 +108,6 @@ struct NowPlayingView: View {
                 startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button(action: onDismiss) {
-                LucideIcon(.chevronDown, size: 20, color: Color.appPrimaryText)
-                    .frame(width: 44, height: 44)
-                    .background(Color.appPrimaryText.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Minimize")
-            Spacer()
-            Button {
-                player.stop()
-                onDismiss()
-            } label: {
-                LucideIcon(.x, size: 20, color: Color.appPrimaryText)
-                    .frame(width: 44, height: 44)
-                    .background(Color.appPrimaryText.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Stop listening")
-            .accessibilityHint("Ends playback and closes the mini player")
-        }
-        .padding(.top, 4)
     }
 
     // MARK: - Cover
@@ -328,5 +310,5 @@ struct NowPlayingView: View {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return NowPlayingView(player: app.bookPlayer, onDismiss: {})
+    return NowPlayingSurface(player: app.player)
 }

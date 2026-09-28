@@ -1,7 +1,7 @@
 import Foundation
 
 /// Captures listening sessions from the reader's playback owner
-/// (`ChapterAudioPlayer`, Kokoro-only — the only engine that reaches the
+/// (`BookAudioPlayer`, Kokoro-only — the only engine that reaches the
 /// reader) and persists them via `ReadingStatsStore` — deliberately a plain,
 /// non-observable service, not
 /// an `ObservableObject`: nothing in the reader renders stats, so keeping
