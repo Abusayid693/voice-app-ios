@@ -1,11 +1,11 @@
 import LucideSwift
 import SwiftUI
 
-/// Settings > Voice Packs — real download/size status for every engine's
-/// packs (see issue #9). Deletion isn't offered yet: Kokoro's pack is
-/// bundled with the app (nothing to re-download if removed), and Pocket/
-/// Supertonic-3 have no re-download-on-demand path from here yet — all
-/// flagged as follow-ups in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
+/// Settings > Voice Packs — real download/size status for each Kokoro pack
+/// (see issue #9). Deletion isn't offered yet: English's pack is bundled with
+/// the app (nothing to re-download if removed), and the downloaded variants
+/// have no re-download-on-demand path from here yet — flagged as a follow-up
+/// in docs/adr/0007-bundled-vs-downloaded-pack-asymmetry.md.
 struct VoicePacksView: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
@@ -22,17 +22,6 @@ struct VoicePacksView: View {
         return DiskStorage.directorySize(at: directory)
     }
 
-    private var pocketSizeBytes: Int64 {
-        DiskStorage.directorySize(at: DiskStorage.fluidAudioCacheDirectory)
-    }
-
-    // nil (not 0) until a Setup download or a generation resolves the exact
-    // directory this session — see supertonic3ModelDirectory's doc comment.
-    private var supertonic3SizeBytes: Int64? {
-        guard let directory = packs.supertonic3ModelDirectory else { return nil }
-        return DiskStorage.directorySize(at: directory)
-    }
-
     var body: some View {
         List {
             Section {
@@ -46,16 +35,6 @@ struct VoicePacksView: View {
                     subtitle: "\(TTSViewModel.mandarinVoices.count) Mandarin voices",
                     isReady: packs.isKokoroPackReady(.mandarin),
                     sizeBytes: packs.isKokoroPackReady(.mandarin) ? kokoroMandarinSizeBytes : nil)
-                packRow(
-                    title: "Pocket TTS",
-                    subtitle: "\(TTSViewModel.pocketVoices.count) English voices",
-                    isReady: packs.isPocketPackDownloaded,
-                    sizeBytes: packs.isPocketPackDownloaded ? pocketSizeBytes : nil)
-                packRow(
-                    title: "Supertonic-3",
-                    subtitle: "31 languages · 10 voices",
-                    isReady: packs.isSupertonic3Downloaded,
-                    sizeBytes: packs.isSupertonic3Downloaded ? supertonic3SizeBytes : nil)
             }
             .listRowBackground(Color.appSecondaryBackground)
         }
@@ -89,7 +68,8 @@ struct VoicePacksView: View {
 }
 
 #Preview {
-    let viewModel = TTSViewModel(dependencies: DependencyContainer())
+    let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     NavigationStack {
         VoicePacksView(viewModel: viewModel, packs: viewModel.packs)
     }

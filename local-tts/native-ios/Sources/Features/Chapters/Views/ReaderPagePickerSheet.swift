@@ -1,3 +1,4 @@
+import LucideSwift
 import SwiftUI
 
 /// A memory-bounded table of contents for reader pages. Rows load and retain
@@ -7,6 +8,10 @@ struct ReaderPagePickerSheet: View {
     let library: LibraryViewModel
     let currentPageIndex: Int
     let theme: ReaderTheme
+    /// Distinct pages with at least one completed listen — fetched once by
+    /// the presenter (ChapterPlayerView) before opening this sheet, not
+    /// owned or re-fetched here.
+    let completedPageIndices: Set<Int>
     let onSelect: (Int) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -37,8 +42,8 @@ struct ReaderPagePickerSheet: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 16)
         .presentationBackground(.clear)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .presentationContentInteraction(.scrolls)
         .preferredColorScheme(theme.colorScheme)
     }
@@ -89,6 +94,13 @@ struct ReaderPagePickerSheet: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                if completedPageIndices.contains(index) {
+                    LucideIcon(
+                        .check, size: 14,
+                        color: isCurrentPage ? theme.highlightedText : theme.secondaryText)
+                        .accessibilityHidden(true)
+                }
+
                 Text("\(index + 1)")
                     .font(AppTextStyle.label.font)
                     .monospacedDigit()
@@ -107,7 +119,9 @@ struct ReaderPagePickerSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(preview?.excerpt ?? "Page"), page \(index + 1)")
+        .accessibilityLabel(
+            "\(preview?.excerpt ?? "Page"), page \(index + 1)"
+                + (completedPageIndices.contains(index) ? ", completed" : ""))
         .accessibilityAddTraits(isCurrentPage ? .isSelected : [])
     }
 

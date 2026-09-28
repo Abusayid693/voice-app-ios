@@ -24,7 +24,7 @@ final class LibraryViewModel: ObservableObject {
     /// Copies finalized PDF page files without decoding the full document.
     @discardableResult
     func saveImportedPDF(
-        title: String, pagesDirectory: URL, pageCount: Int, coverURL: URL?,
+        title: String, pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
         engine: Engine, voiceName: String
     ) -> UUID? {
         guard pageCount > 0 else { return nil }
@@ -43,6 +43,13 @@ final class LibraryViewModel: ObservableObject {
                 // readable project if a raster file is unexpectedly bad.
                 try? FileManager.default.copyItem(
                     at: coverURL, to: SavedGeneration.coverFileURL(id: id))
+            }
+            if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
+                // Best-effort for the same reason: without it the reader just
+                // can't offer the original-page view for this book, which is
+                // no reason to fail an otherwise readable import.
+                try? FileManager.default.copyItem(
+                    at: sourceURL, to: SavedGeneration.sourcePDFFileURL(id: id))
             }
             try persist(entry)
             return id
@@ -95,8 +102,10 @@ final class LibraryViewModel: ObservableObject {
         try? data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
     }
 
-    /// Changes the project-wide voice and removes audio synthesized with the
-    /// previous voice so saved playback can never use stale narration.
+    /// Changes the project-wide voice. Playback is always synthesized on
+    /// demand (there is no persisted "Generate" audio to invalidate), so
+    /// this just rewrites metadata — the reader picks up the new voice the
+    /// next time it starts streaming.
     @discardableResult
     func updateVoice(_ voiceName: String, for projectID: UUID) -> Bool {
         guard var project = project(for: projectID) else { return false }
@@ -105,9 +114,28 @@ final class LibraryViewModel: ObservableObject {
         guard let data = try? JSONEncoder().encode(project) else { return false }
 
         do {
-            if FileManager.default.fileExists(atPath: project.audioDirectory.path) {
-                try FileManager.default.removeItem(at: project.audioDirectory)
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[index] = project.summary
+                Self.persistIndex(savedGenerations)
             }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Persists a book's Book Shelf orientation (cover vs. spine) — purely how
+    /// the shelf draws the book, so it just rewrites metadata and republishes
+    /// the summary.
+    @discardableResult
+    func updateShelfDisplayMode(_ mode: ShelfDisplayMode, for projectID: UUID) -> Bool {
+        guard var project = project(for: projectID) else { return false }
+        guard project.shelfDisplayMode != mode else { return true }
+        project.shelfDisplayMode = mode
+        guard let data = try? JSONEncoder().encode(project) else { return false }
+
+        do {
             try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
             if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
                 savedGenerations[index] = project.summary

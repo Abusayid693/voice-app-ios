@@ -28,6 +28,17 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
     func font(family: ReaderFontFamily) -> Font {
         family.font(size: pointSize)
     }
+
+    /// A heading's font, scaled off whatever body size the reader is set to.
+    ///
+    /// `scale` and `bold` come from the source document — an imported PDF's own
+    /// heading is measured against its own body text, so a title the author set
+    /// at 1.8x stays 1.8x here. That keeps the document's hierarchy instead of
+    /// imposing a fixed one, and it still tracks the reader's font preference
+    /// because it multiplies `pointSize` rather than replacing it.
+    func font(family: ReaderFontFamily, scale: Double, bold: Bool) -> Font {
+        family.font(size: pointSize * CGFloat(scale), weight: bold ? .bold : .regular)
+    }
 }
 
 /// Persistable typefaces used only by the chapter reader's long-form text.
@@ -50,17 +61,24 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
     }
 
     func font(size: CGFloat) -> Font {
+        font(size: size, weight: .regular)
+    }
+
+    /// The two `.custom` families need their bold face by name — `.bold()` on a
+    /// custom font synthesises the weight rather than using the real one.
+    func font(size: CGFloat, weight: Font.Weight) -> Font {
         switch self {
         case .sfProText:
-            return .system(size: size, weight: .regular, design: .default)
+            return .system(size: size, weight: weight, design: .default)
         case .newYork:
             // The system serif design resolves to Apple's New York family
             // and follows the platform's optical-size behavior.
-            return .system(size: size, weight: .regular, design: .serif)
+            return .system(size: size, weight: weight, design: .serif)
         case .georgia:
-            return .custom("Georgia", size: size)
+            return .custom(weight == .regular ? "Georgia" : "Georgia-Bold", size: size)
         case .avenirNext:
-            return .custom("AvenirNext-Regular", size: size)
+            return .custom(
+                weight == .regular ? "AvenirNext-Regular" : "AvenirNext-DemiBold", size: size)
         }
     }
 }
@@ -81,23 +99,16 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
 /// pre-existing hazard, not introduced here, and not addressed by this
 /// file.
 enum AppTextStyle {
-    /// In-content hero/sheet heading, e.g. a recording timer readout.
+    /// In-content hero/sheet heading.
     case title
     /// Same heading, over photographic imagery rather than appBackground.
     case titleOnImage
-    /// Long-form reading/editing text — read-along chunks, the write/edit
-    /// text areas, a saved generation's original text.
-    case reading
-    /// A read-along chunk that isn't the current one.
-    case readingMuted
     /// A section header sitting above a horizontally scrolling row.
     case sectionTitle
     /// A card's own title (voice tile, book cover, hero card).
     case cardTitle
     /// A list/row title — settings rows, project rows, action tiles.
     case rowTitle
-    /// The same row title, dimmed for an unavailable/disabled row.
-    case rowTitleMuted
     /// Secondary prose: a row's subtitle, a settings value, body copy
     /// under a heading.
     case body
@@ -112,12 +123,8 @@ enum AppTextStyle {
     case labelDim
     /// A compact card's own title, or a pill/badge label.
     case labelStrong
-    /// Inline error text at label size.
-    case labelError
     /// The finest tier: timestamps, file sizes, progress percentages.
     case meta
-    /// Inline error text at meta size.
-    case metaError
 
     var font: Font {
         switch self {
@@ -125,33 +132,29 @@ enum AppTextStyle {
             return .system(size: 32, weight: .medium)
         case .titleOnImage:
             return .system(size: 24, weight: .medium)
-        case .reading, .readingMuted:
-            return .system(size: 17, weight: .regular)
         case .sectionTitle:
             return .system(size: 18, weight: .medium)
-        case .cardTitle, .rowTitle, .rowTitleMuted, .body, .bodyStrong:
+        case .cardTitle, .rowTitle, .body, .bodyStrong:
             return .system(size: 16, weight: .medium)
         case .labelStrong:
             return .system(size: 14, weight: .medium)
-        case .label, .labelDim, .labelError:
+        case .label, .labelDim:
             return .system(size: 14, weight: .regular)
-        case .meta, .metaError:
+        case .meta:
             return .system(size: 12, weight: .medium)
         }
     }
 
     fileprivate var color: Color {
         switch self {
-        case .title, .reading, .sectionTitle, .cardTitle, .rowTitle, .bodyStrong, .labelStrong:
+        case .title, .sectionTitle, .cardTitle, .rowTitle, .bodyStrong, .labelStrong:
             return .appPrimaryText
         case .titleOnImage:
             return .white
-        case .readingMuted, .rowTitleMuted, .body, .label:
+        case .body, .label:
             return .appSecondaryText
         case .labelDim:
             return .appTertiaryText
-        case .labelError, .metaError:
-            return .red
         case .meta:
             return .appMetaText
         }

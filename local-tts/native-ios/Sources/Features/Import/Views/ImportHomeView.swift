@@ -1,237 +1,260 @@
 import Hugeicons
-import LucideSwift
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// The two pages of Home's top action row — "Listen to text" (get
-/// existing text into the app) vs. "Make audio" (create new voice/audio
-/// content).
-private enum HomeTab: Hashable, Identifiable, CaseIterable {
-    case listen, make
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .listen: return "Listen to text"
-        case .make: return "Make audio"
-        }
-    }
-}
-
-/// The app's default screen — a consumer-facing "Import" landing page
-/// (redesign target: paste/upload/scan/write actions, trending demo rows,
-/// a Setup entry point for the two voice packs). Only "Write text" is
-/// functional today; the rest are visual placeholders per the current
-/// design pass.
+/// The app's books-first Home. It owns navigation and Home-specific chrome;
+/// `BookShelfView` owns the shelf content and its detail transition.
 struct ImportHomeView: View {
-    @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
-    @ObservedObject var pdfImports: PDFImportManager
-    // Observed: this screen's tile availability and the Setup pointer both
-    // read pack readiness.
-    @ObservedObject var packs: VoicePackStore
-    // Everything this screen only hands onward — the cloned-voice model,
-    // the preview player (its ~15x/sec metering would re-render this whole
-    // page), and the two chapter objects — arrives in one non-observable
-    // container rather than as four separate parameters, so none of it
-    // subscribes this view to anything. See AppEnvironment.
     let app: AppEnvironment
-    @Binding var homeMode: HomeMode
-    // Owned here (not TTSViewModel) — book browsing is a separate concern
-    // from TTS orchestration, and outlives this view's re-renders as long
-    // as the Import tab stays alive.
-    @StateObject private var openLibraryBooksViewModel = OpenLibraryBooksViewModel()
-    // Same reasoning as openLibraryBooksViewModel above — owned here, not
-    // TTSViewModel, and outlives re-renders for the life of this view.
-    @StateObject private var classicReadsViewModel = ClassicReadsViewModel()
-    // Which voice's preview sheet is open, if any — pure navigation state
-    // for this screen, not shared elsewhere, so it lives here rather than
-    // on TTSViewModel.
-    @State private var selectedVoiceTile: VoiceTile?
-    @State private var isCreateVoicePresented = false
-    @State private var voiceCloneRoute: VoiceCloneRoute?
-    @State private var isSettingsPresented = false
-    // Reading mode's trailing nav-bar avatar clip — mirrors Studio's
-    // leading settingsButton, just the opposite mode/side.
-    @AppStorage("bookShelf.selectedAvatar") private var selectedAvatarRawValue = ShelfAvatar.first.rawValue
-    @State private var isAvatarPickerPresented = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    // Set when tapping a Projects entry (any engine) — opens page 1.
-    // for that saved project.
-    @State private var openProject: SavedGeneration?
-    // Set by WriteTextView's onGenerated the moment Generate saves a new
-    // project, but not applied to openProjectID until the fullScreenCover's
-    // own onDismiss fires — setting both isWriteTextPresented = false and
-    // openProjectID in the same runloop can drop the subsequent push.
-    @State private var pendingProjectID: UUID?
-    // Which page of the action tabs is showing — tapping a tab and
-    // swiping the TabView both write to this same binding, so either one
-    // keeps the other in sync.
-    @State private var selectedHomeTab: HomeTab = .listen
-    // BookShelfView owns the selected book and its shelf-to-modal hero animation;
-    // Home only needs this state to keep its mode selector out of the modal.
-    @State private var isBookDetailPresented = false
+    /// Driven by the Explore menu in `RootTabView`'s floating bar — Library,
+    /// Voices and Tools are pushed here rather than mounted as peer tabs.
+    @Binding var exploreDestination: ExploreDestination?
+    /// Set by `RootTabView`'s mini player to reopen whatever is playing on
+    /// the audio surface. Consumed here, since Home owns the only stack.
+    @Binding var openBookRequest: OpenBookRequest?
+    /// RootTabView owns the PDF file importer (it's global, reachable from
+    /// Add Books too) — forwarded into Tools' "Upload File" row so it
+    /// triggers the exact same picker rather than a second one.
+    let onAddBooks: () -> Void
 
-    private var selectedVoiceName: String {
-        switch viewModel.engine {
-        case .kokoroAne: return viewModel.kokoroVoice
-        case .pocketTts: return viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
-        case .supertonic3: return viewModel.supertonicVoice.displayName
-        }
-    }
+    @State private var isSettingsPresented = false
+    @State private var isAvatarPickerPresented = false
+    @State private var openProject: SavedGeneration?
+    /// Which surface the pending push should open on — nil means "use the
+    /// reader's stored preference".
+    @State private var openSurfaceMode: ReaderSurfaceMode?
+    /// Page to open at, when the push came from somewhere that knows one
+    /// (the mini player). Nil falls back to the project's saved position.
+    @State private var openPageIndex: Int?
+    @State private var isBookDetailPresented = false
+    @State private var isReadingStatsPresented = false
+    // Seeded with 7 zero-activity days so the strip never flashes empty
+    // before the real one-shot load below finishes.
+    @State private var recentActivity: [DayActivity] = ImportHomeView.emptyRecentDays()
+    @AppStorage("bookShelf.selectedAvatar") private var selectedAvatarRawValue = ShelfAvatar.first.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        navigationContent
-    }
-
-    private var navigationContent: some View {
         NavigationStack {
-            ZStack {
-                studioContent
-                    .opacity(homeMode == .studio ? 1 : 0)
-                    .allowsHitTesting(homeMode == .studio)
-                    .accessibilityHidden(homeMode != .studio)
-
-                BookShelfView(
-                    library: libraryViewModel,
-                    isDetailPresented: $isBookDetailPresented,
-                    onAddBooks: { pdfImports.requestDocumentPicker() }
-                ) { book in
+            BookShelfView(
+                library: libraryViewModel,
+                pdfImports: app.pdfImports,
+                readingStats: app.readingStats,
+                isDetailPresented: $isBookDetailPresented,
+                onOpenBook: { book in
+                    openSurfaceMode = nil
                     openProject = libraryViewModel.project(for: book.id)
-                }
-                .opacity(homeMode == .reading ? 1 : 0)
-                .allowsHitTesting(homeMode == .reading)
-                .accessibilityHidden(homeMode != .reading)
+                },
+                onListen: { book in
+                    // Same push as "Read this", only landing on the audio
+                    // surface — one screen, one player, two surfaces.
+                    openSurfaceMode = .audio
+                    openPageIndex = nil
+                    openProject = libraryViewModel.project(for: book.id)
+                })
+            // Home draws its own header controls instead of using the
+            // navigation bar: a `ToolbarItem` renders through nav-bar
+            // chrome (Liquid Glass on iOS 26, plus bar-button padding
+            // around custom content), which neither the flat icon nor the
+            // edge-to-edge avatar wants. Overlaid rather than inset, so
+            // the shelf backdrop still runs to the top of the screen.
+            .toolbar(.hidden, for: .navigationBar)
+            // Applied before the controls so it sits under them: shelf rows
+            // scrolling up soften into the top edge instead of running
+            // straight into the icons.
+            .overlay(alignment: .top) {
+                ShelfTopBlur().ignoresSafeArea(edges: .top)
             }
-            .background(homeMode.background.ignoresSafeArea())
-            .animation(.easeInOut(duration: 0.24), value: homeMode)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HomeModeSwitcher(selection: $homeMode)
-                        .opacity(isBookDetailPresented ? 0.42 : 1)
-                        .blur(radius: isBookDetailPresented ? 1.5 : 0)
-                        .allowsHitTesting(!isBookDetailPresented)
-                        .accessibilityHidden(isBookDetailPresented)
-                }
-                if homeMode == .studio {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        settingsButton
-                    }
-                }
-                if homeMode == .reading {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        shelfAvatarButton
-                    }
-                }
-            }
+            .overlay(alignment: .top) { headerControls }
             .sheet(isPresented: $isAvatarPickerPresented) {
                 ShelfAvatarPickerSheet(selection: selectedAvatarBinding)
             }
-            .tint(homeMode.primaryText)
-            .preferredColorScheme(homeMode.colorScheme)
-            .onChange(of: homeMode) { _, mode in
-                if mode != .reading {
-                    isBookDetailPresented = false
-                }
-            }
-            .task { await openLibraryBooksViewModel.loadIfNeeded() }
-            .navigationDestination(item: $voiceCloneRoute) { route in
-                switch route {
-                case .instantClone:
-                    InstantCloneView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
-                case .upload:
-                    UploadVoiceView(viewModel: app.voiceClone) { voiceCloneRoute = nil }
-                }
-            }
             .navigationDestination(item: $openProject) { project in
                 ChapterPlayerView(
-                    project: project, library: libraryViewModel,
-                    voiceCloneViewModel: app.voiceClone,
-                    chapterPlayer: app.chapterPlayer,
-                    generationStore: app.generationStore,
-                    viewModel: viewModel,
-                    previewPlayer: app.previewPlayer)
+                    project: project,
+                    initialPageIndex: openPageIndex,
+                    initialSurfaceMode: openSurfaceMode,
+                    library: libraryViewModel,
+                    player: app.player,
+                    viewModel: app.tts,
+                    previewPlayer: app.previewPlayer,
+                    readingStats: app.readingStats)
             }
-            // The root tab bar/floating "+" button should only show at
-            // this screen's own root, not on anything pushed above it.
+            .navigationDestination(item: $exploreDestination) { destination in
+                exploreScreen(destination)
+                    // Every Explore destination is dark while the shelf
+                    // below it is light. Scoping the scheme to the pushed
+                    // content is the reliable lever here — `.environment`
+                    // is read top-down by the subtree that sets it, unlike
+                    // `.preferredColorScheme`, which is a presentation-wide
+                    // preference an ancestor can override.
+                    .environment(\.colorScheme, .dark)
+            }
+            .navigationDestination(isPresented: $isReadingStatsPresented) {
+                // Explicit even though Home's own window scheme is already
+                // light here (isReadingStatsPresented doesn't touch
+                // exploreDestination) — same convention as the Explore
+                // destinations above: the push site states the theme
+                // rather than a pushed screen inheriting it implicitly.
+                ReadingStatsView(readingStats: app.readingStats)
+                    .environment(\.colorScheme, .light)
+            }
             .tabRootChrome(
                 app.navigationChrome,
-                isPushed: openProject != nil || voiceCloneRoute != nil)
+                isPushed: openProject != nil || exploreDestination != nil || isReadingStatsPresented)
+        }
+        .task { await loadRecentActivity() }
+        // Reload when a reader page is closed — that's the natural moment
+        // a new session may have just been recorded for today.
+        .onChange(of: openProject) { oldValue, newValue in
+            guard oldValue != nil, newValue == nil else { return }
+            Task { await loadRecentActivity() }
+        }
+        // The mini player asked for a book: load it and push, on the audio
+        // surface. Cleared immediately so tapping it again after popping
+        // back re-triggers.
+        .onChange(of: openBookRequest) { _, request in
+            guard let request, let project = libraryViewModel.project(for: request.projectID)
+            else { return }
+            openPageIndex = request.pageIndex
+            openSurfaceMode = request.surfaceMode
+            openProject = project
+            openBookRequest = nil
+        }
+        // The single writer of `isReaderOpen`, same convention as
+        // `tabRootChrome`'s own `isAtTabRoot` above — see that property's
+        // doc comment for why a pushed screen must not write this itself.
+        .onAppear { app.navigationChrome.isReaderOpen = openProject != nil }
+        .onChange(of: openProject) { _, newValue in
+            app.navigationChrome.isReaderOpen = newValue != nil
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: viewModel, voiceCloneViewModel: app.voiceClone)
+            SettingsSheet(viewModel: app.tts)
         }
-        .fullScreenCover(
-            isPresented: $viewModel.isWriteTextPresented,
-            onDismiss: {
-                if let pendingProjectID {
-                    openProject = libraryViewModel.project(for: pendingProjectID)
-                    self.pendingProjectID = nil
-                }
-            }
-        ) {
-            WriteTextView(
-                viewModel: viewModel, voiceCloneViewModel: app.voiceClone,
-                libraryViewModel: libraryViewModel, packs: packs,
-                previewPlayer: app.previewPlayer,
-                onGenerated: { projectID in
-                    pendingProjectID = projectID
-                    viewModel.isWriteTextPresented = false
-                })
-        }
-        .sheet(isPresented: $isCreateVoicePresented) {
-            CreateVoiceSheet { route in
-                isCreateVoicePresented = false
-                voiceCloneRoute = route
-            }
-        }
-        .sheet(item: $selectedVoiceTile) { tile in
-            VoicePreviewSheet(tiles: voiceTiles, initialTileID: tile.id, previewPlayer: app.previewPlayer)
-        }
-        .fileImporter(
-            isPresented: $pdfImports.isDocumentPickerPresented,
-            allowedContentTypes: [.pdf], allowsMultipleSelection: false
-        ) { result in
-            guard case let .success(urls) = result, let url = urls.first else { return }
-            Task {
-                await pdfImports.importPDF(
-                    from: url, engine: viewModel.engine, voiceName: selectedVoiceName)
-            }
+        // Window-level (status bar, nav-bar material) counterpart to the
+        // `.environment` above: light for the shelf, dark while an Explore
+        // destination is on top of it.
+        .preferredColorScheme(exploreDestination == nil ? .light : .dark)
+    }
+
+    @ViewBuilder
+    private func exploreScreen(_ destination: ExploreDestination) -> some View {
+        switch destination {
+        case .library:
+            LibraryTabView(viewModel: libraryViewModel, app: app)
+        case .voices:
+            VoicesTabView(packs: app.tts.packs, app: app)
+        case .tools:
+            ToolsView(libraryViewModel: libraryViewModel, app: app, onAddBooks: onAddBooks)
         }
     }
 
-    private var studioContent: some View {
-        ScrollView {
-                // 4 top-level groups (buttons, Trending voices, Read
-                // Anything, Projects) at AppSpacing.betweenGroups; within a
-                // multi-part group, siblings sit at the tighter
-                // AppSpacing.betweenSections instead.
-                VStack(alignment: .leading, spacing: AppSpacing.betweenGroups) {
-                    actionTabsSection
-
-                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                        trendingVoicesSection
-                        createYourOwnVoiceRow
-                    }
-
-                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                        readAnythingSection
-                        ClassicReadsSection(viewModel: classicReadsViewModel)
-                        newInRomanceSection
-                        createYourOwnBookRow
-                    }
-
-                    projectsSection
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+    /// Ghost controls floating over the shelf — no background of their own.
+    /// Each keeps a 44pt tap target while its padding is set so the *visible*
+    /// icon lands on the same 16pt margin a navigation bar would have used;
+    /// that's why the two sides differ (the icons aren't the same size).
+    private var headerControls: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                settingsButton
+                recentActivityDots
+                    // Grid is 28pt wide (3 × 6pt + 2 × 5pt gaps), plus its
+                    // own 6pt tap-target padding on each side = 40pt total —
+                    // indent it to sit centered under the 44pt icon above.
+                    .padding(.leading, (44 - 40) / 2)
             }
-            .scrollIndicators(.hidden)
-            .background(Color.appBackground.ignoresSafeArea())
+            .padding(.leading, 16 - (44 - 25.3) / 2)
+            Spacer(minLength: 0)
+            shelfAvatarButton
+                .padding(.trailing, 16 - (44 - 36.8) / 2)
+        }
+        .padding(.top, 4)
+        // These are page content now, not bar chrome, so they fade with the
+        // book detail rather than floating above it merely disabled.
+        .opacity(isBookDetailPresented ? 0 : 1)
+        .animation(.easeInOut(duration: 0.2), value: isBookDetailPresented)
+    }
+
+    /// A 7-dot grid for the current week (Monday first), 3 per row wrapping
+    /// to a 4th partial row, reading left-to-right then top-to-bottom, same
+    /// chronological convention as `ContributionGraphView`. A day later in
+    /// the week than today just has no sessions yet, so it renders as an
+    /// empty dot rather than needing to be hidden. Tapping it opens the full
+    /// `ReadingStatsView` route. Intensity reuses `Color.statsIntensity` —
+    /// the same ramp `ContributionGraphView` draws its dots from, so this
+    /// teaser and the full graph it opens into read as one system.
+    private var recentActivityDots: some View {
+        Button {
+            isReadingStatsPresented = true
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(recentActivity.chunked(into: 3).enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 5) {
+                        ForEach(row) { day in
+                            Circle()
+                                .fill(Color.statsIntensity(level: day.intensityLevel))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
+                }
+            }
+            .padding(6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isBookDetailPresented)
+        .accessibilityLabel("Reading stats")
+        .accessibilityHint("Opens this week's listening activity")
+    }
+
+    /// Monday of the week containing `Date()` — deliberately computed
+    /// rather than relying on `calendar.firstWeekday`, which follows the
+    /// device's region (e.g. Sunday-first in the US) and would silently
+    /// reorder this Mon…Sun strip per-locale.
+    private static func currentWeekStart(calendar: Calendar) -> Date {
+        let today = calendar.startOfDay(for: Date())
+        // `.weekday` is 1-based, Sunday = 1: (weekday + 5) % 7 maps
+        // Mon->0 ... Sun->6, i.e. days since this week's Monday.
+        let weekday = calendar.component(.weekday, from: today)
+        let daysSinceMonday = (weekday + 5) % 7
+        return calendar.date(byAdding: .day, value: -daysSinceMonday, to: today) ?? today
+    }
+
+    private static func emptyRecentDays(calendar: Calendar = .current) -> [DayActivity] {
+        let weekStart = currentWeekStart(calendar: calendar)
+        return (0..<7).compactMap { offset -> DayActivity? in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart)
+            else { return nil }
+            return DayActivity(day: day, listenedSeconds: 0, pagesCompleted: 0)
+        }
+    }
+
+    /// This calendar week, Monday through Sunday — not a rolling last-7-days
+    /// window. Days later in the week than today have no sessions yet, so
+    /// they fall out naturally as empty (level 0) dots rather than needing
+    /// special-casing.
+    private func loadRecentActivity() async {
+        let calendar = Calendar.current
+        let weekStart = Self.currentWeekStart(calendar: calendar)
+        guard let rangeEndExclusive = calendar.date(byAdding: .day, value: 7, to: weekStart)
+        else { return }
+
+        let sessions = await app.readingStats.sessions(from: weekStart, to: rangeEndExclusive)
+        var listenedByDay: [Date: Double] = [:]
+        for session in sessions {
+            let day = calendar.startOfDay(for: session.startedAt)
+            listenedByDay[day, default: 0] += session.listenedSeconds
+        }
+
+        var days: [DayActivity] = []
+        var cursor = weekStart
+        for _ in 0..<7 {
+            days.append(
+                DayActivity(day: cursor, listenedSeconds: listenedByDay[cursor] ?? 0, pagesCompleted: 0))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        recentActivity = days
     }
 
     private var settingsButton: some View {
@@ -242,10 +265,13 @@ struct ImportHomeView: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
+                .foregroundStyle(BookShelfPalette.primaryText)
                 .frame(width: 25.3, height: 25.3)
                 .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isBookDetailPresented)
         .accessibilityLabel("Settings")
     }
 
@@ -259,9 +285,6 @@ struct ImportHomeView: View {
             set: { selectedAvatarRawValue = $0.rawValue })
     }
 
-    // Reading mode's trailing nav-bar counterpart to settingsButton — a
-    // silent looping clip of the current avatar. Tapping it opens
-    // ShelfAvatarPickerSheet to switch which one plays here.
     @ViewBuilder
     private var shelfAvatarButton: some View {
         if let url = selectedAvatar.videoURL {
@@ -272,393 +295,31 @@ struct ImportHomeView: View {
                     .frame(width: 36.8, height: 36.8)
                     .clipShape(Circle())
                     .background(BookShelfPalette.background, in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .disabled(isBookDetailPresented)
             .accessibilityLabel("Change avatar")
             .accessibilityHint("Opens a list of avatars to choose from")
         }
     }
+}
 
-    // Tab switcher + swipeable pages, both driving the same
-    // `selectedHomeTab` binding — tapping a tab and swiping the TabView
-    // are just two ways to write to it, so they can never disagree.
-    private var actionTabsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
-            homeTabSwitcher
-
-            TabView(selection: $selectedHomeTab) {
-                listenActionsGrid.tag(HomeTab.listen)
-                makeAudioActionsGrid.tag(HomeTab.make)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            // Matches the grid's own natural height (2 rows of
-            // ImportActionCard's 80pt content + 16pt padding on each
-            // side = 112pt per card, + 12pt row spacing) — TabView
-            // doesn't size to its pages' content on its own.
-            .frame(height: 236)
-            // Cancels the parent VStack's .padding(.horizontal) so the
-            // TabView's own drag area spans the true screen edge-to-edge
-            // (same trick trendingVoicesSection uses) — each grid re-adds
-            // the same 16pt as its own content inset, so the cards still
-            // sit exactly where they did before.
-            .padding(.horizontal, -16)
+extension Array {
+    /// Splits into consecutive groups of at most `size`, last group short if
+    /// the count doesn't divide evenly. Used only to wrap `recentActivityDots`
+    /// into rows.
+    fileprivate func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
-    }
-
-    private var homeTabSwitcher: some View {
-        HStack(spacing: 8) {
-            ForEach(HomeTab.allCases) { tab in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { selectedHomeTab = tab }
-                } label: {
-                    Text(tab.title)
-                        .appText(.rowTitle)
-                        .foregroundStyle(selectedHomeTab == tab ? Color.appPrimaryText : Color.appSecondaryText)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .background(
-                            selectedHomeTab == tab ? Color.appSecondaryBackground : Color.clear,
-                            in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // "Listen to text" — get existing text into the app to have it read
-    // aloud. Only "Write text" is functional today; the rest are visual
-    // placeholders per the current design pass (same status as before
-    // this row grew tabs).
-    private var listenActionsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ImportActionCard(title: "Paste a link", icon: .link, action: {})
-            ImportActionCard(title: "Upload a file", icon: .file) {
-                pdfImports.requestDocumentPicker()
-            }
-            ImportActionCard(title: "Scan text", icon: .scan, action: {})
-            ImportActionCard(title: "Write text", icon: .textCursor) {
-                viewModel.isWriteTextPresented = true
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-
-    // "Make audio" — create new voice/audio content. All 4 are visual
-    // placeholders for now, same status as most of "Listen to text"'s row.
-    private var makeAudioActionsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ImportActionCard(title: "Clone voice", icon: .mic, action: {})
-            ImportActionCard(title: "Upload Book", icon: .bookUp) {
-                pdfImports.requestDocumentPicker()
-            }
-            ImportActionCard(title: "Create Podcast", icon: .radio, action: {})
-            ImportActionCard(title: "Change Voice", icon: .repeatIcon, action: {})
-        }
-        .padding(.horizontal, 16)
-    }
-
-    // Every real voice from both packs, not just a curated few — shown
-    // regardless of download state (per the request to "show all voices
-    // available"); isAvailable just controls cover art vs. a gradient
-    // placeholder below.
-    private var voiceTiles: [VoiceTile] {
-        let kokoro = KokoroVariant.allCases.flatMap { variant in
-            VoiceCatalog.voices(for: variant).map { voice in
-                VoiceTile(
-                    id: "kokoro-\(variant.rawValue)-\(voice.code)", voice: voice, engine: .kokoroAne,
-                    engineLabel: variant == .english ? "Kokoro-ANE" : "Kokoro-ANE (\(variant.displayName))",
-                    isAvailable: packs.isKokoroPackReady(variant))
-            }
-        }
-        let pocket = VoiceCatalog.pocket.map { voice in
-            VoiceTile(
-                id: "pocket-\(voice.code)", voice: voice, engine: .pocketTts,
-                engineLabel: "Pocket TTS", isAvailable: packs.isPocketPackDownloaded)
-        }
-        let supertonic3 = VoiceCatalog.supertonic3.map { voice in
-            VoiceTile(
-                id: "supertonic3-\(voice.code)", voice: voice, engine: .supertonic3,
-                engineLabel: "Supertonic-3", isAvailable: packs.isSupertonic3Downloaded)
-        }
-        return kokoro + pocket + supertonic3
-    }
-
-    private var trendingVoicesSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
-            Text("Trending voices").appText(.sectionTitle)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHGrid(
-                    rows: [
-                        GridItem(.fixed(60), spacing: 14), GridItem(.fixed(60), spacing: 16),
-                    ], spacing: 0
-                ) {
-                    ForEach(voiceTiles) { tile in
-                        PreviewVoiceCard(tile: tile, previewPlayer: app.previewPlayer) {
-                            selectedVoiceTile = tile
-                        }
-                    }
-                }
-                // Each tile becomes a snap candidate; for a 2-row grid this
-                // snaps per column (both stacked tiles at that horizontal
-                // offset), not per individual tile.
-                .scrollTargetLayout()
-                .padding(.horizontal, 2)
-            }
-            .scrollTargetBehavior(.viewAligned)
-            .padding(.horizontal, -16)
-        }
-    }
-
-    // Real, unlike createYourOwnBookRow below — opens the same CreateVoiceSheet
-    // (Instant Clone / Upload file) as the Voices tab's own entry point.
-    private var createYourOwnVoiceRow: some View {
-        CreateYourOwnRow(
-            icon: Hugeicons.mic01, title: "Create your own voice",
-            subtitle: "Clone your voice in seconds"
-        ) {
-            isCreateVoicePresented = true
-        }
-    }
-
-    // "Read Anything" — a horizontally scrolling row of promo cards, one
-    // card per item so more can be appended later. Card width/image size
-    // are fixed per the supplied design (327x188 image, full card width
-    // 327), not derived from screen width.
-    private var readAnythingSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
-            Text("Read Anything").appText(.sectionTitle)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(readAnythingItems) { item in
-                        ReadAnythingCard(item: item)
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .padding(.horizontal, -16)
-        }
-    }
-
-    // No "See all" yet — see OpenLibraryBooksViewModel's doc comment.
-    private var newInRomanceSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.innerSectionToContent) {
-            Text("New in romance").appText(.sectionTitle)
-
-            if openLibraryBooksViewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 24)
-            } else if let errorMessage = openLibraryBooksViewModel.loadErrorMessage {
-                VStack(spacing: 8) {
-                    Text(errorMessage)
-                        .appText(.body)
-                    // Font only — stays system accent-tinted so it still
-                    // reads as tappable, matching every other bare toolbar/
-                    // text button in this app (none carry an app color).
-                    Button("Retry") {
-                        Task { await openLibraryBooksViewModel.retry() }
-                    }
-                    .font(AppTextStyle.body.font)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 12)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(openLibraryBooksViewModel.books) { book in
-                            OpenLibraryBookCard(book: book)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                .padding(.horizontal, -16)
-            }
-        }
-    }
-
-    private var createYourOwnBookRow: some View {
-        CreateYourOwnRow(
-            icon: Hugeicons.plusSign, title: "Create your own book",
-            subtitle: "Craft your own story in seconds"
-        ) {}
-    }
-
-    // Real generations (latest 5, newest first) once any exist; falls back
-    // to the static demo row + a "Create your own project" entry point
-    // (no action yet, matching createYourOwnBookRow's own no-op) while the
-    // library is still empty.
-    private var projectsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sectionToContent) {
-            Text("Projects").appText(.sectionTitle)
-            ForEach(pdfImports.jobs.filter { $0.phase != .completed && $0.phase != .cancelled }.prefix(2)) { job in
-                PDFImportJobCard(job: job, manager: pdfImports)
-            }
-            if libraryViewModel.savedGenerations.isEmpty {
-                ForEach(DemoContent.projects) { project in
-                    projectRow(title: project.title, subtitle: project.subtitle, updatedLabel: project.updatedLabel)
-                }
-                createYourOwnProjectRow
-            } else {
-                ForEach(libraryViewModel.savedGenerations.prefix(5)) { generation in
-                    GenerationRow(
-                        icon: generation.engine == .kokoroAne ? .audioWaveform : .mic,
-                        iconStyle: generation.engine == .kokoroAne ? .stroked : .filled,
-                        coverURL: generation.coverURL,
-                        title: generation.title,
-                        subtitle:
-                            "\(generation.pageCountLabel) · \(VoiceDisplayName.forCode(generation.voiceName)) · \(generation.createdAt.formatted(date: .abbreviated, time: .shortened))",
-                        onTap: { openProject = libraryViewModel.project(for: generation.id) }
-                    )
-                }
-            }
-        }
-    }
-
-    private func projectRow(title: String, subtitle: String, updatedLabel: String) -> some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.appSecondaryBackground)
-                .frame(width: 40, height: 40)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).appText(.rowTitle)
-                Text(subtitle).appText(.label)
-                    .lineLimit(1)
-                Text(updatedLabel).appText(.labelDim)
-            }
-            Spacer()
-            Hugeicons.play.image()
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(Color.appPrimaryText)
-                .frame(width: 22, height: 22)
-        }
-        .contentShape(Rectangle())
-    }
-
-    private var createYourOwnProjectRow: some View {
-        Button(action: {}) {
-            HStack(spacing: 12) {
-                LucideIcon(.circlePlus, size: 28, color: Color.appPrimaryText)
-                Text("Create your own project").appText(.rowTitle)
-                Spacer()
-            }
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 
-/// Static content for `readAnythingSection` — just one card today; append
-/// more here as they're designed, `ReadAnythingCard`/the section's
-/// ForEach need no changes to pick them up.
-private let readAnythingItems: [ReadAnythingItem] = [
-    ReadAnythingItem(
-        id: "sample",
-        imageName: "ReadAnythingSample",
-        title: "Turn any book into audio",
-        description: "Pick up where you left off, hands-free — listen to your library anywhere."),
-    ReadAnythingItem(
-        id: "sample2",
-        imageName: "ReadAnythingSample2",
-        title: "Hear it before you commit",
-        description: "A real 30-minute demo, generated right on iPhone — no cloud round-trip.",
-        showsPlayButton: true),
-]
-
-private struct ReadAnythingItem: Identifiable {
-    let id: String
-    let imageName: String
-    let title: String
-    let description: String
-    // Decorative only today — not wired to real playback, since these
-    // cards have no associated audio yet.
-    var showsPlayButton: Bool = false
-}
-
-/// One "Read Anything" promo card: a fixed-size 327x188 image on top, title
-/// + short description below. Card width is fixed at 327 (not derived from
-/// screen width) per the supplied design.
-private struct ReadAnythingCard: View {
-    let item: ReadAnythingItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(item.imageName)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 327, height: 188)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(alignment: .leading) {
-                    if item.showsPlayButton {
-                        LucideIcon(.circlePlay, size: 36, color: Color(hex: 0xD5AB80))
-                            .padding(.leading, 29)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).appText(.cardTitle)
-                Text(item.description).appText(.label)
-                    .lineLimit(2)
-            }
-        }
-        .frame(width: 327, alignment: .leading)
-    }
-}
-
-private struct ImportActionCard: View {
-    let title: String
-    let icon: LucideIconName
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 10) {
-                LucideIcon(icon, size: 20, color: Color.appPrimaryText)
-                Text(title)
-                    .appText(.rowTitle)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .frame(height: 80)
-            .padding()
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color.appSecondaryBackground))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// A voice plus the per-screen context the catalog doesn't own: which
-/// engine will speak it, and whether its pack is downloaded yet.
-struct VoiceTile: Identifiable {
-    let id: String
-    let voice: Voice
-    let engine: Engine
-    let engineLabel: String
-    let isAvailable: Bool
-
-    /// Raw code passed to the engine (e.g. "af_alloy", "bill_boerst").
-    var name: String { voice.code }
-    var displayName: String { voice.displayName }
-    var countryFlag: String { voice.flag }
-
-    // Falls back to the engine label for voices with no persona written
-    // yet (all of Pocket TTS and Japanese today).
-    var descriptionText: String { voice.tagline ?? engineLabel }
-    var longDescription: String {
-        voice.longDescription ?? "A distinctive voice with its own character."
-    }
-}
-
-/// One row per voice: cover image, name, a short persona tagline, and a
-/// trailing play/pause indicator (reflects whether this voice's preview is
-/// the one currently playing, started from VoicePreviewSheet). The whole
-/// card is the tap target — tapping opens VoicePreviewSheet.
 #Preview {
     let app = AppEnvironment.preview()
     return ImportHomeView(
-        viewModel: app.tts, libraryViewModel: app.library, pdfImports: app.pdfImports,
-        packs: app.tts.packs, app: app, homeMode: .constant(.studio))
+        libraryViewModel: app.library, app: app, exploreDestination: .constant(nil),
+        openBookRequest: .constant(nil), onAddBooks: {})
 }

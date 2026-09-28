@@ -22,16 +22,19 @@ import SwiftUI
 /// `EnvironmentKey` is for — an explicit parameter can't fail.
 struct AppEnvironment {
     let tts: TTSViewModel
-    let voiceClone: VoiceCloneViewModel
     let library: LibraryViewModel
     let pdfImports: PDFImportManager
     let previewPlayer: VoicePreviewPlayer
-    let chapterPlayer: ChapterAudioPlayer
-    let generationStore: ChapterGenerationStore
-    // Not "pass-through" like the others above — a live flag tab roots
-    // write to and RootTabView observes, so RootTabView's custom bottom
-    // bar (tabs + "+", all in one row — see CustomTabBar) can hide itself
-    // on pushed screens. See NavigationChromeVisibility's own doc comment.
+    /// The app's one playback owner, rendered either as read-along text or
+    /// as a music-style now-playing surface — see
+    /// `docs/adr/0013-unified-player.md`. Not pass-through: `RootTabView`
+    /// observes it directly for the floating mini player.
+    let player: BookAudioPlayer
+    let readingStats: ReadingStatsStore
+    // Not "pass-through" like the others above — a live flag Home writes
+    // to and RootTabView observes, so RootTabView's floating Explore/Add
+    // Books bar (see CustomTabBar) can hide itself on pushed screens. See
+    // NavigationChromeVisibility's own doc comment.
     let navigationChrome: NavigationChromeVisibility
 }
 
@@ -42,14 +45,15 @@ extension AppEnvironment {
     @MainActor
     static func preview() -> AppEnvironment {
         let dependencies = DependencyContainer()
+        let statsTracker = ReadingStatsTracker(store: dependencies.readingStatsStore)
         let tts = TTSViewModel(dependencies: dependencies)
         let synthesis = ChapterSynthesisService(kokoroServices: tts.kokoroServices)
         let library = LibraryViewModel()
         return AppEnvironment(
-            tts: tts, voiceClone: VoiceCloneViewModel(dependencies: dependencies),
+            tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
-            chapterPlayer: ChapterAudioPlayer(synthesisService: synthesis),
-            generationStore: ChapterGenerationStore(synthesisService: synthesis),
+            player: BookAudioPlayer(synthesis: synthesis, statsTracker: statsTracker),
+            readingStats: dependencies.readingStatsStore,
             navigationChrome: NavigationChromeVisibility())
     }
 }

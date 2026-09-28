@@ -9,6 +9,17 @@ enum SavedProjectSource: String, Codable, Equatable, Hashable {
     case unknown
 }
 
+/// How one book sits on the Book Shelf — face-out (full cover) or turned to
+/// its spine, which is far narrower so more books fit per row. Set per book
+/// from the shelf's long-press menu and persisted here alongside the other
+/// per-project state (`voiceName`, `lastReadPageIndex`), so the shelf looks
+/// the same after relaunch. `.cover` is the default for every existing
+/// project, which is why it decodes from a missing key.
+enum ShelfDisplayMode: String, Codable, Equatable, Hashable {
+    case cover
+    case spine
+}
+
 /// Lightweight metadata for a saved reading project. Page bodies are stored
 /// in separate files and loaded only when that page is opened.
 struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
@@ -20,6 +31,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     let pageCount: Int
     var lastReadPageIndex: Int = 0
     var source: SavedProjectSource = .unknown
+    var shelfDisplayMode: ShelfDisplayMode = .cover
 
     init(
         id: UUID,
@@ -29,7 +41,8 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         createdAt: Date,
         pageCount: Int,
         lastReadPageIndex: Int = 0,
-        source: SavedProjectSource = .unknown
+        source: SavedProjectSource = .unknown,
+        shelfDisplayMode: ShelfDisplayMode = .cover
     ) {
         self.id = id
         self.title = title
@@ -39,7 +52,9 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         self.pageCount = pageCount
         self.lastReadPageIndex = lastReadPageIndex
         self.source = source
+        self.shelfDisplayMode = shelfDisplayMode
     }
+
 
     static let baseDirectory: URL = {
         let appSupport = FileManager.default.urls(
@@ -79,6 +94,20 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    /// The project's own copy of the imported document, kept so the reader can
+    /// show the original page. The import job also holds a copy, but that
+    /// directory is the importer's to delete — a project cannot depend on it.
+    static func sourcePDFFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("source.pdf")
+    }
+
+    /// Nil for typed text, and for PDFs imported before the copy existed —
+    /// which is what the reader keys off to hide the original-page control.
+    static func existingSourcePDFURL(id: UUID) -> URL? {
+        let url = sourcePDFFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     static func pageFileURL(projectID: UUID, index: Int) -> URL {
         projectPagesDirectory(id: projectID)
             .appendingPathComponent(String(format: "%06d.json", index))
@@ -87,33 +116,29 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     var summary: SavedGenerationSummary {
         SavedGenerationSummary(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: createdAt, pageCount: pageCount, source: source)
+            createdAt: createdAt, pageCount: pageCount, source: source,
+            shelfDisplayMode: shelfDisplayMode)
     }
 
-    var audioDirectory: URL {
-        Self.baseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
-    }
-
-    func pageAudioFileURL(index: Int) -> URL {
-        audioDirectory.appendingPathComponent("page_\(index).wav")
-    }
-
-    func pageSidecarFileURL(index: Int) -> URL {
-        audioDirectory.appendingPathComponent("page_\(index).json")
-    }
-
-    func hasGeneratedAudio(pageIndex: Int) -> Bool {
-        FileManager.default.fileExists(atPath: pageAudioFileURL(index: pageIndex).path)
-    }
 }
 
 extension SavedGeneration {
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
+        case shelfDisplayMode
     }
 
     /// Existing V2 projects predate resume position and should continue at
     /// page 1 rather than becoming unreadable when the new field is absent.
+    ///
+    /// **Every defaulted property must be listed here.** A property left out
+    /// silently keeps its default on every read instead of the stored value,
+    /// which doesn't fail loudly — it just makes writes look like no-ops.
+    /// That's exactly what happened when `shelfDisplayMode` was first added
+    /// and missed here: rotating a book to its spine saved fine, but
+    /// rotating it back read `.cover`, matched the value being written, and
+    /// `updateShelfDisplayMode`'s no-change guard returned early without
+    /// writing anything.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -124,6 +149,8 @@ extension SavedGeneration {
         pageCount = try container.decode(Int.self, forKey: .pageCount)
         lastReadPageIndex = try container.decodeIfPresent(Int.self, forKey: .lastReadPageIndex) ?? 0
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
+        shelfDisplayMode =
+            try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
     }
 }
 
@@ -135,6 +162,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     let createdAt: Date
     let pageCount: Int
     var source: SavedProjectSource = .unknown
+    var shelfDisplayMode: ShelfDisplayMode = .cover
 
     init(
         id: UUID,
@@ -143,7 +171,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         voiceName: String,
         createdAt: Date,
         pageCount: Int,
-        source: SavedProjectSource = .unknown
+        source: SavedProjectSource = .unknown,
+        shelfDisplayMode: ShelfDisplayMode = .cover
     ) {
         self.id = id
         self.title = title
@@ -152,10 +181,11 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.pageCount = pageCount
         self.source = source
+        self.shelfDisplayMode = shelfDisplayMode
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, engine, voiceName, createdAt, pageCount, source
+        case id, title, engine, voiceName, createdAt, pageCount, source, shelfDisplayMode
     }
 
     /// Existing indexes did not record an origin. Leave those entries out of
@@ -169,6 +199,17 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         pageCount = try container.decode(Int.self, forKey: .pageCount)
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
+        shelfDisplayMode =
+            try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
+    }
+
+    /// Spine thickness scales with the book's own page count, the way a real
+    /// book's does — clamped so a 12-page PDF is still tappable and a
+    /// 900-page one doesn't eat the row. Roughly 1pt per 45 pages between
+    /// those bounds.
+    var spineWidth: CGFloat {
+        let scaled = 14 + CGFloat(pageCount) / 45
+        return min(max(scaled, 14), 36)
     }
 
     var pageCountLabel: String {

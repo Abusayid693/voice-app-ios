@@ -2,8 +2,8 @@ import FluidAudio
 import Foundation
 
 /// One displayed word's start/end within its chunk's audio (seconds,
-/// relative to the chunk — add the chunk's own `ChapterAudioManifest
-/// .chunkStarts[i]` for an absolute position in the merged file).
+/// relative to the chunk — chunk audio is never merged into a single file,
+/// so this is always the position within that one chunk's own player).
 ///
 /// `precedingSeparator` is the literal whitespace that appeared before this
 /// word in the chunk's original text ("" for the first word) — a plain

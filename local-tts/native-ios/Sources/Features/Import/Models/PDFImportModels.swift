@@ -139,11 +139,36 @@ struct PDFParagraph: Codable, Hashable {
     let top: Double
     let fontSize: Double
     let isBold: Bool
+    /// Set by `PDFParagraphAssembler` from the same typographic evidence it uses
+    /// to break paragraphs, so a title/chapter/lesson heading can be styled in
+    /// the reader instead of reading as body text.
+    let isHeading: Bool
+    /// How much larger than the document's body text this paragraph was, already
+    /// clamped. 1 for body text and for a heading set apart only by weight.
+    let fontScale: Double
+    /// Where each source line's text ended up inside `text`, so the reader can
+    /// highlight on the original page image. Empty when the paragraph's text
+    /// could not be mapped back safely.
+    let lineSpans: [PDFParagraphLineSpan]
+}
+
+/// One source line's footprint inside its paragraph: the slice of the
+/// paragraph's text it contributed, and the rectangle it occupied on the page.
+///
+/// Offsets are relative to the paragraph, not the page — `PDFProcessingActor`
+/// rebases them when it concatenates paragraphs into the reader page.
+struct PDFParagraphLineSpan: Codable, Hashable {
+    let start: Int
+    let length: Int
+    let bounds: PDFNormalizedRect
 }
 
 struct PDFImportResult: Sendable {
     let title: String
     let pagesDirectory: URL
+    /// The copied source document, so the project can keep its own copy and
+    /// show the original page alongside the extracted text.
+    let sourceURL: URL
     let pageCount: Int
     /// Optional so a thumbnail rendering failure cannot discard otherwise
     /// readable imported content; callers use the standard project icon then.

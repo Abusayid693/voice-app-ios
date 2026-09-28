@@ -8,6 +8,7 @@ struct ChapterPlayerOptionsSheet: View {
     @Binding var showFloatingPlayer: Bool
     @Binding var autoScrollEnabled: Bool
     @Binding var wordHighlightEnabled: Bool
+    @Binding var continuousPlaybackEnabled: Bool
     @Binding var fontSize: ReaderFontSize
     @Binding var fontFamily: ReaderFontFamily
     @Binding var theme: ReaderTheme
@@ -161,6 +162,10 @@ struct ChapterPlayerOptionsSheet: View {
                 title: "Word highlighting",
                 subtitle: "Highlight each word as it's spoken",
                 isOn: $wordHighlightEnabled)
+            row(
+                title: "Continue to next page",
+                subtitle: "Keep playing into the next page automatically",
+                isOn: $continuousPlaybackEnabled)
         }
     }
 
@@ -401,6 +406,7 @@ struct ChapterPlayerOptionsSheet: View {
                 showFloatingPlayer: .constant(true),
                 autoScrollEnabled: .constant(true),
                 wordHighlightEnabled: .constant(true),
+                continuousPlaybackEnabled: .constant(true),
                 fontSize: .constant(.medium),
                 fontFamily: .constant(.sfProText),
                 theme: .constant(.carbon))

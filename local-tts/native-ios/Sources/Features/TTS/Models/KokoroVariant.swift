@@ -3,8 +3,7 @@ import Foundation
 
 /// App-level wrapper around the SDK's `KokoroAneVariant` — kept separate so
 /// app code (Setup, voice picker) doesn't depend on the SDK enum's exact
-/// case names directly, matching how `PocketLanguage` already wraps
-/// `PocketTtsLanguage`.
+/// case names directly.
 ///
 /// Japanese requires FluidAudio pinned past v0.15.7 (see `project.yml`'s
 /// `revision:` pin) — `KokoroAneManager.phonemes(for:)` unconditionally

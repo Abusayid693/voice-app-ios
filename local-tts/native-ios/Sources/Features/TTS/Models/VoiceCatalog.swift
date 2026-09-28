@@ -8,8 +8,8 @@ import Foundation
 /// guesses from each name (the `af_`/`bf_` prefix gives real gender and
 /// accent; the character adjectives don't come from listening to each
 /// clip). Mandarin's 8 named voices use hexgrad's own documented personas.
-/// Pocket TTS and Japanese have no persona data at all, so they carry
-/// `nil` rather than something invented.
+/// Japanese has no persona data at all, so those carry `nil` rather than
+/// something invented.
 enum VoiceCatalog {
     static func voices(for variant: KokoroVariant) -> [Voice] {
         switch variant {
@@ -19,13 +19,13 @@ enum VoiceCatalog {
         }
     }
 
-    static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese + pocket + supertonic3
+    private static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese
 
     /// Precomputed rather than scanned: cover-art resolution calls this
-    /// once per visible tile while the Trending row scrolls, and a linear
-    /// scan there would rebuild and walk the whole roster each time.
-    /// Codes are unique across packs today; `uniquingKeysWith` keeps the
-    /// first entry rather than trapping if that ever stops being true.
+    /// once per visible tile while a voice grid scrolls, and a linear scan
+    /// there would rebuild and walk the whole roster each time. Codes are
+    /// unique across packs today; `uniquingKeysWith` keeps the first entry
+    /// rather than trapping if that ever stops being true.
     private static let byCode: [String: Voice] = Dictionary(
         all.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
 
@@ -306,81 +306,5 @@ enum VoiceCatalog {
         Voice(code: "jf_nezumi"),
         Voice(code: "jf_tebukuro"),
         Voice(code: "jm_kumo"),
-    ]
-
-    // MARK: - Pocket TTS (26, same roster for every language)
-
-    // Named after LibriVox-style audiobook narrators with no persona data
-    // at all, so these descriptions are freshly-written narration-toned
-    // copy rather than anything sourced. No taglines, no preview clips yet
-    // (see ADR 9 — Pocket's clips still need capturing).
-    static let pocket: [Voice] = [
-        Voice(code: "alba", longDescription: "A clear, gentle narrator voice with a calm, steady pace."),
-        Voice(
-            code: "anna",
-            longDescription:
-                "A warm, expressive voice well suited to storytelling and long-form reads."),
-        Voice(code: "azelma", longDescription: "A soft, measured voice with a quiet, thoughtful delivery."),
-        Voice(
-            code: "bill_boerst",
-            longDescription: "A steady, seasoned narrator voice with a relaxed, confident cadence."),
-        Voice(code: "caro_davy", longDescription: "A bright, articulate voice with a brisk, engaging pace."),
-        Voice(
-            code: "charles",
-            longDescription: "A calm, deliberate voice suited to serious or reflective narration."),
-        Voice(code: "cosette", longDescription: "A soft, youthful voice with a gentle, sincere tone."),
-        Voice(
-            code: "eponine",
-            longDescription: "An expressive, emotive voice with a slightly melancholic warmth."),
-        Voice(
-            code: "estelle",
-            longDescription: "A refined, articulate voice with a smooth, unhurried delivery."),
-        Voice(code: "eve", longDescription: "A clear, natural voice with an easy, conversational rhythm."),
-        Voice(
-            code: "fantine",
-            longDescription: "A tender, soft-spoken voice with a quiet emotional depth."),
-        Voice(code: "george", longDescription: "A steady, dependable voice with a classic narrator's tone."),
-        Voice(
-            code: "giovanni",
-            longDescription: "A warm, expressive voice with a touch of theatrical flair."),
-        Voice(code: "jane", longDescription: "A composed, articulate voice with a gentle, measured pace."),
-        Voice(code: "javert", longDescription: "A firm, resolute voice with a serious, commanding edge."),
-        Voice(code: "jean", longDescription: "A grounded, weathered voice with quiet, steady conviction."),
-        Voice(
-            code: "juergen",
-            longDescription: "A deep, deliberate voice with a calm, authoritative presence."),
-        Voice(code: "lola", longDescription: "A lively, expressive voice with a playful, energetic lift."),
-        Voice(code: "marius", longDescription: "A youthful, earnest voice with an open, sincere tone."),
-        Voice(code: "mary", longDescription: "A warm, gentle voice with a comforting, familiar quality."),
-        Voice(
-            code: "michael",
-            longDescription: "A clear, confident voice suited to straightforward narration."),
-        Voice(code: "paul", longDescription: "A steady, even voice with an unassuming, practical tone."),
-        Voice(
-            code: "peter_yearsley",
-            longDescription: "A rich, classic narrator's voice with a measured, deliberate pace."),
-        Voice(code: "rafael", longDescription: "A warm, textured voice with an expressive, animated delivery."),
-        Voice(
-            code: "stuart_bell",
-            longDescription: "A crisp, articulate voice with a brisk, professional pace."),
-        Voice(code: "vera", longDescription: "A soft, composed voice with a calm, reassuring tone."),
-    ]
-
-    // MARK: - Supertonic-3 (10 fixed speaker styles, all 31 languages — issue #27)
-
-    // No persona data (fixed presets, not sourced from a named narrator);
-    // no per-language flag makes sense, since the same voice speaks
-    // whichever `SupertonicLanguage` is picked — see Voice.flagOverride.
-    static let supertonic3: [Voice] = [
-        Voice(code: "F1", flagOverride: "🌐"),
-        Voice(code: "F2", flagOverride: "🌐"),
-        Voice(code: "F3", flagOverride: "🌐"),
-        Voice(code: "F4", flagOverride: "🌐"),
-        Voice(code: "F5", flagOverride: "🌐"),
-        Voice(code: "M1", flagOverride: "🌐"),
-        Voice(code: "M2", flagOverride: "🌐"),
-        Voice(code: "M3", flagOverride: "🌐"),
-        Voice(code: "M4", flagOverride: "🌐"),
-        Voice(code: "M5", flagOverride: "🌐"),
     ]
 }

@@ -28,9 +28,8 @@ struct SetupView: View {
     private func packRow(for pack: VoicePack) -> some View {
         let isReady = isReady(pack)
         // Precise per-row check — viewModel.isBusy alone is shared across
-        // every pack (and generation), so with 6 rows now (Kokoro + 5
-        // Pocket languages) gating the spinner on it made every
-        // not-yet-downloaded row spin the instant any one started.
+        // every pack (and generation), so gating the spinner on it made
+        // every not-yet-downloaded row spin the instant any one started.
         let isDownloadingThis = packs.downloadingPackID == pack.id
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -65,8 +64,6 @@ struct SetupView: View {
     private func isReady(_ pack: VoicePack) -> Bool {
         switch pack {
         case .kokoro(let variant): return packs.isKokoroPackReady(variant)
-        case .pocket(let language): return packs.isPocketPackDownloaded(language)
-        case .supertonic3: return packs.isSupertonic3Downloaded
         }
     }
 
@@ -74,14 +71,13 @@ struct SetupView: View {
         Task {
             switch pack {
             case .kokoro(let variant): await viewModel.downloadKokoroPackIfNeeded(variant: variant)
-            case .pocket(let language): await viewModel.downloadPocketPackIfNeeded(language: language)
-            case .supertonic3: await viewModel.downloadSupertonic3PackIfNeeded()
             }
         }
     }
 }
 
 #Preview {
-    let viewModel = TTSViewModel(dependencies: DependencyContainer())
+    let dependencies = DependencyContainer()
+    let viewModel = TTSViewModel(dependencies: dependencies)
     SetupView(viewModel: viewModel, packs: viewModel.packs)
 }

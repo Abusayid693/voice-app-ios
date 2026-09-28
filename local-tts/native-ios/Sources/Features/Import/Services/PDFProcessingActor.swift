@@ -6,6 +6,7 @@ import UIKit
 /// and finalizes exactly one independently stored reader page per PDF page.
 actor PDFProcessingActor {
     private let extractor: any PDFTextExtractor
+    private let assembler = PDFParagraphAssembler()
 
     init(extractor: any PDFTextExtractor = PDFKitTextExtractor()) {
         self.extractor = extractor
@@ -64,6 +65,7 @@ actor PDFProcessingActor {
         try Task.checkCancellation()
 
         let repeated = try repeatedHeaderFooterLines(job: job, pageCount: pageCount)
+        let bodyFontSize = documentBodyFontSize(job: job, pageCount: pageCount)
         try FileManager.default.createDirectory(
             at: job.readerPagesDirectory, withIntermediateDirectories: true)
 
@@ -78,12 +80,14 @@ actor PDFProcessingActor {
             {
                 readerPage = existing
             } else {
-                let paragraphs = loadPage(job: job, index: pageIndex).map {
-                    makeParagraphs(from: $0, excluding: repeated)
+                let content = loadPage(job: job, index: pageIndex)
+                let paragraphs = content.map {
+                    makeParagraphs(from: $0, excluding: repeated, bodyFontSize: bodyFontSize)
                 } ?? []
-                let text = paragraphs.map(\.text).joined(separator: "\n\n")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                readerPage = ReaderPage(index: pageIndex, text: text)
+                readerPage = makeReaderPage(
+                    at: pageIndex, from: paragraphs,
+                    pageSize: CGSize(
+                        width: content?.pageWidth ?? 0, height: content?.pageHeight ?? 0))
                 let data = try JSONEncoder().encode(readerPage)
                 try data.write(to: job.readerPageURL(index: pageIndex), options: .atomic)
             }
@@ -101,6 +105,7 @@ actor PDFProcessingActor {
         return PDFImportResult(
             title: job.sourceFileName,
             pagesDirectory: job.readerPagesDirectory,
+            sourceURL: job.sourceURL,
             pageCount: pageCount,
             coverURL: coverURL)
     }
@@ -182,44 +187,81 @@ actor PDFProcessingActor {
             .joined(separator: " ")
     }
 
+    /// Drops the lines this page shouldn't read aloud, then hands the rest to
+    /// `PDFParagraphAssembler` for the actual layout analysis. Deciding what is
+    /// junk stays here; deciding how lines group into paragraphs does not.
     private func makeParagraphs(
-        from page: PDFPageContent, excluding repeated: Set<String>
+        from page: PDFPageContent, excluding repeated: Set<String>, bodyFontSize: Double
     ) -> [PDFParagraph] {
         let kept = page.lines.filter {
             !repeated.contains(lineSignature($0.text))
                 && !isPrintedPageNumber($0, pageHeight: page.pageHeight)
         }
         guard !kept.isEmpty else { return [] }
+        return assembler.paragraphs(
+            from: kept, pageIndex: page.pageIndex, pageWidth: page.pageWidth,
+            documentBodyFontSize: bodyFontSize)
+    }
 
-        var result: [PDFParagraph] = []
-        var current: [PDFTextFragment] = []
+    /// One body size for the whole document, so a heading's scale means the same
+    /// thing on every page. Measured over the geometry already checkpointed on
+    /// disk, the same way `repeatedHeaderFooterLines` works, so this costs a
+    /// read rather than another PDFKit pass.
+    private func documentBodyFontSize(job: PDFImportJob, pageCount: Int) -> Double {
+        var lines: [PDFTextFragment] = []
+        for pageIndex in 0..<pageCount {
+            guard let page = loadPage(job: job, index: pageIndex) else { continue }
+            lines.append(contentsOf: page.lines)
+        }
+        return assembler.bodyFontSize(across: lines)
+    }
 
-        func flush() {
-            guard let first = current.first else { return }
-            let text = join(current)
-            if !text.isEmpty {
-                result.append(PDFParagraph(
-                    text: text, pageIndex: page.pageIndex, top: first.bounds.y,
-                    fontSize: first.fontSize, isBold: first.isBold))
+    /// Joins the page's paragraphs into one string, recording where the headings
+    /// landed. The offsets have to be built here, as the text is assembled — the
+    /// styling travels beside `text` rather than inside it, because the reader
+    /// locates synthesis chunks by searching for them as literal substrings of
+    /// this exact string (and the TTS engine speaks it verbatim).
+    private func makeReaderPage(
+        at index: Int, from paragraphs: [PDFParagraph], pageSize: CGSize
+    ) -> ReaderPage {
+        let separator = "\n\n"
+        var text = ""
+        var headings: [ReaderStyledRange] = []
+        var lineRects: [ReaderTextRect] = []
+        let canMapRects = pageSize.width > 0 && pageSize.height > 0
+
+        for paragraph in paragraphs where !paragraph.text.isEmpty {
+            if !text.isEmpty { text += separator }
+            let base = text.count
+            if paragraph.isHeading {
+                headings.append(ReaderStyledRange(
+                    start: base, length: paragraph.text.count,
+                    style: ReaderTextStyle(
+                        scale: paragraph.fontScale, isBold: paragraph.isBold)))
             }
-            current = []
+            if canMapRects {
+                // Rebase each line onto the page's text, and express its
+                // rectangle as a fraction of the page so the reader can scale
+                // it to whatever size it renders the page at.
+                for span in paragraph.lineSpans {
+                    lineRects.append(ReaderTextRect(
+                        start: base + span.start, length: span.length,
+                        x: span.bounds.x / pageSize.width,
+                        y: span.bounds.y / pageSize.height,
+                        width: span.bounds.width / pageSize.width,
+                        height: span.bounds.height / pageSize.height))
+                }
+            }
+            text += paragraph.text
         }
 
-        for line in kept {
-            guard let previous = current.last else {
-                current = [line]
-                continue
-            }
-            let verticalGap = line.bounds.y - previous.bounds.maxY
-            let differentColumn = abs(line.bounds.x - previous.bounds.x) > max(48, page.pageWidth * 0.12)
-            let typographyJump = abs(line.fontSize - previous.fontSize) > 2 || line.isBold != previous.isBold
-            if verticalGap > max(7, previous.bounds.height * 1.35) || differentColumn || typographyJump {
-                flush()
-            }
-            current.append(line)
+        // Paragraph text is already trimmed, so no offset can shift here — but
+        // guard the invariant rather than trusting it.
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed == text else {
+            return ReaderPage(index: index, text: trimmed)
         }
-        flush()
-        return result
+        return ReaderPage(index: index, text: text, headings: headings, lineRects: lineRects)
     }
 
     private func isPrintedPageNumber(_ line: PDFTextFragment, pageHeight: Double) -> Bool {
@@ -230,14 +272,4 @@ actor PDFProcessingActor {
             options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    private func join(_ lines: [PDFTextFragment]) -> String {
-        lines.reduce("") { partial, line in
-            guard !partial.isEmpty else { return line.text }
-            if partial.hasSuffix("-"), let first = line.text.first, first.isLowercase {
-                return String(partial.dropLast()) + line.text
-            }
-            return partial + " " + line.text
-        }
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 }

@@ -2,13 +2,13 @@ import AVFoundation
 import Combine
 
 /// Plays a voice's bundled preview clip — pure file playback, no synthesis,
-/// so it never touches the TTS engines and can't collide with an
-/// in-progress "Write text" generation.
+/// so it never touches the TTS engine and can't collide with an
+/// in-progress Kokoro generation.
 ///
 /// Deliberately its own observable object rather than more state on
 /// `TTSViewModel`: the metering loop below updates `level`/`progress` ~15
 /// times a second, and while that lived on the shared view model every
-/// view observing it — including Import's whole 70-tile Trending scroll —
+/// view observing it — including VoicesTabView's whole voice grid —
 /// re-rendered at that rate for the duration of every preview. Now only
 /// the two views that actually show preview state observe it.
 @MainActor
@@ -28,9 +28,8 @@ final class VoicePreviewPlayer: ObservableObject {
     /// True if this voice has a bundled clip — independent of whether its
     /// pack is *downloaded*, since this is pure bundled-file playback.
     /// Voices with no pack downloaded still preview fine; voices with no
-    /// clip recorded yet (all of Pocket TTS today — see
-    /// docs/adr/0009-bundled-voice-preview-clips.md) can't preview even
-    /// when their pack is present.
+    /// clip recorded yet (see docs/adr/0009-bundled-voice-preview-clips.md)
+    /// can't preview even when their pack is present.
     func hasClip(voiceName: String, engine: Engine) -> Bool {
         Self.clipURL(voiceName: voiceName, engine: engine) != nil
     }
@@ -44,7 +43,19 @@ final class VoicePreviewPlayer: ObservableObject {
         guard let url = Self.clipURL(voiceName: voiceName, engine: engine) else { return }
 
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
+            // Matches BookAudioPlayer/StreamingPlaybackLab's own category —
+            // a bare `.playback` here used to silently downgrade whatever
+            // fuller category either of those had already set for the rest
+            // of the launch (AVAudioSession is one shared, global session;
+            // the last `setCategory` call anywhere wins). Same
+            // policy-less fallback for older systems that reject
+            // `.longFormAudio`.
+            do {
+                try AVAudioSession.sharedInstance().setCategory(
+                    .playback, mode: .spokenAudio, policy: .longFormAudio)
+            } catch {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+            }
             try AVAudioSession.sharedInstance().setActive(true)
             let player = try AVAudioPlayer(contentsOf: url)
             player.isMeteringEnabled = true
@@ -82,11 +93,6 @@ final class VoicePreviewPlayer: ObservableObject {
         let engineFolder: String
         switch engine {
         case .kokoroAne: engineFolder = "Kokoro"
-        case .pocketTts: engineFolder = "Pocket"
-        // No bundled clips exist yet (see docs/adr/0009) — this just
-        // resolves to a folder with nothing in it, same as any other
-        // voice with no clip recorded.
-        case .supertonic3: engineFolder = "Supertonic3"
         }
         let subdirectory = "VoicePreviews/\(engineFolder)"
         return Bundle.main.url(forResource: voiceName, withExtension: "wav", subdirectory: subdirectory)

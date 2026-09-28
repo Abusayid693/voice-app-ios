@@ -1,9 +1,10 @@
 import LucideSwift
 import SwiftUI
 
-/// Half-height sheet reached by tapping a Trending voices row — presented as
-/// a horizontally scrolling carousel of *whole sheet cards*, one per voice,
-/// with the neighbouring voices' cards peeking in at both edges.
+/// Half-height sheet reached by tapping a voice in VoicesTabView's grid (or
+/// a row in the reader's Voice Library) — presented as a horizontally
+/// scrolling carousel of *whole sheet cards*, one per voice, with the
+/// neighbouring voices' cards peeking in at both edges.
 ///
 /// The system sheet itself is made invisible (`.presentationBackground(.clear)`)
 /// and every card is drawn by us instead. That's deliberate: a system sheet

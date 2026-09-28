@@ -1,7 +1,7 @@
 name: KokoroAneTest
 options:
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
   bundleIdPrefix: com.rehanchoudhury.kokoroanetest
 packages:
   # Pinned past the latest tagged release (v0.15.7, 2026-09-10) to a
@@ -25,10 +25,10 @@ packages:
     url: https://github.com/ajaxjiang96/lucide-swift
     exactVersion: 0.9.4
   # Replacing LucideSwift in some call sites (RootTabView's tab icons,
-  # CreateYourOwnRow, GenerationRow, PreviewVoiceCard, ImportHomeView) —
-  # both packages are present since the migration isn't complete across
-  # every icon call site yet. No tagged release as of this pin; revision
-  # is hugeicons-swift's own main at the time this was added.
+  # GenerationRow, PreviewVoiceCard, ImportHomeView) — both packages are
+  # present since the migration isn't complete across every icon call
+  # site yet. No tagged release as of this pin; revision is
+  # hugeicons-swift's own main at the time this was added.
   Hugeicons:
     url: https://github.com/iSapozhnik/hugeicons-swift
     revision: 81caddf04ce5352652ffaa619562f02477dbf35d
@@ -47,11 +47,11 @@ targets:
       - path: CustomKokoroModel
         type: folder
         buildPhase: resources
-      # Bundled voice-preview clips (Sources/Features/Import — see
-      # docs/adr/0009-bundled-voice-preview-clips.md). Same reasoning as
-      # CustomKokoroModel above: added under the plain `Sources` scan, this
-      # would be flattened (losing the Kokoro/Pocket subdirectories that
-      # TTSViewModel.togglePreview looks up via
+      # Bundled voice-preview clips (Sources/Features/TTS) — bundled
+      # rather than synthesized on demand so a preview plays instantly with
+      # no engine warm-up. Same reasoning as CustomKokoroModel above: added
+      # under the plain `Sources` scan, this would be flattened (losing the
+      # per-engine subdirectory VoicePreviewPlayer.clipURL looks up via
       # Bundle.main.url(forResource:withExtension:subdirectory:)) —
       # `type: folder` preserves the real directory structure instead.
       - path: VoicePreviews
@@ -83,15 +83,12 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         # Lets Kokoro playback keep running (and the process stay
         # unsuspended) once the screen locks or the app backgrounds — see
-        # NowPlayingService.swift and TTSViewModel's Kokoro playback methods.
+        # ChapterAudioPlayer.swift, the reader's playback owner.
         UIBackgroundModes: [audio, processing]
         # Imports are checkpointed page-by-page and resumed by this
         # opportunistic iOS background processing task.
         BGTaskSchedulerPermittedIdentifiers:
           - com.rehanchoudhury.kokoroanetest.pdf-import
-        # Voice cloning (Features/VoiceClone) records a short in-app sample
-        # via AVAudioRecorder — required or the app crashes on first mic use.
-        NSMicrophoneUsageDescription: Used to record a short sample of your voice to create a cloned voice.
         # `xcodegen generate` regenerates Info.plist from these properties
         # every time — editing the plist file directly gets clobbered on the
         # next generate. Settings > About reads this back via

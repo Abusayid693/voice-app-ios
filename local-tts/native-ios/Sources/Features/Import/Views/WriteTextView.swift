@@ -1,127 +1,68 @@
-import LucideSwift
 import SwiftUI
 
-/// Full-screen text entry reached from Import's "Write text" card. Generate
-/// no longer synthesizes anything here — it saves the text as reader pages
-/// of at most 2,000 words and hands the project id up so page 1 opens.
+/// Type or paste text and turn it into a Kokoro reader project — pushed
+/// from Tools' "Write a Text" row. Uses the reader's current default voice
+/// (`TTSViewModel.kokoroVoice`), same as Add Books does for PDF imports,
+/// rather than asking for one up front; the voice can still be changed
+/// from the reader itself afterward.
 struct WriteTextView: View {
+    @ObservedObject var library: LibraryViewModel
     @ObservedObject var viewModel: TTSViewModel
-    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
-    @ObservedObject var libraryViewModel: LibraryViewModel
-    @ObservedObject var packs: VoicePackStore
-    let previewPlayer: VoicePreviewPlayer
-    let onGenerated: (UUID) -> Void
+    let onSaved: (SavedGeneration) -> Void
+
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    private var isSaveEnabled: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                TextEditor(text: $viewModel.text)
-                    .appText(.reading)
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text("Paste or type your text here…")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Color.appTertiaryText)
+                        .padding(.horizontal, 17)
+                        .padding(.top, 20)
+                        .allowsHitTesting(false)
+                }
+
+                TextEditor(text: $text)
+                    .focused($isFocused)
                     .scrollContentBackground(.hidden)
-                    .background(Color.appBackground)
-                    .padding(4)
+                    .font(.system(size: 17))
+                    .foregroundStyle(Color.appPrimaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+            }
 
-                bottomBar
-            }
-            .background(Color.appBackground.ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Leading, not trailing — .navigationBarTrailing packs
-                // multiple items into one tight cluster, which squeezed
-                // this two-line control into/behind the close button
-                // instead of sitting cleanly beside it. This screen has no
-                // title and no back button (it's a fullScreenCover), so
-                // the leading side is otherwise empty.
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if viewModel.isPreparingModel {
-                        ModelPreparingNotice(onDismiss: viewModel.dismissModelPreparingNotice)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { viewModel.isWriteTextPresented = false }) {
-                        LucideIcon(.x, color: Color.appPrimaryText)
-                    }
-                }
-            }
+            Button("Save & Read") { save() }
+                .buttonStyle(.primary)
+                .disabled(!isSaveEnabled)
+                .padding()
         }
-        // Warm the model now rather than on a later per-chapter Generate —
-        // opening this screen is a clear signal the user is about to write,
-        // so the load usually finishes while they're still typing.
-        .task { viewModel.prepareKokoroModelIfNeeded() }
-        .preferredColorScheme(.dark)
-        .sheet(isPresented: $viewModel.isVoiceSettingsPresented) {
-            VoiceSettingsSheet(
-                viewModel: viewModel,
-                packs: packs,
-                voiceCloneViewModel: voiceCloneViewModel,
-                previewPlayer: previewPlayer)
-        }
+        .background(Color.appBackground.ignoresSafeArea())
+        .navigationTitle("Write a Text")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .onAppear { isFocused = true }
     }
 
-    // The currently selected voice, whichever engine it belongs to — same
-    // resolution `generate()` already uses for Pocket's cloned-vs-named
-    // voice, so the avatar always matches what Generate will actually use.
-    private var currentVoiceAssetName: String {
-        switch viewModel.engine {
-        case .kokoroAne: return VoiceCoverArt.assetName(for: viewModel.kokoroVoice)
-        case .pocketTts:
-            return VoiceCoverArt.assetName(for: viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice)
-        case .supertonic3: return VoiceCoverArt.assetName(for: viewModel.supertonicVoice.rawValue)
-        }
-    }
-
-    private var bottomBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                viewModel.isVoiceSettingsPresented = true
-            } label: {
-                Image(currentVoiceAssetName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 44, height: 44)
-                    .clipShape(Circle())
-            }
-
-            Button(action: generate) {
-                Text("Generate")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.primary)
-            .disabled(viewModel.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .frame(height: 44)
-        }
-        .padding()
-    }
-
-    // Saves the text (split into reader pages) and hands the new project's id
-    // to the caller — no audio is synthesized here anymore (see this
-    // file's doc comment).
-    private func generate() {
-        let voiceName: String
-        switch viewModel.engine {
-        case .kokoroAne:
-            voiceName = viewModel.kokoroVoice
-        case .pocketTts:
-            voiceName = viewModel.selectedClonedVoice?.name ?? viewModel.pocketVoice
-        case .supertonic3:
-            voiceName = viewModel.supertonicVoice.displayName
-        }
+    private func save() {
         guard
-            let savedID = libraryViewModel.save(
-                text: viewModel.text, engine: viewModel.engine, voiceName: voiceName)
+            let id = library.save(text: text, engine: .kokoroAne, voiceName: viewModel.kokoroVoice),
+            let project = library.project(for: id)
         else { return }
-        onGenerated(savedID)
+        onSaved(project)
     }
 }
 
 #Preview {
-    let dependencies = DependencyContainer()
-    let viewModel = TTSViewModel(dependencies: dependencies)
-    WriteTextView(
-        viewModel: viewModel,
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
-        libraryViewModel: LibraryViewModel(),
-        packs: viewModel.packs,
-        previewPlayer: VoicePreviewPlayer(),
-        onGenerated: { _ in })
+    let app = AppEnvironment.preview()
+    NavigationStack {
+        WriteTextView(library: app.library, viewModel: app.tts) { _ in }
+    }
+    .preferredColorScheme(.dark)
 }

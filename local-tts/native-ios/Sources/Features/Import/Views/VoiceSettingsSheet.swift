@@ -1,12 +1,14 @@
 import LucideSwift
 import SwiftUI
 
-/// Shared Voice Library for Write Text and the reader. Reader callers limit
-/// the library to the engine captured by their saved project.
+/// The reader's Voice Library. Kokoro is the only engine now, so this only
+/// ever shows the Kokoro catalogue. `restrictedEngine`/`synchronizeRestrictedSelection`
+/// stay — a saved project still persists its engine and the reader still
+/// passes it, and `restrictedEngine == nil` (the `#Preview` below, any
+/// caller that omits it) is a real, distinct case from `.kokoroAne`.
 struct VoiceSettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
     @ObservedObject var packs: VoicePackStore
-    @ObservedObject var voiceCloneViewModel: VoiceCloneViewModel
     let previewPlayer: VoicePreviewPlayer
     private let restrictedEngine: Engine?
     private let selectedVoiceName: String?
@@ -17,7 +19,6 @@ struct VoiceSettingsSheet: View {
     init(
         viewModel: TTSViewModel,
         packs: VoicePackStore,
-        voiceCloneViewModel: VoiceCloneViewModel,
         previewPlayer: VoicePreviewPlayer,
         restrictedEngine: Engine? = nil,
         selectedVoiceName: String? = nil,
@@ -25,7 +26,6 @@ struct VoiceSettingsSheet: View {
     ) {
         self.viewModel = viewModel
         self.packs = packs
-        self.voiceCloneViewModel = voiceCloneViewModel
         self.previewPlayer = previewPlayer
         self.restrictedEngine = restrictedEngine
         self.selectedVoiceName = selectedVoiceName
@@ -134,58 +134,15 @@ struct VoiceSettingsSheet: View {
 
     private var catalogue: some View {
         VStack(alignment: .leading, spacing: 26) {
-            if shows(.kokoroAne) {
-                ForEach(KokoroVariant.allCases) { variant in
-                    catalogueSection(title: variant.displayName, tiles: kokoroTiles(for: variant))
-                }
-            }
-
-            if shows(.pocketTts) {
-                if !clonedVoiceTiles.isEmpty {
-                    catalogueSection(title: "My Voices", tiles: clonedVoiceTiles)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        sectionTitle("Pocket TTS")
-                        Spacer()
-                        Picker("Pocket language", selection: $viewModel.pocketLanguage) {
-                            ForEach(PocketLanguage.allCases) { language in
-                                Text(language.displayName).tag(language)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.appPrimaryText)
-                    }
-                    catalogueRows(pocketTiles)
-                }
-            }
-
-            if shows(.supertonic3) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        sectionTitle("Supertonic-3")
-                        Spacer()
-                        Picker("Supertonic language", selection: $viewModel.supertonicLanguage) {
-                            ForEach(SupertonicLanguage.all) { language in
-                                Text(language.displayName).tag(language)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.appPrimaryText)
-                    }
-                    catalogueRows(supertonicTiles)
-                }
+            ForEach(KokoroVariant.allCases) { variant in
+                catalogueSection(title: variant.displayName, tiles: kokoroTiles(for: variant))
             }
         }
     }
 
     private var shortcutTiles: [VoiceTile] {
-        if shows(.kokoroAne) {
-            let byCode = Dictionary(uniqueKeysWithValues: kokoroTiles(for: .english).map { ($0.name, $0) })
-            return ["af_heart", "af_sky", "am_adam"].compactMap { byCode[$0] }
-        }
-        return Array(allCatalogueTiles.prefix(3))
+        let byCode = Dictionary(uniqueKeysWithValues: kokoroTiles(for: .english).map { ($0.name, $0) })
+        return ["af_heart", "af_sky", "am_adam"].compactMap { byCode[$0] }
     }
 
     private var availableTiles: [VoiceTile] {
@@ -193,54 +150,7 @@ struct VoiceSettingsSheet: View {
     }
 
     private var allCatalogueTiles: [VoiceTile] {
-        var tiles: [VoiceTile] = []
-        if shows(.kokoroAne) {
-            tiles += KokoroVariant.allCases.flatMap(kokoroTiles(for:))
-        }
-        if shows(.pocketTts) {
-            tiles += clonedVoiceTiles
-            tiles += pocketTiles
-        }
-        if shows(.supertonic3) {
-            tiles += supertonicTiles
-        }
-        return tiles
-    }
-
-    private var clonedVoiceTiles: [VoiceTile] {
-        voiceCloneViewModel.clonedVoices.map { voice in
-            VoiceTile(
-                id: "cloned-\(voice.id.uuidString)",
-                voice: Voice(
-                    code: voice.name,
-                    tagline: "Cloned voice",
-                    longDescription: "Your personal cloned voice."),
-                engine: .pocketTts,
-                engineLabel: "My Voice",
-                isAvailable: true)
-        }
-    }
-
-    private var pocketTiles: [VoiceTile] {
-        VoiceCatalog.pocket.map { voice in
-            VoiceTile(
-                id: "pocket-\(viewModel.pocketLanguage.rawValue)-\(voice.code)",
-                voice: voice,
-                engine: .pocketTts,
-                engineLabel: "Pocket TTS · \(viewModel.pocketLanguage.displayName)",
-                isAvailable: packs.isPocketPackDownloaded(viewModel.pocketLanguage))
-        }
-    }
-
-    private var supertonicTiles: [VoiceTile] {
-        VoiceCatalog.supertonic3.map { voice in
-            VoiceTile(
-                id: "supertonic3-\(voice.code)",
-                voice: voice,
-                engine: .supertonic3,
-                engineLabel: "Supertonic-3 · \(viewModel.supertonicLanguage.displayName)",
-                isAvailable: packs.isSupertonic3Downloaded)
-        }
+        KokoroVariant.allCases.flatMap(kokoroTiles(for:))
     }
 
     private func kokoroTiles(for variant: KokoroVariant) -> [VoiceTile] {
@@ -289,68 +199,17 @@ struct VoiceSettingsSheet: View {
     }
 
     private func select(_ tile: VoiceTile) {
-        switch tile.engine {
-        case .kokoroAne:
-            guard let variant = VoiceCatalog.variant(forCode: tile.name) else { return }
-            viewModel.engine = .kokoroAne
-            viewModel.kokoroVariant = variant
-            viewModel.kokoroVoice = tile.name
-            viewModel.selectedClonedVoice = nil
-
-        case .pocketTts:
-            viewModel.engine = .pocketTts
-            if let clonedVoice = voiceCloneViewModel.clonedVoices.first(where: { $0.name == tile.name }) {
-                viewModel.pocketLanguage = clonedVoice.language
-                viewModel.selectedClonedVoice = clonedVoice
-            } else {
-                viewModel.pocketVoice = tile.name
-                viewModel.selectedClonedVoice = nil
-            }
-
-        case .supertonic3:
-            // tile.name is the catalogue's uppercase code ("F1"), but
-            // SupertonicVoice's raw values are lowercase — matching case-
-            // sensitively here always failed, silently returning before
-            // finishSelection ever ran (the "Use Voice" button did nothing).
-            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return }
-            viewModel.engine = .supertonic3
-            viewModel.supertonicVoice = voice
-            viewModel.selectedClonedVoice = nil
-        }
-
-        finishSelection(persistedVoiceName(for: tile))
-    }
-
-    private func persistedVoiceName(for tile: VoiceTile) -> String {
-        guard tile.engine == .supertonic3,
-              let voice = SupertonicVoice(rawValue: tile.name.lowercased())
-        else { return tile.name }
-        return voice.displayName
+        guard let variant = VoiceCatalog.variant(forCode: tile.name) else { return }
+        viewModel.kokoroVariant = variant
+        viewModel.kokoroVoice = tile.name
+        finishSelection(tile.name)
     }
 
     private func isSelected(_ tile: VoiceTile) -> Bool {
         if let selectedVoiceName {
-            return selectedVoiceName == persistedVoiceName(for: tile) || selectedVoiceName == tile.name
+            return selectedVoiceName == tile.name
         }
-
-        switch tile.engine {
-        case .kokoroAne:
-            return viewModel.engine == .kokoroAne && viewModel.kokoroVoice == tile.name
-        case .pocketTts:
-            if let clonedVoice = voiceCloneViewModel.clonedVoices.first(where: { $0.name == tile.name }) {
-                return viewModel.engine == .pocketTts && viewModel.selectedClonedVoice?.id == clonedVoice.id
-            }
-            return viewModel.engine == .pocketTts
-                && viewModel.selectedClonedVoice == nil
-                && viewModel.pocketVoice == tile.name
-        case .supertonic3:
-            guard let voice = SupertonicVoice(rawValue: tile.name.lowercased()) else { return false }
-            return viewModel.engine == .supertonic3 && viewModel.supertonicVoice == voice
-        }
-    }
-
-    private func shows(_ engine: Engine) -> Bool {
-        restrictedEngine == nil || restrictedEngine == engine
+        return viewModel.kokoroVoice == tile.name
     }
 
     private func finishSelection(_ voiceName: String) {
@@ -496,6 +355,5 @@ private struct VoiceLibraryAvatar: View {
     VoiceSettingsSheet(
         viewModel: viewModel,
         packs: viewModel.packs,
-        voiceCloneViewModel: VoiceCloneViewModel(dependencies: dependencies),
         previewPlayer: VoicePreviewPlayer())
 }

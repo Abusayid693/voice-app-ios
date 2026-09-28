@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ## [Unreleased]
 
+### Added
+- **One player, two views** — read-along and the audio player are now two surfaces of a single screen over a single playback engine, switched by a toolbar icon, the way Speechify and ElevenReader work. Switching never interrupts playback: both are branches of one view over one player, so the audio keeps going at the same position. Leaving the reader no longer stops playback either — it hands off to the floating mini player. `ChapterAudioPlayer` was deleted and its read-along surface (word timings, seek, play-from-word) folded into `BookAudioPlayer`'s gapless engine, which brings the audio session, lock-screen transport and background survival read-along never had. Playback position now comes from the audio node's own render clock rather than a wall clock, which also fixes the highlight sliding ahead of the voice after a synthesis stall. See `docs/adr/0013-unified-player.md` (supersedes 0012)
+- Music mode (`Features/Listening/`): continuous, lock-screen-surviving playback of a whole book, separate from read-along — cover art, a whole-book progress bar, a draggable per-page scrubber, and lock-screen/Control Centre transport (play/pause, ±15s, scrub, next/previous page). Reached from the Book Shelf detail modal's headphones button beside "Read this"; minimises to an Apple-Music-style floating mini player above the Explore/Add Books bar. Shares reading position and Reading Stats with the reader, and the two are mutually exclusive — starting one pauses (never stops) the other — but are otherwise fully independent engines; see `docs/adr/0012-two-playback-engines.md`
+
 ### Changed
 - Generate no longer synthesizes audio directly — it saves the text split into chapters (≤2000 words each), and a new chapters list lets each chapter be streamed on demand (any engine) or, for Kokoro, generated and saved as one real file with a proper music-player screen (artwork, scrubber, real elapsed/duration) — see `docs/adr/0010-chapters-and-per-chapter-saved-audio.md` (supersedes ADR 4)
 - Library and Home's Projects row now open the same chapters list for every engine, not just Kokoro
@@ -12,6 +16,8 @@ All notable changes to this project are documented here. Format loosely follows 
 
 ### Removed
 - The old Kokoro multi-track playlist system (`KokoroGeneration`, the chunk-scanning background worker, `ReadAlongPlayerView`, `KokoroGenerationListView`) and the retired `TTSHomeView`/`TextEntrySheet` debug screen, replaced by the chapters flow above
+- Pocket TTS and voice cloning removed entirely — Kokoro-ANE is the only engine. `Engine.pocketTts` is gone with no legacy decode path, so any saved project still naming it will fail to decode
+- The "Generate" feature — persisting a page's audio as one merged WAV + timing manifest for real scrubbing/replay. Streaming (synthesize-and-play, chunk by chunk) is now the only playback path; nothing is written to disk. Removed with it: `ChapterGenerationStore`, `ChapterAudioStore`/`PageAudioStore`, `ChapterAudioManifest`, `WavConcatenator`, the reader header's Generate/progress/cancel control, and `SavedGeneration`'s generated-audio file paths. `updateVoice` no longer deletes a per-project audio directory (there's nothing to delete), and Settings > Storage no longer shows a "Generated chapters" row. See `docs/adr/0010-chapters-and-per-chapter-saved-audio.md`, updated to note the supersession
 
 ## [0.1.0] - 2026-09-12
 

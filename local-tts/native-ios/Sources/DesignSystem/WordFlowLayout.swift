@@ -31,6 +31,18 @@ struct WordFlowLayout: Layout {
     // fixed text can leave it at 0.
     var measurementVersion: Int = 0
 
+    /// Optional: when set, each child's placed frame is recorded here, keyed
+    /// by subview index — how `ChapterPlayerView` resolves a tap point to a
+    /// specific word without attaching a gesture to every one of them, which
+    /// would fight the row's own tap gesture and the ScrollView's drag.
+    /// A reference type so writing to it during layout doesn't invalidate
+    /// the view the way reassigning a `@State` value would — the same idiom
+    /// as `ChapterPlayerView`'s `groupHeightsBox`/`visibleParagraphsBox`.
+    final class FrameBox {
+        var frames: [Int: CGRect] = [:]
+    }
+    var frameBox: FrameBox?
+
     // Measured sizes, so the two passes below don't each independently
     // call `sizeThatFits(.unspecified)` on every subview — that was
     // measuring every word twice per layout pass. How much this saves
@@ -79,10 +91,12 @@ struct WordFlowLayout: Layout {
             let size = size(at: index, subview: subview, cache: cache)
             let breaks = subview[LineBreaksBeforeKey.self]
             if !isFirstInLine, breaks > 0 || lineWidth + size.width > maxWidth {
-                totalHeight += lineHeight + lineGap(breaks: breaks)
+                totalHeight += lineHeight + lineGap(breaks: breaks, lineHeight: lineHeight)
                 lineWidth = 0
                 lineHeight = 0
                 isFirstInLine = true
+            } else if isFirstInLine, breaks >= 2, index > 0 {
+                totalHeight += paragraphGap(lineHeight: size.height)
             }
             lineWidth += (isFirstInLine ? 0 : horizontalSpacing) + size.width
             lineHeight = max(lineHeight, size.height)
@@ -97,25 +111,44 @@ struct WordFlowLayout: Layout {
         var y = bounds.minY
         var lineHeight: CGFloat = 0
         var isFirstInLine = true
+        frameBox?.frames.removeAll(keepingCapacity: true)
         for (index, subview) in subviews.enumerated() {
             let size = size(at: index, subview: subview, cache: cache)
             let breaks = subview[LineBreaksBeforeKey.self]
             if !isFirstInLine, breaks > 0 || x + size.width > bounds.minX + bounds.width {
                 x = bounds.minX
-                y += lineHeight + lineGap(breaks: breaks)
+                y += lineHeight + lineGap(breaks: breaks, lineHeight: lineHeight)
                 lineHeight = 0
                 isFirstInLine = true
+            } else if isFirstInLine, breaks >= 2, index > 0 {
+                // Must mirror sizeThatFits exactly, or the measured height and
+                // the placement disagree and the last line clips.
+                y += paragraphGap(lineHeight: size.height)
             }
             if !isFirstInLine { x += horizontalSpacing }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            // Relative to `bounds.minOrigin`, matching the coordinate space a
+            // tap's `value.location` arrives in when the gesture is attached
+            // to this same layout's frame.
+            frameBox?.frames[index] = CGRect(
+                x: x - bounds.minX, y: y - bounds.minY, width: size.width, height: size.height)
             x += size.width
             lineHeight = max(lineHeight, size.height)
             isFirstInLine = false
         }
     }
 
-    private func lineGap(breaks: Int) -> CGFloat {
-        breaks >= 2 ? verticalSpacing + paragraphExtraSpacing : verticalSpacing
+    private func lineGap(breaks: Int, lineHeight: CGFloat) -> CGFloat {
+        breaks >= 2 ? verticalSpacing + paragraphGap(lineHeight: lineHeight) : verticalSpacing
+    }
+
+    /// A paragraph break is always worth at least one blank line, even when the
+    /// source document set its paragraphs with no extra space at all (an
+    /// indent-only book, for instance). `paragraphExtraSpacing` is a floor
+    /// rather than the value, and the gap tracks the line height so it stays a
+    /// blank line at every reader font size instead of a fixed few points.
+    private func paragraphGap(lineHeight: CGFloat) -> CGFloat {
+        max(paragraphExtraSpacing, lineHeight)
     }
 }
 

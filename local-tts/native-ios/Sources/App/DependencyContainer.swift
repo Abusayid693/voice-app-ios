@@ -1,9 +1,9 @@
-import AVFoundation
 import FluidAudio
+import Foundation
 
-/// Long-lived instances shared across the app's TTS engines — created once
-/// here (not per-View-init) so the CoreML managers and the AVAudioEngine
-/// graph aren't torn down and rebuilt on every SwiftUI re-render.
+/// Long-lived instances shared across the app's Kokoro engines — created
+/// once here (not per-View-init) so the CoreML managers aren't torn down
+/// and rebuilt on every SwiftUI re-render.
 final class DependencyContainer {
     // FluidAudio's own hosted ANE repo only publishes af_heart (a real
     // model-conversion constraint, not a missing download — see
@@ -30,6 +30,18 @@ final class DependencyContainer {
     // downloaded" state for Kokoro.
     let isKokoroPackBundled: Bool
 
+    /// Every Kokoro stage on the ANE or the CPU, and **none on the GPU**.
+    ///
+    /// FluidAudio's default on this OS line puts the noise and tail (iSTFT)
+    /// stages on `.cpuAndGPU`, which is faster — but iOS refuses Metal work to
+    /// a backgrounded app outright (`kIOGPUCommandBufferCallbackError`
+    /// `BackgroundExecutionNotPermitted`), and the failure surfaces as an
+    /// MPSGraph assertion that aborts the process rather than an error we could
+    /// catch. So synthesis while the screen is locked is impossible on the GPU
+    /// route, at any deployment target — the restriction is not version
+    /// specific. This is the routing FluidAudio itself defaults to on OS 27+.
+    static let kokoroComputeUnits: KokoroAneComputeUnits = .aneTailCpu
+
     private static func makeKokoroManager() -> (
         manager: KokoroAneManager, directory: URL?, isBundled: Bool
     ) {
@@ -42,7 +54,7 @@ final class DependencyContainer {
         // the bundle's top level, sibling to the executable).
         let bundledDir = Bundle.main.bundleURL.appendingPathComponent("CustomKokoroModel")
         guard FileManager.default.fileExists(atPath: bundledDir.path) else {
-            return (KokoroAneManager(), nil, false)
+            return (KokoroAneManager(computeUnits: kokoroComputeUnits), nil, false)
         }
         // The app's own .app bundle is read-only at runtime, but CoreML's
         // ANE compilation step needs to write analytics/cache data back
@@ -53,11 +65,15 @@ final class DependencyContainer {
         // our bundled models there once (skipped on later launches) so
         // the same thing works for this custom build.
         guard let writableDir = DependencyContainer.writableCopy(ofBundled: bundledDir) else {
-            return (KokoroAneManager(), nil, false)
+            return (KokoroAneManager(computeUnits: kokoroComputeUnits), nil, false)
         }
         // defaultVoice is mostly moot — TTSViewModel always passes an
         // explicit voice — but af_heart is a sane fallback.
-        return (KokoroAneManager(defaultVoice: "af_heart", directory: writableDir), writableDir, true)
+        return (
+            KokoroAneManager(
+                defaultVoice: "af_heart", directory: writableDir,
+                computeUnits: kokoroComputeUnits),
+            writableDir, true)
     }
 
     init() {
@@ -89,55 +105,21 @@ final class DependencyContainer {
     // Mandarin/Japanese have no bundled fallback like English's
     // CustomKokoroModel/ — FluidAudio's own hosted ANE-zh/ANE-ja repos have
     // everything needed (7-stage chain + G2P frontend assets + voices), so
-    // these are real, network-downloaded managers, same shape as the
-    // Pocket managers below. `directory: nil` lets
+    // these are real, network-downloaded managers. `directory: nil` lets
     // KokoroAneResourceDownloader use its own default cache location.
-    let kokoroMandarinManager = KokoroAneManager(variant: .mandarin, defaultVoice: "zf_001")
+    let kokoroMandarinManager = KokoroAneManager(
+        variant: .mandarin, defaultVoice: "zf_001",
+        computeUnits: DependencyContainer.kokoroComputeUnits)
     // Japanese requires FluidAudio pinned past v0.15.7 (see project.yml) —
     // KokoroAneManager.phonemes(for:) unconditionally threw for this
     // variant before FluidInference/FluidAudio#915 added a real MeCab +
     // Cutlet text frontend.
-    let kokoroJapaneseManager = KokoroAneManager(variant: .japanese, defaultVoice: "jf_alpha")
+    let kokoroJapaneseManager = KokoroAneManager(
+        variant: .japanese, defaultVoice: "jf_alpha",
+        computeUnits: DependencyContainer.kokoroComputeUnits)
 
-    // One manager per language — PocketTtsManager.language is fixed at
-    // init ("to switch languages, create a new manager", per the SDK's own
-    // doc comment), so supporting multiple languages means multiple
-    // instances, not a mutable property on one. All share the audio
-    // engine/node below (that's output-only plumbing, not per-manager
-    // state — only one language ever generates/plays at a time).
-    //
-    // .ane keeps the FlowLM + conditioning prefill on the Neural Engine
-    // (rank-4 flowlm_step_ane/cond_prefill_ane) instead of GPU — the SDK
-    // defaults to .gpu, but that default is benchmarked on M-series Macs;
-    // .ane is documented as the iOS-appropriate placement. Precision is
-    // ignored under .ane (those variants are fp16-only).
-    let pocketManagers: [PocketLanguage: PocketTtsManager] = Dictionary(
-        uniqueKeysWithValues: PocketLanguage.allCases.map {
-            ($0, PocketTtsManager(language: $0.sdkLanguage, placement: .ane))
-        })
-
-    // PocketTTS streams 80ms frames rather than one complete WAV, so
-    // playback goes through AVAudioEngine/AVAudioPlayerNode (which accepts
-    // buffers incrementally) instead of AVAudioPlayer (which needs the
-    // whole file up front).
-    let audioEngine = AVAudioEngine()
-    let playerNode = AVAudioPlayerNode()
-    let streamFormat = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32,
-        sampleRate: Double(PocketTtsConstants.audioSampleRate),
-        channels: 1,
-        interleaved: false)!
-
-    // Which VectorEstimator build to download and run. The SDK's own
-    // recommended iOS default (ANE-bucketed int4). Whoever builds
-    // `Supertonic3EngineService` must hand it this same value — it derives
-    // the download variant from it, and the two must request the same files.
-    static let supertonic3VectorEstimator: Supertonic3VectorEstimator = .default
-
-    // A single instance, unlike the per-variant/per-language Kokoro/Pocket
-    // managers above — Supertonic-3's language and voice style are both
-    // passed per `synthesize()` call, not fixed at init, so one manager
-    // serves every language/voice combination.
-    let supertonic3Manager = Supertonic3Manager(
-        vectorEstimator: DependencyContainer.supertonic3VectorEstimator)
+    // Lazy so opening/creating the SwiftData store doesn't tax cold
+    // launch — only constructed on first actual use (the reader's first
+    // playback of this app run). See ReadingStatsStore's own doc comment.
+    lazy var readingStatsStore = ReadingStatsStore()
 }

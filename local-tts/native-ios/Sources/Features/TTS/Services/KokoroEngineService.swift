@@ -32,7 +32,7 @@ final class KokoroEngineService {
     /// Returns the resolved repo directory — English already knows its own
     /// (the bundled `directory`), but Mandarin/Japanese don't until this
     /// actually runs, and Settings' Storage page needs the *exact*
-    /// directory (not FluidAudio's whole shared cache dir, which Pocket
+    /// directory (not FluidAudio's whole shared cache dir, which other
     /// TTS's languages also share) to report each pack's own size without
     /// double-counting.
     @discardableResult
@@ -164,8 +164,7 @@ final class KokoroEngineService {
     private var preloadedVoice: String?
 
     /// Ensures models are downloaded, initialized, and this voice's pack is
-    /// loaded — deduped so two concurrent callers (e.g. `WriteTextView`'s
-    /// warm-up and a chapter Generate tapped moments later) never run
+    /// loaded — deduped so two concurrent reader requests never run
     /// `ensureModels()`/`initialize()` twice at once. Safe to call
     /// repeatedly; a second call for the same already-loaded voice returns
     /// immediately once the in-flight task finishes.
