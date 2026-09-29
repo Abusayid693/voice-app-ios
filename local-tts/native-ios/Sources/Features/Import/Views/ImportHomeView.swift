@@ -38,6 +38,7 @@ struct ImportHomeView: View {
         NavigationStack {
             BookShelfView(
                 library: libraryViewModel,
+                importShelf: app.pdfImports.shelfStore,
                 pdfImports: app.pdfImports,
                 readingStats: app.readingStats,
                 isDetailPresented: $isBookDetailPresented,

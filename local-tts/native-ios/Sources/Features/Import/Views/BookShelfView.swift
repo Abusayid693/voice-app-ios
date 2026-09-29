@@ -37,8 +37,9 @@ struct ShelfTopBlur: View {
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
-    // Passed through to a narrow child observer so per-page import progress
-    // does not invalidate the full shelf and its cover geometry.
+    /// Publishes structural additions/removals only. Each import tile observes
+    /// its own progress object so page updates do not invalidate shelf geometry.
+    @ObservedObject var importShelf: PDFImportShelfStore
     let pdfImports: PDFImportManager
     let readingStats: ReadingStatsStore
     @Binding var isDetailPresented: Bool
@@ -97,15 +98,37 @@ struct BookShelfView: View {
     static let headerControlsInset: CGFloat = 48
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var books: [SavedGenerationSummary] {
+    private var completedBooks: [SavedGenerationSummary] {
         library.savedGenerations
             .filter { $0.source == .pdf }
-            .sorted { $0.createdAt > $1.createdAt }
     }
 
-    private var shelfRows: [[SavedGenerationSummary]] {
-        var rows = stride(from: 0, to: books.count, by: 5).map { start in
-            Array(books[start..<min(start + 5, books.count)])
+    private var shelfEntries: [ShelfEntry] {
+        let legacy = completedBooks
+            .filter { $0.shelfOrder == nil }
+            .sorted { $0.createdAt > $1.createdAt }
+            .map { ShelfEntry(saved: $0, importing: nil) }
+        let savedByID = Dictionary(uniqueKeysWithValues: completedBooks.map { ($0.id, $0) })
+        var orderedByID: [UUID: ShelfEntry] = [:]
+
+        for book in completedBooks where book.shelfOrder != nil {
+            orderedByID[book.id] = ShelfEntry(saved: book, importing: nil)
+        }
+        for item in importShelf.items {
+            orderedByID[item.id] = ShelfEntry(saved: savedByID[item.id], importing: item)
+        }
+
+        let ordered = orderedByID.values.sorted {
+            if $0.shelfOrder == $1.shelfOrder { return $0.createdAt < $1.createdAt }
+            return $0.shelfOrder < $1.shelfOrder
+        }
+        return legacy + ordered
+    }
+
+    private var shelfRows: [[ShelfEntry]] {
+        let entries = shelfEntries
+        var rows = stride(from: 0, to: entries.count, by: 5).map { start in
+            Array(entries[start..<min(start + 5, entries.count)])
         }
         while rows.count < 3 { rows.append([]) }
         return rows
@@ -118,9 +141,7 @@ struct BookShelfView: View {
                     VStack(spacing: 0) {
                         shelfHeader
 
-                        ShelfImportJobsSection(manager: pdfImports)
-
-                        if books.isEmpty {
+                        if shelfEntries.isEmpty {
                             emptyState
                                 .frame(minHeight: max(0, geometry.size.height - 100))
                         } else {
@@ -235,7 +256,7 @@ struct BookShelfView: View {
 
     private var shelfHeader: some View {
         ZStack {
-            ShelfHeaderBackdrop(books: Array(books.prefix(3)))
+            ShelfHeaderBackdrop(books: Array(completedBooks.prefix(3)))
                 // The decorative canvas is intentionally larger than the
                 // header's layout footprint, so its soft colour can extend
                 // behind the shelf without moving the title or shelf rows.
@@ -248,7 +269,7 @@ struct BookShelfView: View {
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("\(books.count) \(books.count == 1 ? "book" : "books")")
+                Text("\(shelfEntries.count) \(shelfEntries.count == 1 ? "book" : "books")")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(BookShelfPalette.secondaryText)
             }
@@ -268,7 +289,7 @@ struct BookShelfView: View {
         return LazyVStack(spacing: 24) {
             ForEach(Array(shelfRows.enumerated()), id: \.offset) { index, row in
                 BookShelfRow(
-                    books: row,
+                    entries: row,
                     coverSize: coverSize,
                     spacing: coverSpacing,
                     shelfWidth: shelfWidth,
@@ -287,6 +308,9 @@ struct BookShelfView: View {
                     arrangeLiftOffset: arrangeLiftOffset,
                     previewDisplayMode: previewDisplayMode,
                     coverFacedBookID: detailShowsCoverFace ? selectedBook?.id : nil,
+                    onCancelImport: pdfImports.cancel(id:),
+                    onRetryImport: pdfImports.retry(id:),
+                    onDeleteImport: pdfImports.delete(id:),
                     onSelect: { book in presentDetail(for: book) },
                     onLongPress: { book in beginArranging(book) })
             }
@@ -654,29 +678,6 @@ private struct ShelfBottomBlur: View {
     }
 }
 
-/// The import manager publishes page-by-page progress. Keeping that
-/// observation in this child avoids rebuilding the shelf's measured covers.
-private struct ShelfImportJobsSection: View {
-    @ObservedObject var manager: PDFImportManager
-
-    private var visibleJobs: [PDFImportJob] {
-        manager.jobs.filter { $0.phase != .completed && $0.phase != .cancelled }
-    }
-
-    @ViewBuilder
-    var body: some View {
-        if !visibleJobs.isEmpty {
-            VStack(spacing: 10) {
-                ForEach(visibleJobs.prefix(2)) { job in
-                    PDFImportJobCard(job: job, manager: manager)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-        }
-    }
-}
-
 /// A restrained, decorative echo of the newest covers. It is deliberately
 /// blurred enough to read as colour and depth behind the Shelf title rather
 /// than as another actionable set of books.
@@ -715,8 +716,18 @@ private struct ShelfHeaderBackdrop: View {
     }
 }
 
+private struct ShelfEntry: Identifiable {
+    let saved: SavedGenerationSummary?
+    let importing: PDFImportShelfItem?
+
+    var id: UUID { saved?.id ?? importing!.id }
+    var title: String { saved?.title ?? importing!.title }
+    var createdAt: Date { saved?.createdAt ?? importing!.createdAt }
+    var shelfOrder: Int { saved?.shelfOrder ?? importing?.shelfOrder ?? .max }
+}
+
 private struct BookShelfRow: View {
-    let books: [SavedGenerationSummary]
+    let entries: [ShelfEntry]
     let coverSize: CGSize
     let spacing: CGFloat
     let shelfWidth: CGFloat
@@ -731,6 +742,9 @@ private struct BookShelfRow: View {
     let previewDisplayMode: ShelfDisplayMode?
     /// Forced face-out while the detail modal's hero owns this book.
     let coverFacedBookID: UUID?
+    let onCancelImport: (UUID) -> Void
+    let onRetryImport: (UUID) -> Void
+    let onDeleteImport: (UUID) -> Void
     let onSelect: (SavedGenerationSummary) -> Void
     let onLongPress: (SavedGenerationSummary) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -739,8 +753,8 @@ private struct BookShelfRow: View {
         ZStack(alignment: .bottom) {
             ScrollView(.horizontal) {
                 HStack(alignment: .bottom, spacing: spacing) {
-                    ForEach(books) { book in
-                        bookItem(for: book)
+                    ForEach(entries) { entry in
+                        entryItem(for: entry)
                     }
                 }
                 // Extra headroom above the covers equal to liftDistance —
@@ -773,6 +787,22 @@ private struct BookShelfRow: View {
     /// expression this exceeded the type-checker's budget outright
     /// ("unable to type-check this expression in reasonable time"). Each
     /// piece here stays trivially inferrable.
+    @ViewBuilder
+    private func entryItem(for entry: ShelfEntry) -> some View {
+        if let importing = entry.importing {
+            PDFImportShelfCover(
+                item: importing,
+                size: coverSize,
+                liftDistance: 15,
+                onCancel: { onCancelImport(importing.id) },
+                onRetry: { onRetryImport(importing.id) },
+                onDelete: { onDeleteImport(importing.id) })
+            .zIndex(1)
+        } else if let book = entry.saved {
+            bookItem(for: book)
+        }
+    }
+
     private func bookItem(for book: SavedGenerationSummary) -> some View {
         interactiveCover(for: book)
             // HStack siblings paint in order, so a book whose artwork
@@ -1386,6 +1416,7 @@ private struct GlassBookShelf: View {
     return NavigationStack {
         BookShelfView(
             library: app.library,
+            importShelf: app.pdfImports.shelfStore,
             pdfImports: app.pdfImports,
             readingStats: app.readingStats,
             isDetailPresented: .constant(false),

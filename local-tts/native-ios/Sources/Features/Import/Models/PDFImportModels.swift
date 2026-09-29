@@ -44,8 +44,16 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
     var completedPages: Int
     var errorMessage: String?
     var projectID: UUID?
+    /// Stable position reserved when the picker returns. Optional so jobs
+    /// created before inline shelf imports remain decodable.
+    var shelfOrder: Int?
+    /// Stage-weighted progress that never moves backwards across resumes.
+    var overallProgress: Double?
 
-    init(id: UUID = UUID(), sourceFileName: String, engine: Engine, voiceName: String) {
+    init(
+        id: UUID = UUID(), sourceFileName: String, engine: Engine, voiceName: String,
+        shelfOrder: Int? = nil
+    ) {
         self.id = id
         self.sourceFileName = sourceFileName
         self.engine = engine
@@ -55,9 +63,14 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
         self.phase = .queued
         self.totalPages = 0
         self.completedPages = 0
+        self.shelfOrder = shelfOrder
+        self.overallProgress = 0
     }
 
     var progress: Double {
+        if let overallProgress {
+            return min(max(overallProgress, 0), 1)
+        }
         guard totalPages > 0 else { return phase == .completed ? 1 : 0 }
         return min(1, Double(completedPages) / Double(totalPages))
     }
@@ -239,6 +252,8 @@ struct PDFProcessingProgress: Sendable {
     let phase: PDFImportPhase
     let totalPages: Int
     let completedPages: Int
+    let overallProgress: Double
+    let coverAvailable: Bool
 }
 
 enum PDFImportError: LocalizedError {

@@ -24,8 +24,16 @@ actor PDFProcessingActor {
         guard pageCount > 0 else { throw PDFImportError.noTextLayer }
 
         await progress(PDFProcessingProgress(
-            phase: .validating, totalPages: pageCount, completedPages: 0))
+            phase: .validating, totalPages: pageCount, completedPages: 0,
+            overallProgress: 0.02, coverAvailable: false))
         try Task.checkCancellation()
+
+        // Render the shelf artwork before text validation. A rejected PDF can
+        // still keep the recognizable cover beside its retry/delete controls.
+        let coverURL = makeCoverThumbnail(document: document, job: job)
+        await progress(PDFProcessingProgress(
+            phase: .validating, totalPages: pageCount, completedPages: 0,
+            overallProgress: 0.04, coverAvailable: coverURL != nil))
 
         let sampleIndexes = distributedSampleIndexes(pageCount: pageCount, maximum: 10)
         let hasTextLayer = sampleIndexes.contains { index in
@@ -33,12 +41,6 @@ actor PDFProcessingActor {
             return !extractor.extractPage(page, index: index).lines.isEmpty
         }
         guard hasTextLayer else { throw PDFImportError.noTextLayer }
-
-        // This is intentionally best-effort: a malformed thumbnail must not
-        // prevent a text-layer PDF from becoming readable. Once present, the
-        // image survives retries in the import job until Library copies it
-        // into the completed project's own directory.
-        let coverURL = makeCoverThumbnail(document: document, job: job)
 
         try FileManager.default.createDirectory(
             at: job.pagesDirectory, withIntermediateDirectories: true)
@@ -57,11 +59,14 @@ actor PDFProcessingActor {
                 completed += 1
             }
             await progress(PDFProcessingProgress(
-                phase: .extracting, totalPages: pageCount, completedPages: completed))
+                phase: .extracting, totalPages: pageCount, completedPages: completed,
+                overallProgress: 0.04 + 0.46 * Double(completed) / Double(pageCount),
+                coverAvailable: coverURL != nil))
         }
 
         await progress(PDFProcessingProgress(
-            phase: .preparingPages, totalPages: pageCount, completedPages: 0))
+            phase: .preparingPages, totalPages: pageCount, completedPages: 0,
+            overallProgress: 0.50, coverAvailable: coverURL != nil))
         try Task.checkCancellation()
 
         // Typography first: the header/footer pass needs the body size to tell a
@@ -108,12 +113,15 @@ actor PDFProcessingActor {
             }
             await progress(PDFProcessingProgress(
                 phase: .preparingPages, totalPages: pageCount,
-                completedPages: pageIndex + 1))
+                completedPages: pageIndex + 1,
+                overallProgress: 0.50 + 0.47 * Double(pageIndex + 1) / Double(pageCount),
+                coverAvailable: coverURL != nil))
         }
 
         guard alphanumericCount >= 500 else { throw PDFImportError.insufficientText }
         await progress(PDFProcessingProgress(
-            phase: .finalizing, totalPages: pageCount, completedPages: pageCount))
+            phase: .finalizing, totalPages: pageCount, completedPages: pageCount,
+            overallProgress: 0.99, coverAvailable: coverURL != nil))
         return PDFImportResult(
             title: job.sourceFileName,
             pagesDirectory: job.readerPagesDirectory,

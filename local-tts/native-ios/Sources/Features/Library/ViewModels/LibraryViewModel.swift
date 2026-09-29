@@ -24,17 +24,34 @@ final class LibraryViewModel: ObservableObject {
     /// Copies finalized PDF page files without decoding the full document.
     @discardableResult
     func saveImportedPDF(
-        title: String, pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
+        id: UUID, title: String, createdAt: Date, shelfOrder: Int?,
+        pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
         engine: Engine, voiceName: String
     ) -> UUID? {
         guard pageCount > 0 else { return nil }
-        let id = UUID()
+        if let existing = project(for: id) {
+            guard existing.source == .pdf else { return nil }
+            savedGenerations.removeAll { $0.id == id }
+            savedGenerations.append(existing.summary)
+            savedGenerations.sort { $0.createdAt > $1.createdAt }
+            Self.persistIndex(savedGenerations)
+            return id
+        }
+
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: Date(), pageCount: pageCount, source: .pdf)
+            createdAt: createdAt, pageCount: pageCount, source: .pdf,
+            shelfOrder: shelfOrder)
+        let projectDirectory = SavedGeneration.projectDirectory(id: id)
         let destination = SavedGeneration.projectPagesDirectory(id: id)
 
         do {
+            // A terminated finalization can leave copied files before the
+            // metadata commit. Rebuild that incomplete destination in place.
+            if FileManager.default.fileExists(atPath: projectDirectory.path) {
+                try FileManager.default.removeItem(at: projectDirectory)
+            }
+            try? FileManager.default.removeItem(at: SavedGeneration.projectFileURL(id: id))
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: pagesDirectory, to: destination)
@@ -54,7 +71,7 @@ final class LibraryViewModel: ObservableObject {
             try persist(entry)
             return id
         } catch {
-            try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+            try? FileManager.default.removeItem(at: projectDirectory)
             try? FileManager.default.removeItem(at: SavedGeneration.projectFileURL(id: id))
             return nil
         }
