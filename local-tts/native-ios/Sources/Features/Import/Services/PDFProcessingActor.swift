@@ -76,9 +76,17 @@ actor PDFProcessingActor {
         let headerFooter = try headerFooterRules(
             job: job, pageCount: pageCount, bodyFontSize: bodyFontSize)
         let repeated = headerFooter.repeated
-        // Built only for a document measured as damaged; every other book skips
-        // the dictionary entirely and cannot be rewritten by it.
-        let repairer = typography.dropsLigatures ? LigatureRepairer() : nil
+        // Resolved once for the whole document, and only for one measured as
+        // damaged — every other book never reaches the dictionary and so cannot
+        // be rewritten by it. Planning is `@MainActor` (`UITextChecker` is), so
+        // doing it here keeps that hop off the per-page path entirely.
+        let repairPlan: LigatureRepairPlan
+        if typography.dropsLigatures {
+            repairPlan = await LigatureRepairPlanner.plan(
+                forLines: documentLineTexts(job: job, pageCount: pageCount))
+        } else {
+            repairPlan = .empty
+        }
         try FileManager.default.createDirectory(
             at: job.readerPagesDirectory, withIntermediateDirectories: true)
 
@@ -101,7 +109,7 @@ actor PDFProcessingActor {
                 let paragraphs = content.map {
                     makeParagraphs(
                         from: $0, excluding: repeated, folioOffset: headerFooter.folioOffset,
-                        bodyFontSize: bodyFontSize, repairer: repairer)
+                        bodyFontSize: bodyFontSize, repairPlan: repairPlan)
                 } ?? []
                 readerPage = makeReaderPage(
                     at: pageIndex, from: paragraphs,
@@ -285,7 +293,7 @@ actor PDFProcessingActor {
     /// junk stays here; deciding how lines group into paragraphs does not.
     private func makeParagraphs(
         from page: PDFPageContent, excluding repeated: Set<String>, folioOffset: Int?,
-        bodyFontSize: Double, repairer: LigatureRepairer?
+        bodyFontSize: Double, repairPlan: LigatureRepairPlan
     ) -> [PDFParagraph] {
         // Filtering runs on the raw text: `repeated` holds signatures built from
         // it, so repairing first would stop them matching.
@@ -301,14 +309,12 @@ actor PDFProcessingActor {
         // `lineSpans`, `styledRanges` and `lineRects` are all character positions
         // derived downstream of this text, so repairing any later would shift
         // them out from under the reader.
-        let lines = repairer.map { repairer in
-            kept.map { line in
-                PDFTextFragment(
-                    text: repairer.repaired(line.text), pageIndex: line.pageIndex,
-                    bounds: line.bounds, fontName: line.fontName, fontSize: line.fontSize,
-                    weight: line.weight, fontClass: line.fontClass)
-            }
-        } ?? kept
+        let lines = repairPlan.isEmpty ? kept : kept.map { line in
+            PDFTextFragment(
+                text: repairPlan.repaired(line.text), pageIndex: line.pageIndex,
+                bounds: line.bounds, fontName: line.fontName, fontSize: line.fontSize,
+                weight: line.weight, fontClass: line.fontClass)
+        }
         return assembler.paragraphs(
             from: lines, pageIndex: page.pageIndex, pageWidth: page.pageWidth,
             documentBodyFontSize: bodyFontSize)
@@ -336,33 +342,52 @@ actor PDFProcessingActor {
     /// Whether this document's text layer has lost its f-ligatures — see
     /// `LigatureRepairer` for what that means and why it happens.
     ///
-    /// Decisive because the substitution is all-or-nothing: a font that ligates
-    /// does it everywhere, so a damaged book contains essentially *no* "fi",
-    /// "ff" or "fl" pairs, where English of that length contains many thousands.
-    /// A rate rather than a flat zero because books mix fonts, and a sans
-    /// heading face that does not ligate still contributes a few real pairs. The
-    /// bar sits roughly fifty times below English's natural rate, so nothing but
-    /// real damage reaches it.
+    /// Every extracted line's text, in page order — what the repair planner
+    /// needs to see the whole document's vocabulary and its adjacent pairs at
+    /// once. Read only for a document already measured as damaged.
+    private func documentLineTexts(job: PDFImportJob, pageCount: Int) -> [String] {
+        var texts: [String] = []
+        for pageIndex in 0..<pageCount {
+            guard let page = loadPage(job: job, index: pageIndex) else { continue }
+            texts.append(contentsOf: page.lines.map(\.text))
+        }
+        return texts
+    }
+
+    /// Measured as a *share of this document's own* "f followed by a letter"
+    /// occurrences, not as a rate against its length.
     ///
-    /// Only ASCII letters are counted, which is what keeps a Mandarin or
-    /// Japanese book out of this: such a book has no "fi" pairs either, and
-    /// would otherwise look damaged to a rule that counted every letter.
+    /// That normalisation is the whole point. Substitution only happens where
+    /// the font ligates, so a damaged book still emits real "fi"/"ff"/"fl" from
+    /// all-caps headings and italic runs, which do not ligate. An absolute rate
+    /// has to sit low enough to ignore those stragglers, and at that point it is
+    /// low enough that any book with a few dozen of them reads as healthy — the
+    /// first version of this check failed exactly there and never fired.
+    ///
+    /// A ratio cancels all of it: a damaged book keeps every "fo"/"fa"/"fe"/"fr"
+    /// pair and loses only the three that ligate, so the share collapses while
+    /// document length, language mix and font mix all divide out. Measured over
+    /// ~98,000 characters of English prose the share is **0.29**; the bar here
+    /// sits roughly three times below that.
     private func dropsLigatures(across lines: [PDFTextFragment]) -> Bool {
-        var letters = 0
-        var pairs = 0
+        var followedByLetter = 0
+        var ligating = 0
         for line in lines {
             let characters = Array(line.text.lowercased())
             for (index, character) in characters.enumerated()
-            where character.isLetter && character.isASCII {
-                letters += 1
-                guard character == "f", index + 1 < characters.count else { continue }
-                if "ifl".contains(characters[index + 1]) { pairs += 1 }
+            where character == "f" && index + 1 < characters.count {
+                let next = characters[index + 1]
+                guard next.isLetter, next.isASCII else { continue }
+                followedByLetter += 1
+                if "ifl".contains(next) { ligating += 1 }
             }
         }
-        // Too little text to judge; assume healthy rather than guess, since a
-        // wrong guess here runs every page through a dictionary that rewrites it.
-        guard letters >= 20_000 else { return false }
-        return Double(pairs) / Double(letters) < 0.0001
+        // Too little English to judge — which also excludes Mandarin and
+        // Japanese books, whose f-pair count is near zero for unrelated reasons.
+        // Assume healthy rather than guess: a wrong guess here runs every page
+        // through a dictionary that rewrites it.
+        guard followedByLetter >= 200 else { return false }
+        return Double(ligating) / Double(followedByLetter) < 0.10
     }
 
     /// Joins the page's paragraphs into one string, recording where the styled
