@@ -39,15 +39,16 @@ struct CustomTabBar: View {
 
     var body: some View {
         // Add Books centers on the bar's own full width, not on the space
-        // left over after Explore — a plain HStack with a Spacer either side
-        // centers within the *remaining* space, which Explore's own width
-        // skews off the bar's true midpoint. Overlaying Explore instead
-        // (pinned leading) leaves this frame's own centering unaffected by it.
+        // left over after Explore. Keep Explore in the same ZStack content
+        // (rather than a view overlay) so SwiftUI retains and moves it with
+        // Add Books when the complete bar exits on a pushed route.
         ZStack {
             addBooksButton
+
+            exploreMenu
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .leading) { exploreMenu }
         .padding(.horizontal, 19)
         .padding(.top, 9)
         .padding(.bottom, max(safeAreaBottom - 31, 8))

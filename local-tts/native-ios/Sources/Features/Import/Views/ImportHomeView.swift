@@ -18,7 +18,6 @@ struct ImportHomeView: View {
     let onAddBooks: () -> Void
 
     @State private var isSettingsPresented = false
-    @State private var isAvatarPickerPresented = false
     @State private var openProject: SavedGeneration?
     /// Which surface the pending push should open on — nil means "use the
     /// reader's stored preference".
@@ -31,8 +30,6 @@ struct ImportHomeView: View {
     // Seeded with 7 zero-activity days so the strip never flashes empty
     // before the real one-shot load below finishes.
     @State private var recentActivity: [DayActivity] = ImportHomeView.emptyRecentDays()
-    @AppStorage("bookShelf.selectedAvatar") private var selectedAvatarRawValue = ShelfAvatar.first.rawValue
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
@@ -56,8 +53,8 @@ struct ImportHomeView: View {
             // Home draws its own header controls instead of using the
             // navigation bar: a `ToolbarItem` renders through nav-bar
             // chrome (Liquid Glass on iOS 26, plus bar-button padding
-            // around custom content), which neither the flat icon nor the
-            // edge-to-edge avatar wants. Overlaid rather than inset, so
+            // around custom content), which these flat controls don't want.
+            // Overlaid rather than inset, so
             // the shelf backdrop still runs to the top of the screen.
             .toolbar(.hidden, for: .navigationBar)
             // Applied before the controls so it sits under them: shelf rows
@@ -67,9 +64,6 @@ struct ImportHomeView: View {
                 ShelfTopBlur().ignoresSafeArea(edges: .top)
             }
             .overlay(alignment: .top) { headerControls }
-            .sheet(isPresented: $isAvatarPickerPresented) {
-                ShelfAvatarPickerSheet(selection: selectedAvatarBinding)
-            }
             .navigationDestination(item: $openProject) { project in
                 ChapterPlayerView(
                     project: project,
@@ -150,30 +144,17 @@ struct ImportHomeView: View {
         }
     }
 
-    /// Ghost controls floating over the shelf — no background of their own.
-    /// Each keeps a 44pt tap target while its padding is set so the *visible*
-    /// icon lands on the same 16pt margin a navigation bar would have used;
-    /// that's why the two sides differ (the icons aren't the same size).
+    /// Ghost controls floating over the shelf with 44pt tap targets.
     private var headerControls: some View {
         HStack(alignment: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                settingsButton
-                recentActivityDots
-                    // Grid is 28pt wide (3 × 6pt + 2 × 5pt gaps), plus its
-                    // own 6pt tap-target padding on each side = 40pt total —
-                    // indent it to sit centered under the 44pt icon above.
-                    .padding(.leading, (44 - 40) / 2)
-            }
-            .padding(.leading, 16 - (44 - 25.3) / 2)
+            settingsButton
+                .padding(.leading, 16 - (44 - 25.3) / 2)
             Spacer(minLength: 0)
-            shelfAvatarButton
-                .padding(.trailing, 16 - (44 - 36.8) / 2)
+            recentActivityDots
+                // The visible 28pt grid lands on the standard 16pt margin.
+                .padding(.trailing, 10)
         }
         .padding(.top, 4)
-        // These are page content now, not bar chrome, so they fade with the
-        // book detail rather than floating above it merely disabled.
-        .opacity(isBookDetailPresented ? 0 : 1)
-        .animation(.easeInOut(duration: 0.2), value: isBookDetailPresented)
     }
 
     /// A 7-dot grid for the current week (Monday first), 3 per row wrapping
@@ -262,11 +243,11 @@ struct ImportHomeView: View {
         Button {
             isSettingsPresented = true
         } label: {
-            Hugeicons.menu01.image()
+            Hugeicons.menu02.image()
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundStyle(BookShelfPalette.primaryText)
+                .foregroundStyle(BookShelfPalette.primaryText.opacity(0.7))
                 .frame(width: 25.3, height: 25.3)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -274,36 +255,6 @@ struct ImportHomeView: View {
         .buttonStyle(.plain)
         .disabled(isBookDetailPresented)
         .accessibilityLabel("Settings")
-    }
-
-    private var selectedAvatar: ShelfAvatar {
-        ShelfAvatar(rawValue: selectedAvatarRawValue) ?? .first
-    }
-
-    private var selectedAvatarBinding: Binding<ShelfAvatar> {
-        Binding(
-            get: { selectedAvatar },
-            set: { selectedAvatarRawValue = $0.rawValue })
-    }
-
-    @ViewBuilder
-    private var shelfAvatarButton: some View {
-        if let url = selectedAvatar.videoURL {
-            Button {
-                isAvatarPickerPresented = true
-            } label: {
-                LoopingVideoPlayerView(url: url, isPaused: reduceMotion)
-                    .frame(width: 36.8, height: 36.8)
-                    .clipShape(Circle())
-                    .background(BookShelfPalette.background, in: Circle())
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(isBookDetailPresented)
-            .accessibilityLabel("Change avatar")
-            .accessibilityHint("Opens a list of avatars to choose from")
-        }
     }
 }
 

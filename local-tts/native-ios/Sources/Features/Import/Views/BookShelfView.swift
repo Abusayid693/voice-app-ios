@@ -268,7 +268,7 @@ struct BookShelfView: View {
 
             VStack(spacing: 3) {
                 Text("My Shelf")
-                    .font(.custom("Didot-Bold", size: 30, relativeTo: .title))
+                    .font(.custom("SnellRoundhand-Bold", size: 36, relativeTo: .title))
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .accessibilityAddTraits(.isHeader)
 
