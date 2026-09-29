@@ -64,9 +64,13 @@ actor PDFProcessingActor {
             phase: .preparingPages, totalPages: pageCount, completedPages: 0))
         try Task.checkCancellation()
 
-        let repeated = try repeatedHeaderFooterLines(job: job, pageCount: pageCount)
+        // Typography first: the header/footer pass needs the body size to tell a
+        // running head from a genuine recurring heading.
         let typography = documentTypography(job: job, pageCount: pageCount)
         let bodyFontSize = typography.bodyFontSize
+        let headerFooter = try headerFooterRules(
+            job: job, pageCount: pageCount, bodyFontSize: bodyFontSize)
+        let repeated = headerFooter.repeated
         try FileManager.default.createDirectory(
             at: job.readerPagesDirectory, withIntermediateDirectories: true)
 
@@ -87,7 +91,9 @@ actor PDFProcessingActor {
             } else {
                 let content = loadPage(job: job, index: pageIndex)
                 let paragraphs = content.map {
-                    makeParagraphs(from: $0, excluding: repeated, bodyFontSize: bodyFontSize)
+                    makeParagraphs(
+                        from: $0, excluding: repeated, folioOffset: headerFooter.folioOffset,
+                        bodyFontSize: bodyFontSize)
                 } ?? []
                 readerPage = makeReaderPage(
                     at: pageIndex, from: paragraphs,
@@ -166,20 +172,90 @@ actor PDFProcessingActor {
         return try? JSONDecoder().decode(PDFPageContent.self, from: data)
     }
 
-    private func repeatedHeaderFooterLines(
-        job: PDFImportJob, pageCount: Int
-    ) throws -> Set<String> {
+    /// The two things one pass over the header/footer bands can learn: which
+    /// line texts recur there, and what the printed folio's offset from the
+    /// physical page index is.
+    ///
+    /// **Recurrence is counted, not proportion.** A running head is only
+    /// document-wide on the side of the spread carrying the *book* title; the
+    /// other side usually carries the *chapter* title, which changes at every
+    /// chapter and so covers a few pages out of hundreds. Requiring a share of
+    /// the whole document could never catch that side, and it is the side that
+    /// most annoys a listener, because the chapter title is then read aloud at
+    /// the top of every page of the chapter.
+    ///
+    /// Three pages is enough because the *band* is already doing most of the
+    /// work: prose does not repeat a line verbatim at the very top or bottom of
+    /// three separate pages. What the low count does risk is deleting a genuine
+    /// recurring heading, so a line larger than the document's body text is
+    /// never counted — running heads are set at or below body size, while a real
+    /// chapter title is set above it.
+    ///
+    /// The folio keeps a much higher bar (a true majority): it is a single
+    /// number applied to every page, so a wrong offset would quietly strip a
+    /// real line from a great many pages.
+    private func headerFooterRules(
+        job: PDFImportJob, pageCount: Int, bodyFontSize: Double
+    ) throws -> (repeated: Set<String>, folioOffset: Int?) {
         var counts: [String: Set<Int>] = [:]
+        var folioOffsets: [Int: Set<Int>] = [:]
         for pageIndex in 0..<pageCount {
             guard let page = loadPage(job: job, index: pageIndex) else { continue }
             for line in page.lines where isInHeaderOrFooter(line, pageHeight: page.pageHeight) {
                 let signature = lineSignature(line.text)
-                guard signature.count >= 3, !signature.allSatisfy(\.isNumber) else { continue }
-                counts[signature, default: []].insert(pageIndex)
+                let isBodySized = bodyFontSize <= 0 || line.fontSize <= bodyFontSize * 1.05
+                if signature.count >= 3, !signature.allSatisfy(\.isNumber), isBodySized {
+                    counts[signature, default: []].insert(pageIndex)
+                }
+                for number in integers(in: line.text) {
+                    folioOffsets[number - pageIndex, default: []].insert(pageIndex)
+                }
             }
         }
-        let threshold = max(3, Int(ceil(Double(pageCount) * 0.35)))
-        return Set(counts.compactMap { $0.value.count >= threshold ? $0.key : nil })
+        let repeated = Set(counts.compactMap { $0.value.count >= 3 ? $0.key : nil })
+        // Front matter numbered in roman numerals, inserted plates and the like
+        // all break the run, so this is a majority signal rather than a
+        // universal one.
+        let folioThreshold = max(3, Int(ceil(Double(pageCount) * 0.35)))
+        let folio = folioOffsets.max { $0.value.count < $1.value.count }
+        return (repeated, (folio?.value.count ?? 0) >= folioThreshold ? folio?.key : nil)
+    }
+
+    /// Whether this line is one of the recurring band lines `headerFooterRules`
+    /// collected — tested against the *same* conditions that collected it, not
+    /// against its text alone.
+    ///
+    /// The band and size conditions have to be repeated here or the rule reaches
+    /// too far: a chapter's running head and that chapter's own opening title
+    /// are the same words, so matching on signature alone deletes the real title
+    /// along with the head. What separates them is exactly what separated them
+    /// at collection time — the real title is set larger than body text and
+    /// sits below the band.
+    private func isRepeatedHeaderFooter(
+        _ line: PDFTextFragment, page: PDFPageContent, repeated: Set<String>,
+        bodyFontSize: Double
+    ) -> Bool {
+        guard isInHeaderOrFooter(line, pageHeight: page.pageHeight),
+              bodyFontSize <= 0 || line.fontSize <= bodyFontSize * 1.05
+        else { return false }
+        return repeated.contains(lineSignature(line.text))
+    }
+
+    private func integers(in text: String) -> [Int] {
+        text.components(separatedBy: CharacterSet.decimalDigits.inverted)
+            .compactMap(Int.init)
+    }
+
+    /// A band line carrying this page's own folio is a running head, whatever
+    /// else is on it — which is the point: the chapter title beside it changes
+    /// every chapter and is unrecognisable on its own.
+    private func isRunningHead(
+        _ line: PDFTextFragment, pageIndex: Int, pageHeight: Double, folioOffset: Int?
+    ) -> Bool {
+        guard let folioOffset, isInHeaderOrFooter(line, pageHeight: pageHeight) else {
+            return false
+        }
+        return integers(in: line.text).contains(pageIndex + folioOffset)
     }
 
     private func isInHeaderOrFooter(_ line: PDFTextFragment, pageHeight: Double) -> Bool {
@@ -197,11 +273,15 @@ actor PDFProcessingActor {
     /// `PDFParagraphAssembler` for the actual layout analysis. Deciding what is
     /// junk stays here; deciding how lines group into paragraphs does not.
     private func makeParagraphs(
-        from page: PDFPageContent, excluding repeated: Set<String>, bodyFontSize: Double
+        from page: PDFPageContent, excluding repeated: Set<String>, folioOffset: Int?,
+        bodyFontSize: Double
     ) -> [PDFParagraph] {
         let kept = page.lines.filter {
-            !repeated.contains(lineSignature($0.text))
+            !isRepeatedHeaderFooter($0, page: page, repeated: repeated, bodyFontSize: bodyFontSize)
                 && !isPrintedPageNumber($0, pageHeight: page.pageHeight)
+                && !isRunningHead(
+                    $0, pageIndex: page.pageIndex, pageHeight: page.pageHeight,
+                    folioOffset: folioOffset)
         }
         guard !kept.isEmpty else { return [] }
         return assembler.paragraphs(

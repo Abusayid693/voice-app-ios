@@ -52,7 +52,7 @@ final class BookAudioPlayer: ObservableObject {
     /// Elapsed within the *current page*, derived from the node's own render
     /// clock via `scheduledSpans` — what the draggable page scrubber binds
     /// to. Republished by the 1Hz ticker, which is plenty for a scrubber;
-    /// the read-along's word highlighting polls `currentWordIndex()` at
+    /// the read-along's word highlighting polls `currentHighlight()` at
     /// ~12Hz instead, deliberately unpublished — publishing at that rate
     /// would re-render every view observing this object (CLAUDE.md's
     /// re-render rule).
@@ -1025,12 +1025,19 @@ final class BookAudioPlayer: ObservableObject {
         retainedChunks[index]?.wordTimings ?? []
     }
 
-    /// The word to highlight right now. Takes no time argument on purpose:
-    /// it resolves the chunk *and* the offset from a single clock read, so
-    /// a chunk boundary can never match the new chunk's offset against the
-    /// old chunk's timings — which it would if the caller passed
-    /// a raw position while `currentChunkIndex` was still a publish behind.
-    func currentWordIndex() -> Int? {
+    /// The chunk *and* the word within it to highlight right now, resolved
+    /// from one clock read.
+    ///
+    /// Returned as a pair, and taking no time argument, for the same reason:
+    /// the two halves must come from the same instant. `currentChunkIndex` is
+    /// a published value a completion callback moves, while this resolves the
+    /// render clock directly, and across a chunk boundary they disagree for a
+    /// frame or two in whichever direction the callback lands. Pairing this
+    /// clock's word ordinal with that published chunk index lit whichever word
+    /// happened to share the ordinal in the *other* chunk — at a boundary the
+    /// ordinal is 0, so the chunk just finished flashed its own first word
+    /// before the highlight moved on.
+    func currentHighlight() -> (chunkIndex: Int, wordIndex: Int)? {
         let position = resolvedPosition()
         let timings = wordTimings(forChunk: position.chunkIndex)
         guard !timings.isEmpty else { return nil }
@@ -1038,7 +1045,7 @@ final class BookAudioPlayer: ObservableObject {
         for (i, timing) in timings.enumerated() where timing.start <= position.offset {
             index = i
         }
-        return index
+        return (position.chunkIndex, index)
     }
 
     /// Page-relative elapsed, for the scrubber and Now Playing — the

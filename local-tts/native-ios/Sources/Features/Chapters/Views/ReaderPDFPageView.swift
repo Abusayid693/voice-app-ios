@@ -32,6 +32,11 @@ struct ReaderPDFPageView: View {
                         .scaledToFit()
                         .frame(width: size.width, height: size.height)
                         .overlay { highlightLayer(in: size) }
+                        // Confines the highlight's `.multiply` to the page it
+                        // marks. A blend mode composites against whatever sits
+                        // beneath it in the same group, which without this is
+                        // the screen's own background as well as the page.
+                        .compositingGroup()
                         // The page is paper-white whatever the reader theme is,
                         // so it needs its own edge rather than dissolving into
                         // a light background.
@@ -71,16 +76,30 @@ struct ReaderPDFPageView: View {
         return CGSize(width: page.size.width * scale, height: page.size.height * scale)
     }
 
+    /// Marks the spoken lines the way a highlighter pen does: the paper takes
+    /// the colour and the type stays black.
+    ///
+    /// `.multiply` rather than a translucent fill is what buys that. Alpha
+    /// compositing lightens the glyphs underneath toward the highlight colour,
+    /// so the text faded exactly where you are meant to be reading; multiplying
+    /// leaves white paper as the colour and black type as black.
+    ///
+    /// The rects are filled opaque inside one `compositingGroup`, and the blend
+    /// applies to that flattened result rather than to each rect. Otherwise
+    /// every overlap between two line rects multiplies twice and darkens, which
+    /// is what gave the old translucent version its blotchy, blobbed edges.
     private func highlightLayer(in size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(highlights.enumerated()), id: \.offset) { _, rect in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(theme.chunkHighlightBackground.opacity(0.55))
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.pdfPageHighlight)
                     .frame(width: rect.width * size.width, height: rect.height * size.height)
                     .offset(x: rect.minX * size.width, y: rect.minY * size.height)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .compositingGroup()
+        .blendMode(.multiply)
         .animation(.easeOut(duration: 0.18), value: highlights)
         .allowsHitTesting(false)
     }

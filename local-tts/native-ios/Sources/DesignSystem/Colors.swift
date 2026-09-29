@@ -42,6 +42,18 @@ extension Color {
     static let chunkHighlightBackground = Color(hex: 0x0E2439)
     static let wordHighlightBackground = Color(hex: 0x1F5182)
 
+    // The original-PDF page's own chunk highlight, deliberately NOT a
+    // `ReaderTheme` color: that page is paper-white with black type in every
+    // theme, while the two above are built for the opposite (light text on a
+    // dark ground) — `chunkHighlightBackground` is a near-black navy, which
+    // over white paper reads as a muddy grey smear rather than a highlight.
+    // Warm amber for the same reason a real highlighter is yellow: it is the
+    // only saturated hue light enough to leave black type near its full
+    // contrast (~17:1 here), where any grey costs contrast and reads as
+    // "dimmed" rather than "marked". Drawn with `.multiply`, so it tints the
+    // paper and leaves the type itself untouched — see `ReaderPDFPageView`.
+    static let pdfPageHighlight = Color(hex: 0xFFE0A0)
+
     // ReadingStatsView's contribution graph (and Book Shelf's own small
     // teaser dots — see ImportHomeView.recentActivityDots) — a 5-step
     // intensity ramp (0 = no activity that day) as increasing ink opacity

@@ -1464,12 +1464,10 @@ struct ChapterPlayerView: View {
     }
 
     private var currentSpokenWord: String {
-        let timings = player.wordTimings(forChunk: player.currentChunkIndex)
-        guard
-            let wordIndex = player.currentWordIndex(),
-            timings.indices.contains(wordIndex)
-        else { return "Current" }
-        return timings[wordIndex].word
+        guard let highlight = player.currentHighlight() else { return "Current" }
+        let timings = player.wordTimings(forChunk: highlight.chunkIndex)
+        guard timings.indices.contains(highlight.wordIndex) else { return "Current" }
+        return timings[highlight.wordIndex].word
     }
 
     @ViewBuilder
@@ -1557,11 +1555,14 @@ struct ChapterPlayerView: View {
             selectedWordTarget?.groupIndex == groupIndex ? selectedWordTarget?.itemIndex : nil
 
         return TimelineView(.periodic(from: pollAnchor, by: isPolling ? 0.08 : 3600)) { _ in
+            // One read for both halves — see `currentHighlight()`. Reading the
+            // chunk and the word separately let them disagree across a chunk
+            // boundary, which flashed the finished chunk's first word.
+            let highlight = showsWordHighlight ? player.currentHighlight() : nil
             ParagraphRow(
                 items: items, itemsRevision: revision,
-                highlightedChunkIndex: showsWordHighlight ? player.currentChunkIndex : nil,
-                highlightedWordIndex: showsWordHighlight
-                    ? player.currentWordIndex() : nil,
+                highlightedChunkIndex: highlight?.chunkIndex,
+                highlightedWordIndex: highlight?.wordIndex,
                 currentChunkIndex: isCurrentGroup ? player.currentChunkIndex : nil,
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
