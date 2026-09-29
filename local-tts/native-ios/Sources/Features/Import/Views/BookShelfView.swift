@@ -57,23 +57,16 @@ struct BookShelfView: View {
     // for state a view merely reads on demand.
     @State private var selectedBookProgress: Double = 0
     @State private var selectedCoverFrame: CGRect?
+    @State private var selectedFullCoverSize: CGSize?
     @State private var coverFrames: [UUID: CGRect] = [:]
-    /// Where each book's cover *face* sits — the modal hero's source. Differs
-    /// from `coverFrames` for a spine-out book; see BookHeroFramePreferenceKey.
+    /// Full cover dimensions used while a narrow spine unfolds in flight.
     @State private var heroFrames: [UUID: CGRect] = [:]
-    /// True while the detail modal owns `selectedBook`: a spine-out book is
-    /// turned face-out for the lift, and turned back on the way down.
-    @State private var detailShowsCoverFace = false
+    @State private var shelfFrames: [Int: CGRect] = [:]
     @State private var modalPhase: CGFloat = 0
     @State private var showsModalDetails = false
     @State private var isShelfCoverHidden = false
     @State private var isDismissingDetail = false
-    // A short vertical hop (0 to -liftDistance) played just before the book
-    // translates toward the center, and just after it translates back — so
-    // the cover visibly lifts off/settles onto the shelf's glass lip instead
-    // of appearing to pass straight through it.
-    @State private var liftOffset: CGFloat = 0
-    private let liftDistance: CGFloat = 15
+    @State private var hasReachedCoverDestination = false
 
     // MARK: - Long-press arrange mode
     //
@@ -162,6 +155,10 @@ struct BookShelfView: View {
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
 
+                if selectedBook == nil {
+                    ShelfGlassLayer(frames: shelfFrames)
+                }
+
                 ShelfBottomBlur()
                     .frame(height: 120 + geometry.safeAreaInsets.bottom)
                     .frame(maxWidth: .infinity)
@@ -193,11 +190,13 @@ struct BookShelfView: View {
                     BookShelfDetailModal(
                         book: selectedBook,
                         sourceFrame: selectedCoverFrame,
+                        sourceCoverSize: selectedFullCoverSize,
+                        shelfFrames: shelfFrames,
                         phase: modalPhase,
-                        liftOffset: liftOffset,
                         showsCover: isShelfCoverHidden,
                         showsDetails: showsModalDetails,
                         progress: selectedBookProgress,
+                        onLayoutReady: { beginDetailTravel(for: selectedBook) },
                         onDismiss: { dismissDetail() },
                         onRead: openSelectedBook,
                         onListen: startListening)
@@ -211,6 +210,9 @@ struct BookShelfView: View {
             }
             .onPreferenceChange(BookHeroFramePreferenceKey.self) { frames in
                 heroFrames = frames
+            }
+            .onPreferenceChange(ShelfGlassFramePreferenceKey.self) { frames in
+                if selectedBook == nil { shelfFrames = frames }
             }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
@@ -249,6 +251,7 @@ struct BookShelfView: View {
                 isShelfCoverHidden = false
                 selectedBook = nil
                 selectedCoverFrame = nil
+                selectedFullCoverSize = nil
                 isDismissingDetail = false
             }
         }
@@ -289,25 +292,17 @@ struct BookShelfView: View {
         return LazyVStack(spacing: 24) {
             ForEach(Array(shelfRows.enumerated()), id: \.offset) { index, row in
                 BookShelfRow(
+                    shelfIndex: index,
                     entries: row,
                     coverSize: coverSize,
                     spacing: coverSpacing,
                     shelfWidth: shelfWidth,
                     leadingContentInset: index == 0 ? 30 : 16,
                     hiddenBookID: isShelfCoverHidden ? selectedBook?.id : nil,
-                    // While the traveling overlay hasn't taken over yet, the
-                    // real cover itself carries the lift — it stays in its
-                    // native position beneath the glass shelf strip, so it
-                    // visibly rises out from behind the glass instead of the
-                    // overlay popping directly on top of it.
-                    liftedBookID: isShelfCoverHidden ? nil : selectedBook?.id,
-                    liftOffset: liftOffset,
-                    liftAnimation: shelfLiftAnimation,
-                    liftDistance: max(liftDistance, arrangeLiftDistance),
+                    liftDistance: arrangeLiftDistance,
                     arrangingBookID: arrangingBook?.id,
                     arrangeLiftOffset: arrangeLiftOffset,
                     previewDisplayMode: previewDisplayMode,
-                    coverFacedBookID: detailShowsCoverFace ? selectedBook?.id : nil,
                     onCancelImport: pdfImports.cancel(id:),
                     onRetryImport: pdfImports.retry(id:),
                     onDeleteImport: pdfImports.delete(id:),
@@ -335,30 +330,13 @@ struct BookShelfView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // Whole open/close choreography tuned faster than the original pass,
-    // then nudged back up 10% from that.
+    // Lift, spine turn, and travel share a spring; the card expands after arrival.
     private var translateAnimation: Animation {
-        .spring(response: 0.23, dampingFraction: 0.94)
+        .spring(response: 0.42, dampingFraction: 0.9)
     }
 
     private var expandAnimation: Animation {
         .spring(response: 0.28, dampingFraction: 0.92)
-    }
-
-    private var liftAnimation: Animation {
-        .easeOut(duration: 0.20)
-    }
-
-    private var settleAnimation: Animation {
-        .easeIn(duration: 0.20)
-    }
-
-    // Drives the real shelf cover's own offset (see BookShelfRow) — kept in
-    // sync with liftAnimation/settleAnimation's duration above so the
-    // sequenced steps that follow (translate, completeShelfReturn) don't
-    // fire before the lift/settle has visually finished.
-    private var shelfLiftAnimation: Animation {
-        .easeInOut(duration: 0.20)
     }
 
     // MARK: - Long-press arrange
@@ -433,11 +411,12 @@ struct BookShelfView: View {
         // Button's own tap to fire on release — without this the menu and
         // the detail modal would both open from one gesture.
         guard selectedBook == nil, !isDismissingDetail, arrangingBook == nil else { return }
-        // The hero always flies from a full cover — a spine-out book turns
-        // face-out first — so it starts from the cover-face frame, not the
-        // narrow spine slot the book rests in.
-        selectedCoverFrame = heroFrames[book.id] ?? coverFrames[book.id]
+        // Start from the actual shelf slot. A spine keeps its narrow visual
+        // shape at progress zero and unfolds inside the travelling overlay.
+        selectedCoverFrame = coverFrames[book.id] ?? heroFrames[book.id]
+        selectedFullCoverSize = heroFrames[book.id]?.size ?? selectedCoverFrame?.size
         modalPhase = reduceMotion ? 2 : 0
+        hasReachedCoverDestination = reduceMotion
         showsModalDetails = reduceMotion
         selectedBookProgress = 0
         Task {
@@ -448,104 +427,49 @@ struct BookShelfView: View {
         var selectionTransaction = Transaction(animation: nil)
         selectionTransaction.disablesAnimations = true
         withTransaction(selectionTransaction) {
-            // reduceMotion has no lift step, so the overlay takes over
-            // immediately, same as before; otherwise the real shelf cover
-            // keeps the visible artwork until the lift finishes.
             isShelfCoverHidden = reduceMotion
             selectedBook = book
             isDetailPresented = true
-            liftOffset = 0
         }
+    }
 
-        if reduceMotion {
-            return
+    private func beginDetailTravel(for book: SavedGenerationSummary) {
+        guard !reduceMotion, selectedBook?.id == book.id,
+            !isDismissingDetail, !isShelfCoverHidden else { return }
+        var handoff = Transaction(animation: nil)
+        handoff.disablesAnimations = true
+        withTransaction(handoff) {
+            isShelfCoverHidden = true
         }
-
-        Task { @MainActor in
-            // Leave one display frame for the destination card to measure its
-            // intrinsic height while it is still exactly over the source book.
-            try? await Task.sleep(nanoseconds: 20_000_000)
+        withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
+            modalPhase = 1
+        } completion: {
             guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-            // Lift the real shelf cover clear of the glass lip first — it
-            // stays in its native position beneath the glass strip, so it
-            // visibly rises from behind the glass instead of the traveling
-            // overlay popping directly on top of it.
-            withAnimation(liftAnimation, completionCriteria: .logicallyComplete) {
-                liftOffset = -liftDistance
+            hasReachedCoverDestination = true
+            // Expand around the cover after it reaches its final slot.
+            withAnimation(expandAnimation, completionCriteria: .logicallyComplete) {
+                modalPhase = 2
             } completion: {
                 guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                // A spine-out book turns face-out while it hangs there, so
-                // what the overlay takes over is already a cover — the modal
-                // is a full cover, and flying a narrow spine into it read
-                // wrong. A cover-out book's turn is a no-op.
-                turnFaceOut(book) {
-                guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                // Hand off to the traveling overlay now that it's clear of
-                // the shelf — both sit at the identical lifted position, so
-                // the swap itself is invisible.
-                var handoff = Transaction(animation: nil)
-                handoff.disablesAnimations = true
-                withTransaction(handoff) {
-                    isShelfCoverHidden = true
-                }
-                withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
-                    modalPhase = 1
-                } completion: {
-                    guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                    withAnimation(expandAnimation, completionCriteria: .logicallyComplete) {
-                        modalPhase = 2
-                    } completion: {
-                        guard selectedBook?.id == book.id, !isDismissingDetail else { return }
-                        withAnimation(.easeOut(duration: 0.14)) {
-                            showsModalDetails = true
-                        }
-                    }
-                }
+                withAnimation(.easeOut(duration: 0.14)) {
+                    showsModalDetails = true
                 }
             }
         }
     }
 
-    /// Turns a spine-out book face-out and calls back once it has actually
-    /// finished. Uses `bookShelfRotationAnimation` so this completion lines
-    /// up with the turn `BookShelfRow` really plays.
-    private func turnFaceOut(
-        _ book: SavedGenerationSummary, then continuation: @escaping () -> Void
-    ) {
-        guard book.shelfDisplayMode == .spine, !reduceMotion else {
-            var instant = Transaction(animation: nil)
-            instant.disablesAnimations = true
-            withTransaction(instant) { detailShowsCoverFace = true }
-            continuation()
-            return
-        }
-        withAnimation(bookShelfRotationAnimation, completionCriteria: .logicallyComplete) {
-            detailShowsCoverFace = true
-        } completion: {
-            continuation()
-        }
-    }
-
-    /// The reverse, for the way back down: the book is face-out in the shelf
-    /// slot again, so turn it back to its spine before it settles.
-    private func turnBackToShelfFace(
-        _ book: SavedGenerationSummary, then continuation: @escaping () -> Void
-    ) {
-        guard book.shelfDisplayMode == .spine, !reduceMotion else {
-            detailShowsCoverFace = false
-            continuation()
-            return
-        }
-        withAnimation(bookShelfRotationAnimation, completionCriteria: .logicallyComplete) {
-            detailShowsCoverFace = false
-        } completion: {
-            continuation()
-        }
-    }
-
     private func dismissDetail(afterDismiss: (() -> Void)? = nil) {
-        guard let dismissingBook = selectedBook, !isDismissingDetail else { return }
+        guard selectedBook != nil, !isDismissingDetail else { return }
         isDismissingDetail = true
+
+        if !reduceMotion, !hasReachedCoverDestination {
+            withAnimation(translateAnimation, completionCriteria: .removed) {
+                modalPhase = 0
+            } completion: {
+                completeShelfReturn(afterDismiss)
+            }
+            return
+        }
 
         withAnimation(.easeOut(duration: 0.11)) {
             showsModalDetails = false
@@ -567,28 +491,10 @@ struct BookShelfView: View {
             withAnimation(expandAnimation, completionCriteria: .logicallyComplete) {
                 modalPhase = 1
             } completion: {
-                withAnimation(translateAnimation, completionCriteria: .logicallyComplete) {
+                withAnimation(translateAnimation, completionCriteria: .removed) {
                     modalPhase = 0
                 } completion: {
-                    // Translate stops lifted just above the shelf slot (liftOffset
-                    // is still -liftDistance here). Hand off back to the real
-                    // shelf cover — still at the identical lifted position, so
-                    // invisibly — then let it carry the settle down through the
-                    // glass lip, rather than the overlay cutting through it.
-                    var handoff = Transaction(animation: nil)
-                    handoff.disablesAnimations = true
-                    withTransaction(handoff) {
-                        isShelfCoverHidden = false
-                    }
-                    // Still lifted and still face-out here. Turn back to the
-                    // spine first, then settle — the mirror of the way up.
-                    turnBackToShelfFace(dismissingBook) {
-                        withAnimation(settleAnimation, completionCriteria: .logicallyComplete) {
-                            liftOffset = 0
-                        } completion: {
-                            completeShelfReturn(afterDismiss)
-                        }
-                    }
+                    completeShelfReturn(afterDismiss)
                 }
             }
         }
@@ -613,12 +519,12 @@ struct BookShelfView: View {
 
     private func finishDismissal(_ completion: (() -> Void)?) {
         selectedCoverFrame = nil
+        selectedFullCoverSize = nil
         modalPhase = 0
-        liftOffset = 0
         showsModalDetails = false
         isShelfCoverHidden = false
         isDismissingDetail = false
-        detailShowsCoverFace = false
+        hasReachedCoverDestination = false
         completion?()
     }
 
@@ -727,21 +633,17 @@ private struct ShelfEntry: Identifiable {
 }
 
 private struct BookShelfRow: View {
+    let shelfIndex: Int
     let entries: [ShelfEntry]
     let coverSize: CGSize
     let spacing: CGFloat
     let shelfWidth: CGFloat
     let leadingContentInset: CGFloat
     let hiddenBookID: UUID?
-    let liftedBookID: UUID?
-    let liftOffset: CGFloat
-    let liftAnimation: Animation
     let liftDistance: CGFloat
     let arrangingBookID: UUID?
     let arrangeLiftOffset: CGFloat
     let previewDisplayMode: ShelfDisplayMode?
-    /// Forced face-out while the detail modal's hero owns this book.
-    let coverFacedBookID: UUID?
     let onCancelImport: (UUID) -> Void
     let onRetryImport: (UUID) -> Void
     let onDeleteImport: (UUID) -> Void
@@ -771,10 +673,17 @@ private struct BookShelfRow: View {
             .contentMargins(.leading, leadingContentInset, for: .scrollContent)
             .contentMargins(.trailing, 16, for: .scrollContent)
 
-            GlassBookShelf()
+            Color.clear
                 .frame(
                     width: shelfWidth,
                     height: 18)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ShelfGlassFramePreferenceKey.self,
+                            value: [shelfIndex: proxy.frame(in: .named(bookShelfModalCoordinateSpace))])
+                    }
+                }
                 .allowsHitTesting(false)
         }
         // Bottom-aligned, so the extra liftDistance headroom is added above
@@ -805,16 +714,6 @@ private struct BookShelfRow: View {
 
     private func bookItem(for book: SavedGenerationSummary) -> some View {
         interactiveCover(for: book)
-            // HStack siblings paint in order, so a book whose artwork
-            // overflows its slot — a cover mid-turn is far wider than the
-            // spine slot it sits in — is drawn *under* every book after it.
-            // Both lifts need raising, not just the arrange one: tapping a
-            // spine-out book turns it face-out for the modal hero, and that
-            // wide cover was landing behind its right-hand neighbour.
-            // `arrangingBookID` outlives the arrange menu, and
-            // `liftedBookID` spans the modal's lift/turn and its turn/settle
-            // on the way back, so between them they cover every frame where
-            // a book is off the shelf.
             .zIndex(isRaised(book) ? 1 : 0)
             .background { frameReporter(for: book) }
             .transaction { transaction in
@@ -840,11 +739,8 @@ private struct BookShelfRow: View {
             .accessibilityAction(named: "Book options") { onLongPress(book) }
     }
 
-    /// Whether this book is currently off the shelf, in either sense — being
-    /// arranged, or lifted for the detail modal. Either way its artwork can
-    /// overflow its slot and must paint above its neighbours.
     private func isRaised(_ book: SavedGenerationSummary) -> Bool {
-        arrangingBookID == book.id || liftedBookID == book.id || coverFacedBookID == book.id
+        arrangingBookID == book.id
     }
 
     /// Publishes two frames per book: the real slot (anchors the arrange
@@ -896,13 +792,7 @@ private struct BookShelfRow: View {
     /// `BookShelfView.endArranging` commits the mode and this frame changes.
     private func shelfCover(for book: SavedGenerationSummary) -> some View {
         let isArranging = arrangingBookID == book.id
-        // A spine-out book turns face-out before the detail modal's hero
-        // takes over, and back again on the way down — the modal shows a
-        // full cover, so flying a narrow spine into it read wrong.
-        let rendered: ShelfDisplayMode =
-            coverFacedBookID == book.id
-            ? .cover
-            : ((isArranging ? previewDisplayMode : nil) ?? book.shelfDisplayMode)
+        let rendered = (isArranging ? previewDisplayMode : nil) ?? book.shelfDisplayMode
         let layoutSize = size(for: book, mode: book.shelfDisplayMode)
 
         // 0 = cover face-on, 90 = spine face-on. The *angle* is what
@@ -914,8 +804,6 @@ private struct BookShelfRow: View {
         return slot(size: layoutSize, book: book, angle: angle)
             .opacity(hiddenBookID == book.id ? 0 : 1)
             .animation(.linear(duration: 0.001), value: hiddenBookID)
-            .offset(y: liftedBookID == book.id ? liftOffset : 0)
-            .animation(liftAnimation, value: liftOffset)
             .offset(y: isArranging ? arrangeLiftOffset : 0)
             .shadow(
                 color: .black.opacity(isArranging ? 0.22 : 0),
@@ -929,11 +817,7 @@ private struct BookShelfRow: View {
         .spring(response: 0.34, dampingFraction: 0.84)
     }
 
-    /// Enough life to read as a real flick of the wrist, damped enough that
-    /// it doesn't overshoot far past edge-on (`RotatingBookFaces` fades a
-    /// face out over its last degrees as a second line of defence). Shared
-    /// with `BookShelfView`'s sequencing so its completion callbacks line up
-    /// with what's actually on screen.
+    /// Drives only the shelf's long-press arrangement preview.
     private var rotationAnimation: Animation { bookShelfRotationAnimation }
 
     private func size(for book: SavedGenerationSummary, mode: ShelfDisplayMode) -> CGSize {
@@ -1024,38 +908,46 @@ private struct BookArrangeMenu: View {
     }
 }
 
-private struct BookShelfDetailModal: View {
+private struct BookShelfDetailModal: View, Animatable {
     let book: SavedGenerationSummary
     let sourceFrame: CGRect?
-    let phase: CGFloat
-    // Extra vertical offset applied only at the shelf end of the translate
-    // (see BookShelfView's lift/settle steps) — animates 0 -> -10 before the
-    // cover starts moving, and -10 -> 0 after it arrives back, so it clears
-    // the glass shelf's lip instead of appearing to cut through it.
-    let liftOffset: CGFloat
-    // False while the real shelf cover still owns the visible artwork
-    // (during the pre-translate lift / post-translate settle) — the card and
-    // traveling cover stay invisible until that handoff happens, so they
-    // never sit exactly on top of the real cover across the glass boundary.
+    let sourceCoverSize: CGSize?
+    let shelfFrames: [Int: CGRect]
+    var phase: CGFloat
     let showsCover: Bool
     let showsDetails: Bool
     // Fraction of pages completed, 0...1 — fetched once by BookShelfView
     // when this modal is presented; see coverProgressBar.
     let progress: Double
+    let onLayoutReady: () -> Void
     let onDismiss: () -> Void
     let onRead: () -> Void
     let onListen: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var modalCardSize: CGSize = .zero
+    @State private var modalContentHeight: CGFloat = 0
+    @State private var measuredCoverFrame: CGRect = .zero
     private let dismissDragThreshold: CGFloat = 80
     private let expandedCoverSize = CGSize(width: 117.6, height: 176.4)
+    /// Keeps the travelling book visibly above the glass shelf at both ends
+    /// of the trip. A direct interpolation can initially move downward when
+    /// the screen center is below the source book, which reads as the cover
+    /// passing through the shelf instead of lifting clear of it.
+    private let travelLiftDistance: CGFloat = 28
+
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let metrics = heroMetrics(in: geometry)
 
             ZStack {
+                ShelfGlassLayer(frames: shelfFrames)
+                    .zIndex(metrics.isBehindShelf ? 1 : -1)
+
                 Color.black.opacity(0.28 * metrics.translationProgress)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
@@ -1065,12 +957,7 @@ private struct BookShelfDetailModal: View {
 
                 detailCard(
                     targetWidth: metrics.targetWidth,
-                    maximumHeight: max(0, min(geometry.size.height - 32, 650)))
-                    .onGeometryChange(for: CGSize.self) { proxy in
-                        proxy.size
-                    } action: { size in
-                        modalCardSize = size
-                    }
+                    targetHeight: resolvedCardHeight(in: geometry))
                     .frame(
                         width: metrics.cardSize.width,
                         height: metrics.cardSize.height)
@@ -1084,26 +971,66 @@ private struct BookShelfDetailModal: View {
                         color: .black.opacity(0.22 * metrics.expansionProgress),
                         radius: 24 * metrics.expansionProgress,
                         y: 12 * metrics.expansionProgress)
-                    .opacity(showsCover ? 1 : 0)
+                    .opacity(showsCover && metrics.expansionProgress > 0 ? 1 : 0)
+                    .allowsHitTesting(showsDetails)
                     .transition(reduceMotion ? .opacity : .identity)
                     .gesture(dragToDismissGesture)
                     .accessibilityElement(children: .contain)
 
-                SavedProjectCover(
-                    coverURL: book.coverURL,
-                    title: book.title,
-                    size: metrics.coverSize,
-                    cornerRadius: metrics.coverCornerRadius)
+                heroCover(metrics: metrics)
                     .position(metrics.coverCenter)
                     .shadow(
                         color: .black.opacity(0.16 * metrics.expansionProgress),
                         radius: 12 * metrics.expansionProgress,
                         y: 6 * metrics.expansionProgress)
-                    .opacity(showsCover ? 1 : 0)
+                    .opacity(showsCover && !showsDetails ? 1 : 0)
+                    .animation(nil, value: showsDetails)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(alignment: .top) {
+                // Measure the full content independently of the animated crop.
+                modalContent(isMeasuring: true)
+                    .frame(width: metrics.targetWidth)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .coordinateSpace(name: "book-detail-measurement")
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { height in
+                        var measurement = Transaction(animation: nil)
+                        measurement.disablesAnimations = true
+                        withTransaction(measurement) { modalContentHeight = height }
+                    }
+                    .hidden()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .task(id: modalContentHeight > 0 && measuredCoverFrame.height > 0) {
+            if modalContentHeight > 0 && measuredCoverFrame.height > 0 { onLayoutReady() }
+        }
+    }
+
+    @ViewBuilder
+    private func heroCover(metrics: BookHeroMetrics) -> some View {
+        if book.shelfDisplayMode == .spine {
+            RotatingBookFaces(
+                coverURL: book.coverURL,
+                title: book.title,
+                coverSize: metrics.coverSize,
+                spineWidth: book.spineWidth,
+                angle: metrics.coverAngle)
+                .frame(
+                    width: metrics.coverSize.width,
+                    height: metrics.coverSize.height,
+                    alignment: .bottomLeading)
+        } else {
+            SavedProjectCover(
+                coverURL: book.coverURL,
+                title: book.title,
+                size: metrics.coverSize,
+                cornerRadius: metrics.coverCornerRadius)
         }
     }
 
@@ -1126,17 +1053,19 @@ private struct BookShelfDetailModal: View {
 
     private func detailCard(
         targetWidth: CGFloat,
-        maximumHeight: CGFloat
+        targetHeight: CGFloat
     ) -> some View {
-        ViewThatFits(in: .vertical) {
-            modalContent
-
-            ScrollView(.vertical, showsIndicators: false) {
-                modalContent
+        Group {
+            if modalContentHeight > targetHeight {
+                ScrollView(.vertical, showsIndicators: false) {
+                    modalContent()
+                }
+            } else {
+                modalContent()
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: maximumHeight)
         }
-        .frame(width: targetWidth)
+        .frame(width: targetWidth, height: targetHeight, alignment: .top)
         .background {
             modalBackground
         }
@@ -1198,44 +1127,49 @@ private struct BookShelfDetailModal: View {
             y: geometry.size.height / 2 - 67.5,
             width: 90,
             height: 135)
-        let targetHeight = modalCardSize.height > 0
-            ? modalCardSize.height
-            : targetWidth * 1.5
+        let resolvedSourceCoverSize = sourceCoverSize ?? resolvedSourceFrame.size
+        let targetHeight = resolvedCardHeight(in: geometry)
         let translationProgress = reduceMotion ? 1 : min(max(phase, 0), 1)
         let expansionProgress = reduceMotion ? 1 : min(max(phase - 1, 0), 1)
         let screenCenter = CGPoint(
             x: geometry.size.width / 2,
             y: geometry.size.height / 2)
-        // liftOffset only has weight near the shelf end (translationProgress
-        // near 0); once fully translated to the center it contributes
-        // nothing, since progress = 1 discards the "from" term entirely.
-        let liftedSourceMidY = resolvedSourceFrame.midY + (reduceMotion ? 0 : liftOffset)
+        // The hero lands in the measured content slot, including Dynamic Type layout.
+        let finalCoverCenter = CGPoint(
+            x: screenCenter.x - targetWidth / 2 + measuredCoverFrame.midX,
+            y: screenCenter.y - targetHeight / 2 + measuredCoverFrame.midY)
+        let sourceCoverCenter = CGPoint(
+            x: resolvedSourceFrame.minX + resolvedSourceCoverSize.width / 2,
+            y: resolvedSourceFrame.midY)
+        let effectiveTravelLift = travelLiftDistance
+            + max(finalCoverCenter.y - sourceCoverCenter.y, 0) * 0.3
+        let clearanceProgress = shelfClearanceProgress(
+            sourceFrame: resolvedSourceFrame,
+            sourceCenter: sourceCoverCenter,
+            destination: finalCoverCenter,
+            sourceHeight: resolvedSourceCoverSize.height,
+            lift: effectiveTravelLift)
+        // Land directly in the final cover slot; expansion never moves it again.
+        let coverCenter = reduceMotion
+            ? finalCoverCenter
+            : cubicPoint(
+                from: sourceCoverCenter,
+                firstControl: CGPoint(
+                    x: sourceCoverCenter.x,
+                    y: sourceCoverCenter.y - effectiveTravelLift),
+                secondControl: CGPoint(
+                    x: finalCoverCenter.x,
+                    y: finalCoverCenter.y - effectiveTravelLift),
+                to: finalCoverCenter,
+                progress: translationProgress)
         let cardCenter = CGPoint(
             x: interpolate(
-                from: resolvedSourceFrame.midX,
+                from: finalCoverCenter.x,
                 to: screenCenter.x,
-                progress: translationProgress),
-            y: interpolate(
-                from: liftedSourceMidY,
-                to: screenCenter.y,
-                progress: translationProgress))
-        // Top padding + progress bar + stack spacing + half the cover height
-        // matches modalContent's real layout so the absolutely-positioned
-        // cover art lands exactly over its reserved Color.clear spacer
-        // instead of overlapping the progress bar above it.
-        let finalCoverCenter = CGPoint(
-            x: screenCenter.x,
-            y: screenCenter.y - targetHeight / 2 + 52 + 3 + 18
-                + expandedCoverSize.height / 2)
-        let translatedCoverCenter = cardCenter
-        let coverCenter = CGPoint(
-            x: interpolate(
-                from: translatedCoverCenter.x,
-                to: finalCoverCenter.x,
                 progress: expansionProgress),
             y: interpolate(
-                from: translatedCoverCenter.y,
-                to: finalCoverCenter.y,
+                from: finalCoverCenter.y,
+                to: screenCenter.y,
                 progress: expansionProgress))
 
         return BookHeroMetrics(
@@ -1244,35 +1178,97 @@ private struct BookShelfDetailModal: View {
             expansionProgress: expansionProgress,
             cardSize: CGSize(
                 width: interpolate(
-                    from: resolvedSourceFrame.width,
+                    from: expandedCoverSize.width,
                     to: targetWidth,
                     progress: expansionProgress),
                 height: interpolate(
-                    from: resolvedSourceFrame.height,
+                    from: expandedCoverSize.height,
                     to: targetHeight,
                     progress: expansionProgress)),
             cardCenter: cardCenter,
             cornerRadius: interpolate(from: 3, to: 28, progress: expansionProgress),
             coverSize: CGSize(
                 width: interpolate(
-                    from: resolvedSourceFrame.width,
+                    from: resolvedSourceCoverSize.width,
                     to: expandedCoverSize.width,
-                    progress: expansionProgress),
+                    progress: translationProgress),
                 height: interpolate(
-                    from: resolvedSourceFrame.height,
+                    from: resolvedSourceCoverSize.height,
                     to: expandedCoverSize.height,
-                    progress: expansionProgress)),
+                    progress: translationProgress)),
             coverCenter: coverCenter,
-            coverCornerRadius: interpolate(from: 3, to: 8, progress: expansionProgress))
+            coverCornerRadius: interpolate(from: 3, to: 8, progress: translationProgress),
+            coverAngle: book.shelfDisplayMode == .spine
+                ? 90 * Double(1 - translationProgress)
+                : 0,
+            isBehindShelf: !reduceMotion && translationProgress < clearanceProgress)
     }
 
-    private var modalContent: some View {
-        VStack(spacing: 18) {
-            coverProgressBar
-                .opacity(showsDetails ? 1 : 0)
+    /// Use the first clearance point, so passing another shelf never hides the book again.
+    private func shelfClearanceProgress(
+        sourceFrame: CGRect,
+        sourceCenter: CGPoint,
+        destination: CGPoint,
+        sourceHeight: CGFloat,
+        lift: CGFloat
+    ) -> CGFloat {
+        guard let lip = shelfFrames.values.first(where: {
+            $0.minY <= sourceFrame.maxY && $0.maxY >= sourceFrame.maxY
+        }) else { return 0 }
 
-            Color.clear
-                .frame(width: expandedCoverSize.width, height: expandedCoverSize.height)
+        for step in 0...32 {
+            let progress = CGFloat(step) / 64
+            let center = cubicPoint(
+                from: sourceCenter,
+                firstControl: CGPoint(x: sourceCenter.x, y: sourceCenter.y - lift),
+                secondControl: CGPoint(x: destination.x, y: destination.y - lift),
+                to: destination,
+                progress: progress)
+            let height = interpolate(
+                from: sourceHeight, to: expandedCoverSize.height, progress: progress)
+            if center.y + height / 2 <= lip.minY - 2 { return progress }
+        }
+        return 0.5
+    }
+
+    private func resolvedCardHeight(in geometry: GeometryProxy) -> CGFloat {
+        let maximumHeight = max(1, min(geometry.size.height - 32, 650))
+        return modalContentHeight > 0 ? min(modalContentHeight, maximumHeight) : maximumHeight
+    }
+
+    private func modalContent(isMeasuring: Bool = false) -> some View {
+        VStack(spacing: 10) {
+            VStack(spacing: 8) {
+                coverProgressBar
+                    .opacity(showsDetails ? 1 : 0)
+
+                Color.clear
+                    .frame(width: expandedCoverSize.width, height: expandedCoverSize.height)
+                    .background {
+                        if isMeasuring {
+                            Color.clear
+                                .onGeometryChange(for: CGRect.self) { proxy in
+                                    proxy.frame(in: .named("book-detail-measurement"))
+                                } action: { frame in
+                                    var measurement = Transaction(animation: nil)
+                                    measurement.disablesAnimations = true
+                                    withTransaction(measurement) { measuredCoverFrame = frame }
+                                }
+                        }
+                    }
+                    .overlay {
+                        if !isMeasuring {
+                            SavedProjectCover(
+                                coverURL: book.coverURL,
+                                title: book.title,
+                                size: expandedCoverSize,
+                                cornerRadius: book.shelfDisplayMode == .spine ? 3 : 8)
+                                .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                                .opacity(showsDetails ? 1 : 0)
+                                .animation(nil, value: showsDetails)
+                        }
+                    }
+            }
 
             VStack(spacing: 18) {
                 Text(book.title)
@@ -1325,9 +1321,9 @@ private struct BookShelfDetailModal: View {
     private var coverProgressBar: some View {
         ZStack(alignment: .leading) {
             Capsule()
-                .fill(Color.white)
+                .fill(Color.black.opacity(0.18))
                 .overlay {
-                    Capsule().strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
+                    Capsule().strokeBorder(Color.black.opacity(0.25), lineWidth: 0.5)
                 }
             Capsule()
                 .fill(Color.black)
@@ -1343,6 +1339,30 @@ private struct BookShelfDetailModal: View {
         progress: CGFloat
     ) -> CGFloat {
         start + (end - start) * progress
+    }
+
+    private func cubicPoint(
+        from start: CGPoint,
+        firstControl: CGPoint,
+        secondControl: CGPoint,
+        to end: CGPoint,
+        progress: CGFloat
+    ) -> CGPoint {
+        let inverse = 1 - progress
+        let startWeight = inverse * inverse * inverse
+        let firstWeight = 3 * inverse * inverse * progress
+        let secondWeight = 3 * inverse * progress * progress
+        let endWeight = progress * progress * progress
+
+        return CGPoint(
+            x: start.x * startWeight
+                + firstControl.x * firstWeight
+                + secondControl.x * secondWeight
+                + end.x * endWeight,
+            y: start.y * startWeight
+                + firstControl.y * firstWeight
+                + secondControl.y * secondWeight
+                + end.y * endWeight)
     }
 
     private func detailRow(_ title: String, value: String) -> some View {
@@ -1371,12 +1391,7 @@ private struct BookShelfDetailModal: View {
 
 private let bookShelfModalCoordinateSpace = "book-shelf-modal"
 
-/// Shared by `BookShelfView`'s sequencing and `BookShelfRow`'s own
-/// `.animation(_:value:)` on the turn. They must be the same spec: the row's
-/// value-scoped animation is what actually plays (it beats the row's
-/// `.transaction { animation = nil }`), while the view's `withAnimation`
-/// exists only for its completion callback — if the two differed, the next
-/// step would fire before the turn had visually finished.
+/// Explicit animation for the shelf row's arrangement preview.
 private let bookShelfRotationAnimation: Animation = .spring(
     response: 0.45, dampingFraction: 0.8)
 
@@ -1393,11 +1408,8 @@ private struct BookCoverFramePreferenceKey: PreferenceKey {
     }
 }
 
-/// Where the book's *cover face* sits, which is what the detail modal's hero
-/// flies from and back to. Separate from the slot frame above because a
-/// spine-out book turns face-out before the hero starts: it occupies a full
-/// cover's width from its slot's leading edge, not the narrow spine slot.
-/// Handing the hero the spine frame instead made it fly out of a sliver.
+/// Full cover geometry. A spine hero starts from the narrow slot above while
+/// using this size for the cover face that unfolds during its flight.
 private struct BookHeroFramePreferenceKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
 
@@ -1419,6 +1431,37 @@ private struct BookHeroMetrics {
     let coverSize: CGSize
     let coverCenter: CGPoint
     let coverCornerRadius: CGFloat
+    let coverAngle: Double
+    let isBehindShelf: Bool
+}
+
+private struct ShelfGlassFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+/// One copy of each shelf lip; only lift-off and settling occlude the cover.
+private struct ShelfGlassLayer: View {
+    let frames: [Int: CGRect]
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(frames.keys.sorted(), id: \.self) { index in
+                if let frame = frames[index] {
+                    GlassBookShelf()
+                        .frame(width: frame.width, height: frame.height)
+                        .position(x: frame.midX, y: frame.midY)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
 }
 
 private struct GlassBookShelf: View {
