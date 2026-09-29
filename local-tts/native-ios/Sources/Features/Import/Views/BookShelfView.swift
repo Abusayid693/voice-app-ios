@@ -1049,6 +1049,7 @@ private struct BookShelfDetailModal: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var modalCardSize: CGSize = .zero
     private let dismissDragThreshold: CGFloat = 80
+    private let expandedCoverSize = CGSize(width: 117.6, height: 176.4)
 
     var body: some View {
         GeometryReader { geometry in
@@ -1137,8 +1138,7 @@ private struct BookShelfDetailModal: View {
         }
         .frame(width: targetWidth)
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(BookShelfPalette.background)
+            modalBackground
         }
         .overlay(alignment: .topTrailing) {
             Button(action: onDismiss) {
@@ -1153,6 +1153,42 @@ private struct BookShelfDetailModal: View {
             .accessibilityHidden(!showsDetails)
             .accessibilityLabel("Close book details")
         }
+    }
+
+    private var modalBackground: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                BookShelfPalette.background
+
+                SavedProjectCover(
+                    coverURL: book.coverURL,
+                    title: book.title,
+                    size: CGSize(
+                        width: geometry.size.width + 72,
+                        height: geometry.size.height / 2 + 72),
+                    cornerRadius: 0)
+                    .blur(radius: 28, opaque: true)
+                    .offset(y: -36)
+                    .frame(
+                        width: geometry.size.width,
+                        height: geometry.size.height / 2)
+                    .clipped()
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.72),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom)
+                    }
+                    .opacity(showsDetails ? 0.58 : 0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     private func heroMetrics(in geometry: GeometryProxy) -> BookHeroMetrics {
@@ -1183,14 +1219,14 @@ private struct BookShelfDetailModal: View {
                 from: liftedSourceMidY,
                 to: screenCenter.y,
                 progress: translationProgress))
-        // 52 top padding + the progress bar's own 3pt height + the 18pt
-        // VStack spacing above it, then half the 252pt cover placeholder —
+        // Top padding + progress bar + stack spacing + half the cover height
         // matches modalContent's real layout so the absolutely-positioned
         // cover art lands exactly over its reserved Color.clear spacer
         // instead of overlapping the progress bar above it.
         let finalCoverCenter = CGPoint(
             x: screenCenter.x,
-            y: screenCenter.y - targetHeight / 2 + 52 + 3 + 18 + 126)
+            y: screenCenter.y - targetHeight / 2 + 52 + 3 + 18
+                + expandedCoverSize.height / 2)
         let translatedCoverCenter = cardCenter
         let coverCenter = CGPoint(
             x: interpolate(
@@ -1220,11 +1256,11 @@ private struct BookShelfDetailModal: View {
             coverSize: CGSize(
                 width: interpolate(
                     from: resolvedSourceFrame.width,
-                    to: 168,
+                    to: expandedCoverSize.width,
                     progress: expansionProgress),
                 height: interpolate(
                     from: resolvedSourceFrame.height,
-                    to: 252,
+                    to: expandedCoverSize.height,
                     progress: expansionProgress)),
             coverCenter: coverCenter,
             coverCornerRadius: interpolate(from: 3, to: 8, progress: expansionProgress))
@@ -1236,11 +1272,11 @@ private struct BookShelfDetailModal: View {
                 .opacity(showsDetails ? 1 : 0)
 
             Color.clear
-                .frame(width: 168, height: 252)
+                .frame(width: expandedCoverSize.width, height: expandedCoverSize.height)
 
             VStack(spacing: 18) {
                 Text(book.title)
-                    .font(.custom("Didot-Bold", size: 28, relativeTo: .title))
+                    .font(.custom("Didot-Bold", size: 22, relativeTo: .title2))
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -1285,8 +1321,7 @@ private struct BookShelfDetailModal: View {
         .padding(.bottom, 20)
     }
 
-    // Real completed-pages fraction (see `progress`), matches the expanded
-    // cover's own 168pt width.
+    // Real completed-pages fraction, matched to the expanded cover width.
     private var coverProgressBar: some View {
         ZStack(alignment: .leading) {
             Capsule()
@@ -1296,9 +1331,9 @@ private struct BookShelfDetailModal: View {
                 }
             Capsule()
                 .fill(Color.black)
-                .frame(width: 168 * CGFloat(min(max(progress, 0), 1)))
+                .frame(width: expandedCoverSize.width * CGFloat(min(max(progress, 0), 1)))
         }
-        .frame(width: 168, height: 3)
+        .frame(width: expandedCoverSize.width, height: 3)
         .accessibilityHidden(true)
     }
 
