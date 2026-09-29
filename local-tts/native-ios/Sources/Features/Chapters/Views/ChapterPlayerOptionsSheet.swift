@@ -47,13 +47,11 @@ struct ChapterPlayerOptionsSheet: View {
                 .background(.ultraThinMaterial)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.background)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 16)
-        // Match VoicePreviewSheet: the system sheet is invisible and this
-        // view draws the rounded, themed sheet card itself.
-        .presentationBackground(.clear)
+        .background(theme.background.ignoresSafeArea())
+        // Color the native presentation itself instead of drawing an inset
+        // card, so the active reader theme reaches every sheet edge and the
+        // system owns the sheet's outer corner shape.
+        .presentationBackground(theme.background)
         // One detent keeps the sheet at its initial height. All overflow is
         // handled by the ScrollView above rather than expanding the sheet.
         .presentationDetents([.medium])

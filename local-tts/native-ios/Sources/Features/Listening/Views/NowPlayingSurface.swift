@@ -40,6 +40,9 @@ struct NowPlayingSurface: View {
     /// duration) describe *this* page. False when nothing is playing yet, or
     /// when the player is on some other book.
     let isActive: Bool
+    /// Keeps the audio content below an overlaid reader header while the
+    /// ambient artwork background still fills the entire screen behind it.
+    let topContentInset: CGFloat
     /// Routed back to the reader rather than calling the player directly,
     /// so play starts a session when there isn't one — `togglePlayPause`
     /// alone no-ops against an idle player.
@@ -53,6 +56,9 @@ struct NowPlayingSurface: View {
     var body: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: topContentInset)
+                    .accessibilityHidden(true)
                 cover(height: coverHeight(in: geometry))
                 Spacer(minLength: 16)
                 titleBlock
@@ -88,7 +94,7 @@ struct NowPlayingSurface: View {
     /// landscape there's barely any vertical room at all.
     private func coverHeight(in geometry: GeometryProxy) -> CGFloat {
         let reservedBelowCover: CGFloat = 330
-        let available = geometry.size.height - reservedBelowCover
+        let available = geometry.size.height - reservedBelowCover - topContentInset
         // 2:3, so the width it implies also has to fit the side padding —
         // and a further margin of its own (`- 100`, not just the screen's
         // `- 56` side padding), so the cover reads as artwork sitting on
@@ -340,5 +346,6 @@ struct NowPlayingSurface: View {
     let app = AppEnvironment.preview()
     return NowPlayingSurface(
         player: app.player, coverURL: nil, title: "A Book", pageIndex: 2, pageCount: 326,
-        isActive: false, onTogglePlayPause: {}, onSelectPage: { _ in })
+        isActive: false, topContentInset: 0,
+        onTogglePlayPause: {}, onSelectPage: { _ in })
 }

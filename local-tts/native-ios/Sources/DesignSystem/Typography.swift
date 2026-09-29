@@ -47,6 +47,7 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
     case sfProText
     case newYork
     case georgia
+    case timesNewRoman
     case avenirNext
 
     var id: String { rawValue }
@@ -56,6 +57,7 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
         case .sfProText: return "SF Pro Text"
         case .newYork: return "New York"
         case .georgia: return "Georgia"
+        case .timesNewRoman: return "Times New Roman"
         case .avenirNext: return "Avenir Next"
         }
     }
@@ -76,6 +78,9 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
             return .system(size: size, weight: weight, design: .serif)
         case .georgia:
             return .custom(weight == .regular ? "Georgia" : "Georgia-Bold", size: size)
+        case .timesNewRoman:
+            return .custom(
+                weight == .regular ? "TimesNewRomanPSMT" : "TimesNewRomanPS-BoldMT", size: size)
         case .avenirNext:
             return .custom(
                 weight == .regular ? "AvenirNext-Regular" : "AvenirNext-DemiBold", size: size)

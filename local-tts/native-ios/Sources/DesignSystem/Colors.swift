@@ -87,6 +87,9 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
     case chatGPT
     case midnight
     case sage
+    case warmPaper
+    case sepia
+    case linen
 
     var id: String { rawValue }
 
@@ -98,13 +101,16 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return "ChatGPT"
         case .midnight: return "Midnight"
         case .sage: return "Sage"
+        case .warmPaper: return "Warm Paper"
+        case .sepia: return "Sepia"
+        case .linen: return "Linen"
         }
     }
 
     var colorScheme: ColorScheme {
         switch self {
         case .dark, .carbon, .midnight: return .dark
-        case .claude, .chatGPT, .sage: return .light
+        case .claude, .chatGPT, .sage, .warmPaper, .sepia, .linen: return .light
         }
     }
 
@@ -116,6 +122,9 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return .white
         case .midnight: return Color(hex: 0x101525)
         case .sage: return Color(hex: 0xEEF2E8)
+        case .warmPaper: return Color(hex: 0xF7F1E3)
+        case .sepia: return Color(hex: 0xF2E2C4)
+        case .linen: return Color(hex: 0xF8F4EC)
         }
     }
 
@@ -127,6 +136,9 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return Color(hex: 0x0D0D0D)
         case .midnight: return Color(hex: 0xEEF0FF)
         case .sage: return Color(hex: 0x253128)
+        case .warmPaper: return Color(hex: 0x2D2923)
+        case .sepia: return Color(hex: 0x30271D)
+        case .linen: return Color(hex: 0x26231F)
         }
     }
 
@@ -138,6 +150,9 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return Color(hex: 0x5D5D5D)
         case .midnight: return Color(hex: 0x9CA6C8)
         case .sage: return Color(hex: 0x687468)
+        case .warmPaper: return Color(hex: 0x655E54)
+        case .sepia: return Color(hex: 0x695744)
+        case .linen: return Color(hex: 0x625D54)
         }
     }
 
@@ -149,13 +164,17 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return Color(hex: 0xF4F4F4).opacity(0.94)
         case .midnight: return Color(hex: 0x1C2440).opacity(0.94)
         case .sage: return Color(hex: 0xDDE5D5).opacity(0.94)
+        case .warmPaper: return Color(hex: 0xE8DECA).opacity(0.94)
+        case .sepia: return Color(hex: 0xE2CBA4).opacity(0.94)
+        case .linen: return Color(hex: 0xEAE3D8).opacity(0.94)
         }
     }
 
     var controlAccent: Color {
         switch self {
         case .dark, .carbon: return .green
-        case .claude, .chatGPT, .midnight, .sage: return wordHighlightBackground
+        case .claude, .chatGPT, .midnight, .sage, .warmPaper, .sepia, .linen:
+            return wordHighlightBackground
         }
     }
 
@@ -165,7 +184,8 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
     var optionsAccent: Color {
         switch self {
         case .dark, .carbon: return .white
-        case .claude, .chatGPT, .midnight, .sage: return controlAccent
+        case .claude, .chatGPT, .midnight, .sage, .warmPaper, .sepia, .linen:
+            return controlAccent
         }
     }
 
@@ -177,6 +197,9 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return Color(hex: 0xE5F2FF)
         case .midnight: return Color(hex: 0x242A4C)
         case .sage: return Color(hex: 0xD8E4CF)
+        case .warmPaper: return Color(hex: 0xE8D8B8)
+        case .sepia: return Color(hex: 0xE5CAA0)
+        case .linen: return Color(hex: 0xE5DDD0)
         }
     }
 
@@ -188,13 +211,18 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
         case .chatGPT: return Color(hex: 0x0285FF)
         case .midnight: return Color(hex: 0x6858C9)
         case .sage: return Color(hex: 0x55705A)
+        case .warmPaper: return Color(hex: 0x7B4F32)
+        case .sepia: return Color(hex: 0x814E28)
+        case .linen: return Color(hex: 0x62574B)
         }
     }
 
     var highlightedText: Color {
         switch self {
-        case .dark, .carbon, .chatGPT, .midnight, .sage: return .white
+        case .dark, .carbon, .chatGPT, .midnight, .sage, .linen: return .white
         case .claude: return Color(hex: 0x141413)
+        case .warmPaper: return Color(hex: 0xFFFAF0)
+        case .sepia: return Color(hex: 0xFFF6E5)
         }
     }
 }
