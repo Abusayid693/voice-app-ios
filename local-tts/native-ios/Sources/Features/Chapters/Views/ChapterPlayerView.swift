@@ -200,10 +200,6 @@ struct ChapterPlayerView: View {
     // (chapterPlayer's ticker), and this does an O(n) string search over
     // the chapter text.
     @State private var paragraphGroups: [[Int]] = []
-    /// One entry per paragraph group: the heading style the source document gave
-    /// it, or nil for body text. Computed alongside `paragraphGroups` because it
-    /// reuses the same chunk-to-page-text offsets.
-    @State private var paragraphStyles: [ReaderTextStyle?] = []
     // Precomputed per-group word items (see wordItems(for:)) + a
     // per-group revision, both feeding ParagraphRow's Equatable
     // conformance — the actual fix for read-along scroll jank. Without
@@ -479,7 +475,6 @@ struct ChapterPlayerView: View {
         .onChange(of: player.chunkTexts.count) { _, _ in
             if isCurrentKokoroPageActive {
                 paragraphGroups = computeParagraphGroups()
-                paragraphStyles = computeParagraphStyles(groups: effectiveGroups)
                 recomputeWordItems()
             }
         }
@@ -868,7 +863,6 @@ struct ChapterPlayerView: View {
         currentPage = page
         idleChunkTexts = KokoroTextChunker.chunk(page.text)
         paragraphGroups = computeParagraphGroups()
-        paragraphStyles = computeParagraphStyles(groups: effectiveGroups)
         paragraphWordItems = []
         paragraphRevisions = []
         recomputeWordItems()
@@ -893,7 +887,8 @@ struct ChapterPlayerView: View {
     }
 
     private func recomputeWordItems() {
-        let fresh = effectiveGroups.map { wordItems(for: $0) }
+        let styling = makePageStyling()
+        let fresh = effectiveGroups.map { wordItems(for: $0, styling: styling) }
         guard fresh.count == paragraphWordItems.count else {
             // The group count changed — every row's content is now derived
             // from a different set of chunks, so stamp them all with one
@@ -1011,34 +1006,6 @@ struct ChapterPlayerView: View {
         return page.lineRects
             .filter { $0.start < end && $0.end > start }
             .map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
-    }
-
-    /// Matches each paragraph group against the page's stored heading ranges.
-    ///
-    /// A group qualifies only when it *starts* at a heading and is not
-    /// materially longer than that heading. Both halves matter: the length guard
-    /// is what stops a heading that accidentally merged with the paragraph
-    /// following it from rendering that whole paragraph at title size, which is
-    /// a far louder failure than missing a heading altogether.
-    private func computeParagraphStyles(groups: [[Int]]) -> [ReaderTextStyle?] {
-        guard let page = currentPage, !page.headings.isEmpty else {
-            return Array(repeating: nil, count: groups.count)
-        }
-        let text = page.text
-        let ranges = chunkRanges(in: text, texts: visibleChunkTexts)
-
-        return groups.map { group in
-            let located = group.compactMap { index -> Range<String.Index>? in
-                ranges.indices.contains(index) ? ranges[index] : nil
-            }
-            guard let first = located.first, let last = located.last else { return nil }
-            let start = text.distance(from: text.startIndex, to: first.lowerBound)
-            let length = text.distance(from: first.lowerBound, to: last.upperBound)
-            return page.headings.first { heading in
-                heading.start == start
-                    && Double(length) <= Double(heading.length) * 1.5 + 8
-            }?.style
-        }
     }
 
     // MARK: - Floating player
@@ -1566,7 +1533,7 @@ struct ChapterPlayerView: View {
         let group = effectiveGroups[groupIndex]
         let items =
             paragraphWordItems.indices.contains(groupIndex)
-            ? paragraphWordItems[groupIndex] : wordItems(for: group)
+            ? paragraphWordItems[groupIndex] : wordItems(for: group, styling: makePageStyling())
         let revision = paragraphRevisions.indices.contains(groupIndex) ? paragraphRevisions[groupIndex] : 0
         // Position only — NOT gated on isPlaying, so the chunk band and
         // its last-highlighted word stay put on pause instead of both
@@ -1599,8 +1566,6 @@ struct ChapterPlayerView: View {
                 isCurrentGroup: isCurrentGroup,
                 fontSize: readerFontSize,
                 fontFamily: readerFontFamily,
-                style: paragraphStyles.indices.contains(groupIndex)
-                    ? paragraphStyles[groupIndex] : nil,
                 theme: readerTheme,
                 selectedItemIndex: selectedItemIndex,
                 frameBox: paragraphFrameBoxes.box(for: groupIndex),
@@ -1644,9 +1609,6 @@ struct ChapterPlayerView: View {
         let isCurrentGroup: Bool
         let fontSize: ReaderFontSize
         let fontFamily: ReaderFontFamily
-        /// The source document's own heading treatment for this paragraph, or
-        /// nil for body text.
-        let style: ReaderTextStyle?
         let theme: ReaderTheme
         /// Which word (index into `items`) is awaiting a confirming tap on
         /// its "Play from here" button, or nil. Part of `==`: it changes
@@ -1673,28 +1635,27 @@ struct ChapterPlayerView: View {
                 && lhs.highlightedWordIndex == rhs.highlightedWordIndex
                 && lhs.currentChunkIndex == rhs.currentChunkIndex && lhs.isCurrentGroup == rhs.isCurrentGroup
                 && lhs.fontSize == rhs.fontSize && lhs.fontFamily == rhs.fontFamily
-                && lhs.style == rhs.style && lhs.theme == rhs.theme
+                && lhs.theme == rhs.theme
                 && lhs.selectedItemIndex == rhs.selectedItemIndex
         }
 
         // The inputs that can change a word's measured size. Colors (which is
         // all the highlight changes) can't, so the ~12x/sec re-runs while this
         // paragraph plays reuse the measured sizes instead of re-measuring
-        // every word each time. `style` belongs here as much as in `==`: it
-        // scales the font, so leaving it out would hand WordFlowLayout's cache
-        // body-sized measurements for heading-sized words.
+        // every word each time. Per-word styles ride in on `itemsRevision`:
+        // `FlowWordItem` compares its own style, so a style change is already a
+        // content change that bumps the revision.
         private var measurementVersion: Int {
             var hasher = Hasher()
             hasher.combine(itemsRevision)
             hasher.combine(fontSize)
             hasher.combine(fontFamily)
-            hasher.combine(style)
             return hasher.finalize()
         }
 
-        private var resolvedFont: Font {
+        private func font(for style: ReaderTextStyle?) -> Font {
             guard let style else { return fontSize.font(family: fontFamily) }
-            return fontSize.font(family: fontFamily, scale: style.scale, bold: style.isBold)
+            return fontSize.font(family: fontFamily, style: style)
         }
 
         var body: some View {
@@ -1725,7 +1686,7 @@ struct ChapterPlayerView: View {
                     // radius reads as one continuous band rather than pills.
                     let isCurrentChunk = item.chunkIndex == currentChunkIndex
                     Text(item.text)
-                        .font(resolvedFont)
+                        .font(font(for: item.style))
                         .foregroundStyle(isHighlighted ? theme.highlightedText : theme.primaryText)
                         .padding(.horizontal, 2)
                         .padding(.vertical, 1)
@@ -1770,7 +1731,11 @@ struct ChapterPlayerView: View {
             // it, and applied as a modifier on the same view — an if/else
             // around the row would change its structural identity and force a
             // re-measure of everything below it in the LazyVStack.
-            .padding(.top, style.map { ($0.scale - 1) * 20 + 10 } ?? 0)
+            // Emphasised body text is styled but is *not* a section opener, so
+            // it takes the document's weight without the space above. Read off
+            // the first word, since that is what decides whether this row opens
+            // a section — a heading mid-row is preceded by its own line break.
+            .padding(.top, items.first?.style.map { $0.isHeading ? ($0.scale - 1) * 20 + 10 : 0 } ?? 0)
         }
 
         /// The word whose frame contains the tap, or — taps often land in
@@ -1854,13 +1819,59 @@ struct ChapterPlayerView: View {
         /// been synthesized yet, rather than falling back to its start.
         let ordinalInChunk: Int
         let lineBreaksBefore: Int
+        /// The document's own treatment for this word, resolved from its
+        /// character offset in the page text.
+        ///
+        /// Per *word* rather than per row because a row is a paragraph group,
+        /// and the synthesis chunker does not respect headings: "Communalist
+        /// Approach" and the 300 characters of body text after it land in one
+        /// chunk, so one style for the whole row can only be right for one of
+        /// them. Styling by offset also picks up emphasis inside a sentence,
+        /// which a row-level style could never express.
+        let style: ReaderTextStyle?
     }
 
-    private func wordItems(for group: [Int]) -> [FlowWordItem] {
+    /// Resolves a word's character offset in the page text to whatever style the
+    /// document gave it.
+    ///
+    /// Built once per recompute and handed down: locating chunks inside the page
+    /// text is a scan of the whole page, far too expensive to repeat per
+    /// paragraph.
+    private struct PageStyling {
+        let chunkStarts: [Int?]
+        let ranges: [ReaderStyledRange]
+
+        var isEmpty: Bool { ranges.isEmpty }
+
+        func chunkStart(_ index: Int) -> Int? {
+            chunkStarts.indices.contains(index) ? chunkStarts[index] : nil
+        }
+
+        func style(at offset: Int) -> ReaderTextStyle? {
+            ranges.first { offset >= $0.start && offset < $0.end }?.style
+        }
+    }
+
+    private func makePageStyling() -> PageStyling {
+        guard let page = currentPage, !page.styledRanges.isEmpty else {
+            return PageStyling(chunkStarts: [], ranges: [])
+        }
+        let starts = chunkRanges(in: page.text, texts: visibleChunkTexts).map { range in
+            range.map { page.text.distance(from: page.text.startIndex, to: $0.lowerBound) }
+        }
+        return PageStyling(chunkStarts: starts, ranges: page.styledRanges)
+    }
+
+    private func wordItems(for group: [Int], styling: PageStyling) -> [FlowWordItem] {
         let texts = visibleChunkTexts
         var items: [FlowWordItem] = []
         for (positionInGroup, chunkIndex) in group.enumerated() {
             guard texts.indices.contains(chunkIndex) else { continue }
+            // Offsets come from the chunk's own text rather than from whichever
+            // token source renders below, so they stay correct even if real
+            // timings ever split a word differently from the plain splitter.
+            let styleOffsets = styling.isEmpty
+                ? [] : wordOffsets(inChunk: texts[chunkIndex], start: styling.chunkStart(chunkIndex))
             // Newlines at the END of the previous chunk's text would
             // otherwise be lost entirely: splitPreservingSeparators only
             // reports whitespace that *precedes* a word, so a chunk ending
@@ -1899,10 +1910,27 @@ struct ChapterPlayerView: View {
                         text: token.word, chunkIndex: chunkIndex,
                         wordIndexInChunk: token.wordIndexInChunk,
                         ordinalInChunk: i,
-                        lineBreaksBefore: min(2, breaks)))
+                        lineBreaksBefore: min(2, breaks),
+                        style: styleOffsets.indices.contains(i)
+                            ? styling.style(at: styleOffsets[i]) : nil))
             }
         }
         return items
+    }
+
+    /// Each word's character offset within the page text, walked from the
+    /// chunk's own start. Character counts throughout, matching
+    /// `ReaderStyledRange`'s own offsets.
+    private func wordOffsets(inChunk text: String, start: Int?) -> [Int] {
+        guard let start else { return [] }
+        var offsets: [Int] = []
+        var cursor = start
+        for token in WordTimingDeriver.splitPreservingSeparators(text) {
+            cursor += token.precedingSeparator.count
+            offsets.append(cursor)
+            cursor += token.word.count
+        }
+        return offsets
     }
 
     private func trailingNewlineCount(of text: String) -> Int {
@@ -1936,7 +1964,7 @@ struct ChapterPlayerView: View {
         let group = effectiveGroups.indices.contains(groupIndex) ? effectiveGroups[groupIndex] : []
         let items =
             paragraphWordItems.indices.contains(groupIndex)
-            ? paragraphWordItems[groupIndex] : wordItems(for: group)
+            ? paragraphWordItems[groupIndex] : wordItems(for: group, styling: makePageStyling())
         guard items.indices.contains(itemIndex) else { return }
         let item = items[itemIndex]
         player.playFromWord(

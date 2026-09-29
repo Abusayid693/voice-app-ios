@@ -177,7 +177,8 @@ struct PDFParagraphAssembler {
         return PDFTextFragment(
             text: lhs.text + separator + rhs.text, pageIndex: lhs.pageIndex,
             bounds: PDFNormalizedRect(union), fontName: dominant.fontName,
-            fontSize: dominant.fontSize, isBold: dominant.isBold)
+            fontSize: dominant.fontSize, weight: dominant.weight,
+            fontClass: dominant.fontClass)
     }
 
     /// Character-weighted modal font size across every line of a document —
@@ -220,7 +221,7 @@ struct PDFParagraphAssembler {
 
         func flush() {
             guard let first = current.first else { return }
-            let joined = joined(current)
+            let joined = joined(current, metrics: metrics)
             if !joined.text.isEmpty {
                 // The longest line represents the paragraph's typography
                 // better than its first one, which may be a short opener.
@@ -228,9 +229,9 @@ struct PDFParagraphAssembler {
                 let heading = isHeading(dominant, metrics: metrics)
                 result.append(PDFParagraph(
                     text: joined.text, pageIndex: pageIndex, top: first.bounds.y,
-                    fontSize: dominant.fontSize, isBold: dominant.isBold,
-                    isHeading: heading,
-                    fontScale: heading ? headingScale(dominant, metrics: metrics) : 1,
+                    fontSize: dominant.fontSize, weight: dominant.weight,
+                    fontClass: dominant.fontClass, isHeading: heading,
+                    fontScale: fontScale(dominant, metrics: metrics),
                     lineSpans: joined.spans))
             }
             current = []
@@ -317,15 +318,44 @@ struct PDFParagraphAssembler {
         // a full-measure bold line is emphasised body text.
         let isShort = line.bounds.maxX < metrics.columnRight - metrics.columnWidth * 0.15
         guard isShort else { return false }
+        // A short line carries its own evidence, so a gentler size margin is
+        // safe here than the full-measure test above: the short lines in body
+        // text are paragraph endings, which are set at exactly body size and so
+        // score 1.0. This matters because plenty of embedded fonts name no
+        // weight at all, leaving size as a heading's only remaining signal.
+        if metrics.referenceFontSize > 0,
+           line.fontSize >= metrics.referenceFontSize * 1.08
+        {
+            return true
+        }
         return line.isBold || isAllCaps(line.text)
     }
 
-    /// How much larger this heading was than the document's body text, clamped:
-    /// a cover-page title set at 5x would otherwise dwarf the reader, and a
-    /// heading distinguished only by weight legitimately scores 1.0.
-    private func headingScale(_ line: PDFTextFragment, metrics: Metrics) -> Double {
+    /// This paragraph's size as a multiple of the document's own body size.
+    ///
+    /// Clamped at both ends — a cover-page title set at 5x would dwarf the
+    /// reader, a 0.4x legal footnote would be unreadable — then snapped: a size
+    /// within ±6% of body *is* body, because producers emit 9.96pt where they
+    /// mean 10, and a page of 0.99x paragraphs reads as sloppy rather than
+    /// faithful. Rounding the rest to a 0.05 step keeps paragraphs the document
+    /// set identically measuring identically, which `WordFlowLayout`'s size
+    /// cache keys off.
+    private func fontScale(_ line: PDFTextFragment, metrics: Metrics) -> Double {
         guard metrics.referenceFontSize > 0, line.fontSize > 0 else { return 1 }
-        return min(2, max(1, line.fontSize / metrics.referenceFontSize))
+        let raw = line.fontSize / metrics.referenceFontSize
+        guard abs(raw - 1) > 0.06 else { return 1 }
+        return (min(2, max(0.7, raw)) * 20).rounded() / 20
+    }
+
+    /// The class covering the most characters across the document — the face a
+    /// reader would call "the body font", against which everything else is a
+    /// deliberate contrast.
+    func bodyFontClass(across lines: [PDFTextFragment]) -> ReaderFontClass {
+        var weights: [ReaderFontClass: Int] = [:]
+        for line in lines {
+            weights[line.fontClass, default: 0] += line.text.count
+        }
+        return weights.max { $0.value < $1.value }?.key ?? .serif
     }
 
     /// A line that opens mid-sentence is never the start of a paragraph. The
@@ -448,14 +478,16 @@ struct PDFParagraphAssembler {
     /// text and its rectangle are still associated, and joining rewrites the
     /// text — it merges fragments, drops wrap hyphens and inserts separators.
     private func joined(
-        _ lines: [PDFTextFragment]
+        _ lines: [PDFTextFragment], metrics: Metrics
     ) -> (text: String, spans: [PDFParagraphLineSpan]) {
         var text = ""
         var spans: [PDFParagraphLineSpan] = []
 
         func appendSpan(start: Int, _ line: PDFTextFragment) {
             spans.append(PDFParagraphLineSpan(
-                start: start, length: line.text.count, bounds: line.bounds))
+                start: start, length: line.text.count, bounds: line.bounds,
+                weight: line.weight, fontClass: line.fontClass,
+                fontScale: fontScale(line, metrics: metrics)))
         }
 
         for line in lines {
@@ -474,7 +506,8 @@ struct PDFParagraphAssembler {
                     if let previous = spans.popLast() {
                         spans.append(PDFParagraphLineSpan(
                             start: previous.start, length: max(0, previous.length - 1),
-                            bounds: previous.bounds))
+                            bounds: previous.bounds, weight: previous.weight,
+                            fontClass: previous.fontClass, fontScale: previous.fontScale))
                     }
                     appendSpan(start: text.count - 1, line)
                     text = rejoined

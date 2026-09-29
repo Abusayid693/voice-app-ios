@@ -65,7 +65,8 @@ actor PDFProcessingActor {
         try Task.checkCancellation()
 
         let repeated = try repeatedHeaderFooterLines(job: job, pageCount: pageCount)
-        let bodyFontSize = documentBodyFontSize(job: job, pageCount: pageCount)
+        let typography = documentTypography(job: job, pageCount: pageCount)
+        let bodyFontSize = typography.bodyFontSize
         try FileManager.default.createDirectory(
             at: job.readerPagesDirectory, withIntermediateDirectories: true)
 
@@ -76,7 +77,11 @@ actor PDFProcessingActor {
             if
                 let data = try? Data(contentsOf: job.readerPageURL(index: pageIndex)),
                 let existing = try? JSONDecoder().decode(ReaderPage.self, from: data),
-                existing.index == pageIndex
+                existing.index == pageIndex,
+                // A page checkpointed by an older styling pipeline is re-derived
+                // rather than reused, so an import resumed across an app update
+                // can't finalize half the book with the old typography.
+                existing.formatVersion == ReaderPage.currentFormatVersion
             {
                 readerPage = existing
             } else {
@@ -87,7 +92,8 @@ actor PDFProcessingActor {
                 readerPage = makeReaderPage(
                     at: pageIndex, from: paragraphs,
                     pageSize: CGSize(
-                        width: content?.pageWidth ?? 0, height: content?.pageHeight ?? 0))
+                        width: content?.pageWidth ?? 0, height: content?.pageHeight ?? 0),
+                    bodyFontClass: typography.bodyFontClass)
                 let data = try JSONEncoder().encode(readerPage)
                 try data.write(to: job.readerPageURL(index: pageIndex), options: .atomic)
             }
@@ -203,41 +209,72 @@ actor PDFProcessingActor {
             documentBodyFontSize: bodyFontSize)
     }
 
-    /// One body size for the whole document, so a heading's scale means the same
+    /// One body size and one body face-class for the whole document, so a
+    /// paragraph's scale and its "is this a different face?" test mean the same
     /// thing on every page. Measured over the geometry already checkpointed on
     /// disk, the same way `repeatedHeaderFooterLines` works, so this costs a
     /// read rather than another PDFKit pass.
-    private func documentBodyFontSize(job: PDFImportJob, pageCount: Int) -> Double {
+    private func documentTypography(
+        job: PDFImportJob, pageCount: Int
+    ) -> (bodyFontSize: Double, bodyFontClass: ReaderFontClass) {
         var lines: [PDFTextFragment] = []
         for pageIndex in 0..<pageCount {
             guard let page = loadPage(job: job, index: pageIndex) else { continue }
             lines.append(contentsOf: page.lines)
         }
-        return assembler.bodyFontSize(across: lines)
+        return (assembler.bodyFontSize(across: lines), assembler.bodyFontClass(across: lines))
     }
 
-    /// Joins the page's paragraphs into one string, recording where the headings
-    /// landed. The offsets have to be built here, as the text is assembled — the
+    /// Joins the page's paragraphs into one string, recording where the styled
+    /// ones landed. The offsets have to be built here, as the text is assembled — the
     /// styling travels beside `text` rather than inside it, because the reader
     /// locates synthesis chunks by searching for them as literal substrings of
     /// this exact string (and the TTS engine speaks it verbatim).
     private func makeReaderPage(
-        at index: Int, from paragraphs: [PDFParagraph], pageSize: CGSize
+        at index: Int, from paragraphs: [PDFParagraph], pageSize: CGSize,
+        bodyFontClass: ReaderFontClass
     ) -> ReaderPage {
         let separator = "\n\n"
         var text = ""
-        var headings: [ReaderStyledRange] = []
+        var styledRanges: [ReaderStyledRange] = []
         var lineRects: [ReaderTextRect] = []
         let canMapRects = pageSize.width > 0 && pageSize.height > 0
 
         for paragraph in paragraphs where !paragraph.text.isEmpty {
             if !text.isEmpty { text += separator }
             let base = text.count
-            if paragraph.isHeading {
-                headings.append(ReaderStyledRange(
-                    start: base, length: paragraph.text.count,
-                    style: ReaderTextStyle(
-                        scale: paragraph.fontScale, isBold: paragraph.isBold)))
+            // Styling is recorded per *source line*, not per paragraph. Assembly
+            // merges lines the document set differently whenever none of the
+            // prose break rules separate them — a bold contents entry and the
+            // regular one beneath it both run to the right margin, so they land
+            // in one paragraph — and a paragraph-wide style would then spread
+            // the first line's weight across every line after it.
+            //
+            // Recorded for every line the document set apart, not just headings:
+            // size, weight and face all carry structure. A face is only worth
+            // recording where it contrasts with the document's own body face,
+            // since otherwise the reader's chosen font should keep governing.
+            //
+            // A paragraph whose lines could not be mapped back to its text
+            // keeps the old paragraph-wide range: coarser, but better than
+            // dropping its styling entirely.
+            let spans: [(start: Int, length: Int, style: ReaderTextStyle)]
+            if paragraph.lineSpans.isEmpty {
+                spans = [(0, paragraph.text.count, ReaderTextStyle(
+                    scale: paragraph.fontScale, weight: paragraph.weight,
+                    fontClass: paragraph.fontClass == bodyFontClass ? nil : paragraph.fontClass,
+                    isHeading: paragraph.isHeading))]
+            } else {
+                spans = paragraph.lineSpans.map { span in
+                    (span.start, span.length, ReaderTextStyle(
+                        scale: span.fontScale, weight: span.weight,
+                        fontClass: span.fontClass == bodyFontClass ? nil : span.fontClass,
+                        isHeading: paragraph.isHeading))
+                }
+            }
+            for span in spans where !isPlainBody(span.style) {
+                styledRanges.append(ReaderStyledRange(
+                    start: base + span.start, length: span.length, style: span.style))
             }
             if canMapRects {
                 // Rebase each line onto the page's text, and express its
@@ -259,9 +296,22 @@ actor PDFProcessingActor {
         // guard the invariant rather than trusting it.
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed == text else {
-            return ReaderPage(index: index, text: trimmed)
+            // Still current-version: the offsets are unsafe, not the pipeline,
+            // so re-deriving this page on every resume would change nothing.
+            return ReaderPage(
+                index: index, text: trimmed, formatVersion: ReaderPage.currentFormatVersion)
         }
-        return ReaderPage(index: index, text: text, headings: headings, lineRects: lineRects)
+        return ReaderPage(
+            index: index, text: text, styledRanges: styledRanges, lineRects: lineRects,
+            formatVersion: ReaderPage.currentFormatVersion)
+    }
+
+    /// Nothing the reader would render differently from its own defaults, so
+    /// storing a range for it would cost a page-file entry and a lookup to say
+    /// "unchanged".
+    private func isPlainBody(_ style: ReaderTextStyle) -> Bool {
+        !style.isHeading && style.scale == 1 && style.weight == .regular
+            && style.fontClass == nil
     }
 
     private func isPrintedPageNumber(_ line: PDFTextFragment, pageHeight: Double) -> Bool {

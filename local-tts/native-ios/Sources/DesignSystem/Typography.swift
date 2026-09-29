@@ -29,15 +29,26 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
         family.font(size: pointSize)
     }
 
-    /// A heading's font, scaled off whatever body size the reader is set to.
+    /// A styled paragraph's font, scaled off whatever body size the reader is set
+    /// to.
     ///
-    /// `scale` and `bold` come from the source document — an imported PDF's own
-    /// heading is measured against its own body text, so a title the author set
-    /// at 1.8x stays 1.8x here. That keeps the document's hierarchy instead of
-    /// imposing a fixed one, and it still tracks the reader's font preference
-    /// because it multiplies `pointSize` rather than replacing it.
-    func font(family: ReaderFontFamily, scale: Double, bold: Bool) -> Font {
-        family.font(size: pointSize * CGFloat(scale), weight: bold ? .bold : .regular)
+    /// The style comes from the source document — an imported PDF's heading is
+    /// measured against its own body text, so a title the author set at 1.8x
+    /// stays 1.8x here. That keeps the document's hierarchy instead of imposing a
+    /// fixed one, and it still tracks the reader's font preference because it
+    /// multiplies `pointSize` rather than replacing it.
+    ///
+    /// The face is the one place the document does *not* simply win. A PDF's real
+    /// face is usually an embedded subset that exists nowhere on the device, and
+    /// the reader's own font choice is a setting the user made deliberately — so
+    /// `style.fontClass` is set only where the document contrasted against its own
+    /// body face, and only then does it override.
+    func font(family: ReaderFontFamily, style: ReaderTextStyle) -> Font {
+        let size = pointSize * CGFloat(style.scale)
+        guard let fontClass = style.fontClass, fontClass != family.fontClass else {
+            return family.font(size: size, weight: style.weight)
+        }
+        return fontClass.font(size: size, weight: style.weight)
     }
 }
 
@@ -62,28 +73,77 @@ enum ReaderFontFamily: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Which class this family reads as, so an imported document's own face is
+    /// only allowed to override the user's choice when the two genuinely differ.
+    var fontClass: ReaderFontClass {
+        switch self {
+        case .sfProText, .avenirNext: return .sansSerif
+        case .newYork, .georgia, .timesNewRoman: return .serif
+        }
+    }
+
     func font(size: CGFloat) -> Font {
         font(size: size, weight: .regular)
     }
 
-    /// The two `.custom` families need their bold face by name — `.bold()` on a
-    /// custom font synthesises the weight rather than using the real one.
-    func font(size: CGFloat, weight: Font.Weight) -> Font {
+    /// The `.custom` families address a face *by name*, so a weight only exists
+    /// if the family actually ships it — asking for one it doesn't have makes
+    /// SwiftUI synthesise a smeared approximation instead. Georgia and Times
+    /// ship regular and bold only, so the scale collapses onto those two; Avenir
+    /// Next has the full run and maps one to one.
+    func font(size: CGFloat, weight: ReaderFontWeight) -> Font {
         switch self {
         case .sfProText:
-            return .system(size: size, weight: weight, design: .default)
+            return .system(size: size, weight: weight.swiftUI, design: .default)
         case .newYork:
             // The system serif design resolves to Apple's New York family
             // and follows the platform's optical-size behavior.
-            return .system(size: size, weight: weight, design: .serif)
+            return .system(size: size, weight: weight.swiftUI, design: .serif)
         case .georgia:
-            return .custom(weight == .regular ? "Georgia" : "Georgia-Bold", size: size)
+            return .custom(weight.isEmphasised ? "Georgia-Bold" : "Georgia", size: size)
         case .timesNewRoman:
             return .custom(
-                weight == .regular ? "TimesNewRomanPSMT" : "TimesNewRomanPS-BoldMT", size: size)
+                weight.isEmphasised ? "TimesNewRomanPS-BoldMT" : "TimesNewRomanPSMT", size: size)
         case .avenirNext:
-            return .custom(
-                weight == .regular ? "AvenirNext-Regular" : "AvenirNext-DemiBold", size: size)
+            return .custom(Self.avenirNextFace(for: weight), size: size)
+        }
+    }
+
+    private static func avenirNextFace(for weight: ReaderFontWeight) -> String {
+        switch weight {
+        case .light: return "AvenirNext-UltraLight"
+        case .regular: return "AvenirNext-Regular"
+        case .medium: return "AvenirNext-Medium"
+        case .semibold: return "AvenirNext-DemiBold"
+        case .bold: return "AvenirNext-Bold"
+        case .heavy: return "AvenirNext-Heavy"
+        }
+    }
+}
+
+extension ReaderFontWeight {
+    var swiftUI: Font.Weight {
+        switch self {
+        case .light: return .light
+        case .regular: return .regular
+        case .medium: return .medium
+        case .semibold: return .semibold
+        case .bold: return .bold
+        case .heavy: return .heavy
+        }
+    }
+}
+
+extension ReaderFontClass {
+    /// The system face standing in for this class. Deliberately a system design
+    /// rather than a named font: this is only reached where an imported document
+    /// contrasted against its own body face, and the system families carry every
+    /// weight at every optical size, which a named family may not.
+    func font(size: CGFloat, weight: ReaderFontWeight) -> Font {
+        switch self {
+        case .serif: return .system(size: size, weight: weight.swiftUI, design: .serif)
+        case .sansSerif: return .system(size: size, weight: weight.swiftUI, design: .default)
+        case .monospaced: return .system(size: size, weight: weight.swiftUI, design: .monospaced)
         }
     }
 }

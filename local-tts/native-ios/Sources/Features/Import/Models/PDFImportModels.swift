@@ -123,7 +123,57 @@ struct PDFTextFragment: Codable, Hashable {
     let bounds: PDFNormalizedRect
     let fontName: String?
     let fontSize: Double
-    let isBold: Bool
+    let weight: ReaderFontWeight
+    let fontClass: ReaderFontClass
+
+    var isBold: Bool { weight.isEmphasised }
+
+    init(
+        text: String, pageIndex: Int, bounds: PDFNormalizedRect, fontName: String?,
+        fontSize: Double, weight: ReaderFontWeight, fontClass: ReaderFontClass
+    ) {
+        self.text = text
+        self.pageIndex = pageIndex
+        self.bounds = bounds
+        self.fontName = fontName
+        self.fontSize = fontSize
+        self.weight = weight
+        self.fontClass = fontClass
+    }
+
+    // Page geometry is checkpointed to disk mid-import and resumed on relaunch,
+    // so fragments written before weight replaced `isBold` have to keep loading.
+    private enum CodingKeys: String, CodingKey {
+        case text, pageIndex, bounds, fontName, fontSize, weight, fontClass, isBold
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        pageIndex = try container.decode(Int.self, forKey: .pageIndex)
+        bounds = try container.decode(PDFNormalizedRect.self, forKey: .bounds)
+        fontName = try container.decodeIfPresent(String.self, forKey: .fontName)
+        fontSize = try container.decode(Double.self, forKey: .fontSize)
+        if let stored = try container.decodeIfPresent(ReaderFontWeight.self, forKey: .weight) {
+            weight = stored
+        } else {
+            weight = (try container.decodeIfPresent(Bool.self, forKey: .isBold) ?? false)
+                ? .bold : .regular
+        }
+        fontClass = try container.decodeIfPresent(ReaderFontClass.self, forKey: .fontClass)
+            ?? .serif
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encode(pageIndex, forKey: .pageIndex)
+        try container.encode(bounds, forKey: .bounds)
+        try container.encodeIfPresent(fontName, forKey: .fontName)
+        try container.encode(fontSize, forKey: .fontSize)
+        try container.encode(weight, forKey: .weight)
+        try container.encode(fontClass, forKey: .fontClass)
+    }
 }
 
 struct PDFPageContent: Codable, Hashable {
@@ -138,13 +188,15 @@ struct PDFParagraph: Codable, Hashable {
     let pageIndex: Int
     let top: Double
     let fontSize: Double
-    let isBold: Bool
+    let weight: ReaderFontWeight
+    let fontClass: ReaderFontClass
     /// Set by `PDFParagraphAssembler` from the same typographic evidence it uses
     /// to break paragraphs, so a title/chapter/lesson heading can be styled in
     /// the reader instead of reading as body text.
     let isHeading: Bool
-    /// How much larger than the document's body text this paragraph was, already
-    /// clamped. 1 for body text and for a heading set apart only by weight.
+    /// This paragraph's size as a multiple of the document's own body size,
+    /// already clamped and snapped. 1 for ordinary body text; below 1 for
+    /// captions and footnotes the document set smaller.
     let fontScale: Double
     /// Where each source line's text ended up inside `text`, so the reader can
     /// highlight on the original page image. Empty when the paragraph's text
@@ -161,6 +213,14 @@ struct PDFParagraphLineSpan: Codable, Hashable {
     let start: Int
     let length: Int
     let bounds: PDFNormalizedRect
+    /// This line's own typography, kept per line rather than per paragraph.
+    /// Assembly regularly merges lines the document set differently — a bold
+    /// contents entry and the regular one beneath it both reach the right
+    /// margin, so none of the prose break rules separate them — and a single
+    /// paragraph-wide style would spread the first line's weight over the rest.
+    let weight: ReaderFontWeight
+    let fontClass: ReaderFontClass
+    let fontScale: Double
 }
 
 struct PDFImportResult: Sendable {
