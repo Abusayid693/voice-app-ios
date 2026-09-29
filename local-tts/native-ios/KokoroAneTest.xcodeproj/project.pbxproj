@@ -21,6 +21,7 @@
 		19D4C9EBF3CF872D79F687F5 /* SavedGeneration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B908701D84BB974C827AF15 /* SavedGeneration.swift */; };
 		2015F85627995E465906F7B8 /* VoicePackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E1EBEEA3D87A28330ED0B3 /* VoicePackStore.swift */; };
 		208E8009C63548A0B3CB61C6 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06231A578E9AA46671656B29 /* SettingsSheet.swift */; };
+		268951278F70FDDF73B48AB4 /* LigatureRepairer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08CB2EE81E3D8E716C9552B7 /* LigatureRepairer.swift */; };
 		294CF8B675441831F49CEC9E /* VoiceTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BD3C14618432EE8069A16D /* VoiceTile.swift */; };
 		29F396739FBA8F258EEAE396 /* Orbits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0442723D57E62C76DA6D549B /* Orbits.swift */; };
 		2D292907D6A8DC6591218E86 /* VoiceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E216E7D8A7A543D1795B03D /* VoiceCatalog.swift */; };
@@ -126,6 +127,7 @@
 		046CF8805E70FDE33206289F /* VoicePacksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePacksView.swift; sourceTree = "<group>"; };
 		04FBC29C8FAE625EAC7D8690 /* ReadingSessionSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSessionSnapshot.swift; sourceTree = "<group>"; };
 		06231A578E9AA46671656B29 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
+		08CB2EE81E3D8E716C9552B7 /* LigatureRepairer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LigatureRepairer.swift; sourceTree = "<group>"; };
 		0F2346E68205E6911A9AF347 /* StorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageView.swift; sourceTree = "<group>"; };
 		104C976BE72BB0977C4FDB12 /* BookShelfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookShelfView.swift; sourceTree = "<group>"; };
 		109377368A9890E8893F0E25 /* ReadingStatsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStatsViewModel.swift; sourceTree = "<group>"; };
@@ -653,6 +655,7 @@
 		DA0617413627AA2D61B825F6 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				08CB2EE81E3D8E716C9552B7 /* LigatureRepairer.swift */,
 				1B2C23E5CF54502D181EC953 /* PDFImportManager.swift */,
 				9E4F1C733AB2BEC90B60B170 /* PDFParagraphAssembler.swift */,
 				F2B8340BBFAC82C7233DBF7E /* PDFProcessingActor.swift */,
@@ -809,6 +812,7 @@
 				CD66FC7950290E329B1C8F43 /* Lattice.swift in Sources */,
 				720FFD1B122B4A5765F32489 /* LibraryTabView.swift in Sources */,
 				46C2C2CB168983105A9A33FF /* LibraryViewModel.swift in Sources */,
+				268951278F70FDDF73B48AB4 /* LigatureRepairer.swift in Sources */,
 				5D53FD681D3827C7A2A9E49C /* LoopingVideoPlayerView.swift in Sources */,
 				EF89517ED991FCE23715C482 /* MiniPlayerBar.swift in Sources */,
 				E5E4F90206956CE7D69BDC3A /* Morph.swift in Sources */,
