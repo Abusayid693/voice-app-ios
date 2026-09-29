@@ -11,13 +11,18 @@ final class PDFImportManager: ObservableObject {
     static let backgroundTaskIdentifier = "com.rehanchoudhury.kokoroanetest.pdf-import"
 
     @Published private(set) var jobs: [PDFImportJob] = []
+    let shelfStore: PDFImportShelfStore
 
     private let library: LibraryViewModel
     private var processingTasks: [UUID: Task<Void, Never>] = [:]
 
     init(library: LibraryViewModel) {
         self.library = library
-        jobs = Self.loadJobs()
+        var restoredJobs = Self.loadJobs()
+        Self.assignMissingShelfOrders(to: &restoredJobs, library: library)
+        jobs = restoredJobs
+        shelfStore = PDFImportShelfStore(jobs: restoredJobs)
+        persistJobs()
         Task { await resumeInterruptedJobs() }
     }
 
@@ -27,7 +32,13 @@ final class PDFImportManager: ObservableObject {
     func importPDF(from url: URL, engine: Engine, voiceName: String) async {
         let job = PDFImportJob(
             sourceFileName: FileNameFormatter.displayTitle(from: url.lastPathComponent),
-            engine: engine, voiceName: voiceName)
+            engine: engine, voiceName: voiceName, shelfOrder: nextShelfOrder())
+        // Reserve the shelf slot before copying or parsing begins. Large files
+        // therefore cannot make the rest of the shelf jump when they finish.
+        jobs.insert(job, at: 0)
+        shelfStore.insert(job)
+        persistJobs()
+
         let accessed = url.startAccessingSecurityScopedResource()
         defer {
             if accessed { url.stopAccessingSecurityScopedResource() }
@@ -40,27 +51,37 @@ final class PDFImportManager: ObservableObject {
                 try fileManager.createDirectory(at: job.pagesDirectory, withIntermediateDirectories: true)
                 try fileManager.copyItem(at: url, to: job.sourceURL)
             }.value
-            jobs.insert(job, at: 0)
-            persistJobs()
             requestCompletionNotificationsIfNeeded()
             beginProcessing(job.id)
         } catch {
-            var failed = job
-            failed.phase = .failed
-            failed.errorMessage = "Could not copy the selected PDF: \(error.localizedDescription)"
-            failed.updatedAt = Date()
-            jobs.insert(failed, at: 0)
-            persistJobs()
+            update(job.id) {
+                $0.phase = .failed
+                $0.errorMessage = "Could not copy the selected PDF: \(error.localizedDescription)"
+                $0.updatedAt = Date()
+            }
         }
+    }
+
+    func retry(id: UUID) {
+        guard let job = jobs.first(where: { $0.id == id }) else { return }
+        retry(job)
     }
 
     func retry(_ job: PDFImportJob) {
         guard let index = jobs.firstIndex(where: { $0.id == job.id }) else { return }
         jobs[index].phase = .queued
         jobs[index].errorMessage = nil
+        jobs[index].overallProgress = 0
+        jobs[index].completedPages = 0
         jobs[index].updatedAt = Date()
+        shelfStore.update(jobs[index])
         persistJobs()
         beginProcessing(job.id)
+    }
+
+    func cancel(id: UUID) {
+        guard let job = jobs.first(where: { $0.id == id }) else { return }
+        cancel(job)
     }
 
     func cancel(_ job: PDFImportJob) {
@@ -69,12 +90,19 @@ final class PDFImportManager: ObservableObject {
             $0.phase = .cancelled
             $0.updatedAt = Date()
         }
+        shelfStore.remove(id: job.id)
+    }
+
+    func delete(id: UUID) {
+        guard let job = jobs.first(where: { $0.id == id }) else { return }
+        delete(job)
     }
 
     func delete(_ job: PDFImportJob) {
         processingTasks[job.id]?.cancel()
         processingTasks[job.id] = nil
         jobs.removeAll { $0.id == job.id }
+        shelfStore.remove(id: job.id)
         persistJobs()
         try? FileManager.default.removeItem(at: job.directory)
     }
@@ -136,7 +164,8 @@ final class PDFImportManager: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             guard let projectID = library.saveImportedPDF(
-                title: result.title, pagesDirectory: result.pagesDirectory,
+                id: job.id, title: result.title, createdAt: job.createdAt,
+                shelfOrder: job.shelfOrder, pagesDirectory: result.pagesDirectory,
                 sourceURL: result.sourceURL,
                 pageCount: result.pageCount, coverURL: result.coverURL,
                 engine: job.engine, voiceName: job.voiceName
@@ -146,9 +175,17 @@ final class PDFImportManager: ObservableObject {
             update(id) {
                 $0.phase = .completed
                 $0.completedPages = $0.totalPages
+                $0.overallProgress = 1
                 $0.projectID = projectID
                 $0.errorMessage = nil
                 $0.updatedAt = Date()
+            }
+            // Keep the import cover alive while its progress bar fades first,
+            // then the cover settles. The completed project underneath has
+            // the same ID, so removing this transient state cannot reflow it.
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(900))
+                self?.shelfStore.remove(id: id)
             }
             sendCompletionNotification(for: job)
         } catch is CancellationError {
@@ -169,17 +206,22 @@ final class PDFImportManager: ObservableObject {
     }
 
     private func receive(_ progress: PDFProcessingProgress, for id: UUID) {
-        update(id) {
+        update(id, coverAvailable: progress.coverAvailable) {
             $0.phase = progress.phase
             $0.totalPages = progress.totalPages
             $0.completedPages = progress.completedPages
+            $0.overallProgress = max($0.overallProgress ?? 0, progress.overallProgress)
             $0.updatedAt = Date()
         }
     }
 
-    private func update(_ id: UUID, mutation: (inout PDFImportJob) -> Void) {
+    private func update(
+        _ id: UUID, coverAvailable: Bool? = nil,
+        mutation: (inout PDFImportJob) -> Void
+    ) {
         guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
         mutation(&jobs[index])
+        shelfStore.update(jobs[index], coverAvailable: coverAvailable)
         persistJobs()
     }
 
@@ -210,6 +252,32 @@ final class PDFImportManager: ObservableObject {
     private static func loadJobs() -> [PDFImportJob] {
         guard let data = try? Data(contentsOf: PDFImportJob.indexURL) else { return [] }
         return (try? JSONDecoder().decode([PDFImportJob].self, from: data)) ?? []
+    }
+
+    private func nextShelfOrder() -> Int {
+        let savedPDFs = library.savedGenerations.filter { $0.source == .pdf }
+        let legacyLast = savedPDFs.filter { $0.shelfOrder == nil }.count - 1
+        let savedLast = savedPDFs.compactMap(\.shelfOrder).max() ?? -1
+        let jobLast = jobs.compactMap(\.shelfOrder).max() ?? -1
+        return max(legacyLast, savedLast, jobLast) + 1
+    }
+
+    private static func assignMissingShelfOrders(
+        to jobs: inout [PDFImportJob], library: LibraryViewModel
+    ) {
+        let savedPDFs = library.savedGenerations.filter { $0.source == .pdf }
+        let legacyLast = savedPDFs.filter { $0.shelfOrder == nil }.count - 1
+        let savedLast = savedPDFs.compactMap(\.shelfOrder).max() ?? -1
+        var next = max(
+            legacyLast, savedLast,
+            jobs.compactMap(\.shelfOrder).max() ?? -1) + 1
+        let missing = jobs.indices
+            .filter { jobs[$0].shelfOrder == nil }
+            .sorted { jobs[$0].createdAt < jobs[$1].createdAt }
+        for index in missing {
+            jobs[index].shelfOrder = next
+            next += 1
+        }
     }
 
     private func persistJobs() {

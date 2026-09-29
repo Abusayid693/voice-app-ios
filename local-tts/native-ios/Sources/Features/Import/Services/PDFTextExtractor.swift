@@ -26,7 +26,8 @@ struct PDFKitTextExtractor: PDFTextExtractor {
                 return PDFTextFragment(
                     text: text, pageIndex: index,
                     bounds: normalizedBounds(lineBounds, cropBox: cropBox, rotation: page.rotation),
-                    fontName: typography.name, fontSize: typography.size, isBold: typography.isBold)
+                    fontName: typography.name, fontSize: typography.size,
+                    weight: typography.weight, fontClass: typography.fontClass)
             }
 
             return PDFPageContent(
@@ -45,10 +46,10 @@ struct PDFKitTextExtractor: PDFTextExtractor {
     /// Paragraph assembly compares sizes and weights between lines, so a
     /// misread first glyph used to split paragraphs at random.
     private func attributes(for attributedText: NSAttributedString?) -> (
-        name: String?, size: Double, isBold: Bool
+        name: String?, size: Double, weight: ReaderFontWeight, fontClass: ReaderFontClass
     ) {
         guard let attributedText, attributedText.length > 0 else {
-            return (nil, 0, false)
+            return (nil, 0, .regular, .serif)
         }
         var coverage: [Int: (font: UIFont, length: Int)] = [:]
         let whole = NSRange(location: 0, length: attributedText.length)
@@ -58,17 +59,63 @@ struct PDFKitTextExtractor: PDFTextExtractor {
             coverage[key, default: (font, 0)].length += range.length
         }
         guard let dominant = coverage.values.max(by: { $0.length < $1.length })?.font else {
-            return (nil, 0, false)
+            return (nil, 0, .regular, .serif)
         }
-        return (dominant.fontName, Double(dominant.pointSize), isBold(dominant))
+        return (
+            dominant.fontName, Double(dominant.pointSize), weight(of: dominant),
+            fontClass(of: dominant)
+        )
     }
 
-    /// Many embedded PDF fonts never set `.traitBold`, so the descriptor alone
-    /// misses real bold text; the name is the fallback signal.
-    private func isBold(_ font: UIFont) -> Bool {
-        if font.fontDescriptor.symbolicTraits.contains(.traitBold) { return true }
+    /// Reads a face's weight, preferring its *name* over its descriptor.
+    ///
+    /// That order looks backwards and isn't: an embedded PDF font routinely
+    /// ships with no weight trait and no `.traitBold` at all, while its name
+    /// ("…-Semibold", "…-Light") is set correctly, because the name is what the
+    /// producing application wrote and the traits are what CoreText guessed.
+    /// Order within the name matters too — "Semibold" and "ExtraBold" both
+    /// contain "Bold", so the more specific tokens have to be tested first.
+    private func weight(of font: UIFont) -> ReaderFontWeight {
         let name = font.fontName.lowercased()
-        return ["bold", "black", "heavy", "semibold"].contains { name.contains($0) }
+        let tokens: [(needles: [String], weight: ReaderFontWeight)] = [
+            (["extrabold", "ultrabold", "black", "heavy"], .heavy),
+            (["semibold", "demibold", "demi"], .semibold),
+            (["bold"], .bold),
+            (["medium"], .medium),
+            (["ultralight", "extralight", "thin", "light"], .light),
+        ]
+        for token in tokens where token.needles.contains(where: name.contains) {
+            return token.weight
+        }
+        if font.fontDescriptor.symbolicTraits.contains(.traitBold) { return .bold }
+        // Only trusted once the name says nothing: normalized -1...1, 0 regular.
+        let traits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+        guard let measured = traits?[.weight] as? Double else { return .regular }
+        switch measured {
+        case ..<(-0.2): return .light
+        case ..<0.2: return .regular
+        case ..<0.3: return .medium
+        case ..<0.4: return .semibold
+        case ..<0.6: return .bold
+        default: return .heavy
+        }
+    }
+
+    /// Serif is the default rather than sans: books are overwhelmingly set in
+    /// one, and a wrong guess toward serif is the quieter failure in a reader.
+    private func fontClass(of font: UIFont) -> ReaderFontClass {
+        let name = font.fontName.lowercased()
+        if font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace)
+            || ["mono", "courier", "consol", "menlo"].contains(where: name.contains)
+        {
+            return .monospaced
+        }
+        let sans = [
+            "sans", "helvetica", "arial", "calibri", "verdana", "tahoma", "futura",
+            "gill", "frutiger", "myriad", "lato", "roboto", "segoe", "avenir",
+            "franklin", "univers", "optima", "gotham", "proxima",
+        ]
+        return sans.contains(where: name.contains) ? .sansSerif : .serif
     }
 
     /// Folds a line down to plain, single-spaced text.

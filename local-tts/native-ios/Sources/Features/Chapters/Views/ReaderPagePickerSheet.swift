@@ -37,11 +37,8 @@ struct ReaderPagePickerSheet: View {
                 .background(.ultraThinMaterial)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.background)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 16)
-        .presentationBackground(.clear)
+        .background(theme.background.ignoresSafeArea())
+        .presentationBackground(theme.background)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.scrolls)

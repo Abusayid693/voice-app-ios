@@ -32,6 +32,9 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     var lastReadPageIndex: Int = 0
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
+    /// PDF shelf position reserved when import begins. Missing for projects
+    /// created before inline imports; those retain their legacy newest-first order.
+    var shelfOrder: Int?
 
     init(
         id: UUID,
@@ -42,7 +45,8 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         pageCount: Int,
         lastReadPageIndex: Int = 0,
         source: SavedProjectSource = .unknown,
-        shelfDisplayMode: ShelfDisplayMode = .cover
+        shelfDisplayMode: ShelfDisplayMode = .cover,
+        shelfOrder: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -53,6 +57,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         self.lastReadPageIndex = lastReadPageIndex
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
+        self.shelfOrder = shelfOrder
     }
 
 
@@ -117,7 +122,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         SavedGenerationSummary(
             id: id, title: title, engine: engine, voiceName: voiceName,
             createdAt: createdAt, pageCount: pageCount, source: source,
-            shelfDisplayMode: shelfDisplayMode)
+            shelfDisplayMode: shelfDisplayMode, shelfOrder: shelfOrder)
     }
 
 }
@@ -125,7 +130,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
 extension SavedGeneration {
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
-        case shelfDisplayMode
+        case shelfDisplayMode, shelfOrder
     }
 
     /// Existing V2 projects predate resume position and should continue at
@@ -151,6 +156,7 @@ extension SavedGeneration {
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
+        shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
     }
 }
 
@@ -163,6 +169,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     let pageCount: Int
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
+    var shelfOrder: Int?
 
     init(
         id: UUID,
@@ -172,7 +179,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         createdAt: Date,
         pageCount: Int,
         source: SavedProjectSource = .unknown,
-        shelfDisplayMode: ShelfDisplayMode = .cover
+        shelfDisplayMode: ShelfDisplayMode = .cover,
+        shelfOrder: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -182,10 +190,11 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         self.pageCount = pageCount
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
+        self.shelfOrder = shelfOrder
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, engine, voiceName, createdAt, pageCount, source, shelfDisplayMode
+        case id, title, engine, voiceName, createdAt, pageCount, source, shelfDisplayMode, shelfOrder
     }
 
     /// Existing indexes did not record an origin. Leave those entries out of
@@ -201,6 +210,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
+        shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
     }
 
     /// Spine thickness scales with the book's own page count, the way a real

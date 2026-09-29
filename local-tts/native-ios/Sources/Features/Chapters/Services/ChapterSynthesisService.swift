@@ -76,20 +76,51 @@ final class ChapterSynthesisService {
         }
     }
 
-    /// What actually gets fed to the engine: the chunk's text with every
-    /// whitespace run collapsed to one space.
+    /// What actually gets fed to the engine: each paragraph in the chunk closed
+    /// off as its own sentence, with every remaining whitespace run collapsed to
+    /// one space.
     ///
-    /// Chunk text carries real newlines now (a paragraph break inside a
-    /// chunk is preserved for display and for word-timing separators), but
-    /// newlines carry no phonetic information — Kokoro's own `splitWords`
-    /// treats every whitespace run as one word boundary regardless. The
-    /// NeMo FST normalizer that runs *before* that is opaque compiled Rust,
-    /// so feeding it raw paragraph breaks risks it mishandling or
-    /// truncating there, which would silently cut the audio short. Word
-    /// count and order are identical either way, so timing alignment is
-    /// unaffected.
+    /// A newline in reader text is always a paragraph boundary, and the unit
+    /// before one is often not a sentence — a heading, a contents entry, a list
+    /// item. Kokoro takes its prosody from punctuation alone, so simply dropping
+    /// the break (which is what collapsing *all* whitespace did) ran that unit
+    /// into the next paragraph in a single breath: "Communalist Approach The
+    /// historians of this school…". The break has to survive as punctuation or
+    /// it does not survive at all.
+    ///
+    /// It becomes a period rather than a passed-through newline because the NeMo
+    /// FST normalizer that runs before G2P is opaque compiled Rust, and feeding
+    /// it raw paragraph breaks risks it truncating there and silently cutting
+    /// the audio short. The period attaches to the preceding word instead of
+    /// standing as its own token, which keeps the whitespace-separated word
+    /// count identical — that count is what `WordTimingDeriver` aligns the
+    /// displayed words against, and a word ending in a period is already the
+    /// ordinary case at every sentence end.
     private static func spokenText(_ text: String) -> String {
-        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let segments = text.split(whereSeparator: \.isNewline)
+            .map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            .filter { !$0.isEmpty }
+        guard !segments.isEmpty else { return "" }
+        // A chunk gets cut mid-sentence whenever a sentence outruns the phoneme
+        // budget, so its own tail closes a unit only when the text itself ended
+        // on a paragraph break. Closing it unconditionally would plant a full
+        // stop in the middle of a sentence.
+        let closesFinalSegment = text.last?.isNewline ?? false
+        return segments.indices
+            .map { index in
+                let segment = segments[index]
+                guard index < segments.count - 1 || closesFinalSegment else { return segment }
+                return endsSentence(segment) ? segment : segment + "."
+            }
+            .joined(separator: " ")
+    }
+
+    /// Closing quotes and brackets ride *after* the punctuation that ends a
+    /// sentence, so they come off before the test.
+    private static func endsSentence(_ text: String) -> Bool {
+        guard let last = text.reversed().first(where: { !"\"'”’)]}»".contains($0) })
+        else { return false }
+        return ".!?:;…".contains(last)
     }
 
     /// The shared per-chunk synthesis logic `synthesizeChunkDetailed` funnels
