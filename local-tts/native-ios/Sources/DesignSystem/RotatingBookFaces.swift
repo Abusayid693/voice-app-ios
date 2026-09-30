@@ -37,6 +37,7 @@ struct RotatingBookFaces: View {
     let title: String
     let coverSize: CGSize
     let spineWidth: CGFloat
+    var showsSpineTitle = true
     /// 0 = cover face-on, 90 = spine face-on.
     let angle: Double
 
@@ -62,7 +63,8 @@ struct RotatingBookFaces: View {
             face(isSpine: true, facing: spineFacing) {
                 SavedProjectSpine(
                     coverURL: coverURL, title: title,
-                    size: CGSize(width: spineWidth, height: coverSize.height))
+                    size: CGSize(width: spineWidth, height: coverSize.height),
+                    showsTitle: showsSpineTitle)
             }
         }
         // The lit corner where the two faces meet. Strongest mid-turn, when

@@ -213,14 +213,21 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
     }
 
-    /// Spine thickness scales with the book's own page count, the way a real
-    /// book's does — clamped so a 12-page PDF is still tappable and a
-    /// 900-page one doesn't eat the row. Roughly 1pt per 45 pages between
-    /// those bounds.
+    /// A continuous, perceptual thickness curve keeps short documents close
+    /// to a 5pt pamphlet while allowing long books to approach a 36pt spine.
+    /// The square root gives thin books enough visible presence without the
+    /// old fixed 14pt base making every small PDF look equally thick.
     var spineWidth: CGFloat {
-        let scaled = 14 + CGFloat(pageCount) / 45
-        return min(max(scaled, 14), 36)
+        let minimumWidth: CGFloat = 5
+        let maximumWidth: CGFloat = 36
+        let maximumPageCount: CGFloat = 900
+        let pagesAfterFirst = CGFloat(max(pageCount - 1, 0))
+        let normalizedPages = min(pagesAfterFirst / (maximumPageCount - 1), 1)
+        return minimumWidth + (maximumWidth - minimumWidth) * sqrt(normalizedPages)
     }
+
+    /// Very thin documents do not have enough usable spine area for a title.
+    var showsSpineTitle: Bool { pageCount >= 45 }
 
     var pageCountLabel: String {
         "\(pageCount) \(pageCount == 1 ? "page" : "pages")"

@@ -4,7 +4,7 @@ import UIKit
 
 /// A book turned spine-out on the Book Shelf — the same persisted
 /// `cover.jpg` `SavedProjectCover` draws, center-cropped to a narrow strip,
-/// with the title running vertically over it.
+/// with the title running vertically over it when the book is thick enough.
 ///
 /// `scaledToFill` inside a spine-width frame is what does the cropping: the
 /// image keeps its aspect ratio and overflows horizontally, so what's left
@@ -17,6 +17,7 @@ struct SavedProjectSpine: View {
     let title: String
     let size: CGSize
     var cornerRadius: CGFloat = 3
+    var showsTitle = true
 
     @State private var image: UIImage?
 
@@ -26,7 +27,9 @@ struct SavedProjectSpine: View {
 
             spineShading
 
-            verticalTitle
+            if showsTitle {
+                verticalTitle
+            }
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

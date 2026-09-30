@@ -11,6 +11,9 @@ struct MiniPlayerBar: View {
     @ObservedObject var player: BookAudioPlayer
     let onExpand: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @GestureState private var isPressed = false
+
     private let barHeight: CGFloat = 60
 
     var body: some View {
@@ -49,42 +52,70 @@ struct MiniPlayerBar: View {
         .padding(.leading, 8)
         .padding(.trailing, 14)
         .frame(height: barHeight)
-        .background { barBackground }
+        // Apply glass to the hit-tested surface itself. Putting interactive
+        // glass on a `Color.clear` background child leaves that child outside
+        // the gesture's interaction path, so it renders correctly but never
+        // receives Liquid Glass's pressed response.
+        .modifier(MiniPlayerGlassSurface())
         .shadow(color: .black.opacity(0.16), radius: 10, y: 4)
         .contentShape(Capsule())
+        // This restrained transform makes the response legible on every OS;
+        // iOS 26 adds its native fluid highlight on top, while older systems
+        // use the material's brighter pressed state.
+        .scaleEffect(pressScale)
+        .brightness(pressBrightness)
+        .animation(pressAnimation, value: isPressed)
+        .simultaneousGesture(pressGesture)
         .onTapGesture(perform: onExpand)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Now playing, \(player.bookTitle)")
         .accessibilityHint("Opens the full playback screen")
     }
 
-    /// Clear Liquid Glass on iOS 26+ — untinted, so the shelf reads through
-    /// it — with `.ultraThinMaterial` as the pre-26 stand-in. Both are
-    /// transparent, which is why nothing in this bar uses the app's fixed
-    /// `appPrimaryText`: it floats over the *light* Book Shelf and over
-    /// *dark* pushed screens (Library, Voices, Tools), so its foreground has
-    /// to follow the environment's scheme instead. `ImportHomeView` already
-    /// flips `.preferredColorScheme` per route, so `Color.primary` resolves
-    /// correctly on both.
-    /// `.clear` rather than `.regular`, matching `GlassBookShelf`'s own
-    /// glass on the same screen — `.regular` is the frosted variant and
-    /// reads as a solid light fill over the pale shelf. Below iOS 26 there
-    /// is no real Liquid Glass, and `.ultraThinMaterial` is the closest
-    /// stand-in this app already uses everywhere else; it is genuinely
-    /// frostier than the real thing, which is visible on the deployment
-    /// target (18.0) but not on 26.
-    @ViewBuilder
-    private var barBackground: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Color.clear.glassEffect(.clear, in: Capsule())
-            } else {
-                Capsule().fill(.ultraThinMaterial)
+    private var pressGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .updating($isPressed) { _, pressed, _ in
+                pressed = true
             }
+    }
+
+    private var pressScale: CGFloat {
+        guard !reduceMotion else { return 1 }
+        return isPressed ? 0.985 : 1
+    }
+
+    private var pressBrightness: Double {
+        guard isPressed else { return 0 }
+        if #available(iOS 26.0, *) { return 0.035 }
+        return 0.07
+    }
+
+    private var pressAnimation: Animation? {
+        return reduceMotion
+            ? .easeOut(duration: 0.1)
+            : .spring(response: 0.24, dampingFraction: 0.72)
+    }
+}
+
+/// Clear interactive Liquid Glass on iOS 26; a transparent material capsule
+/// on the app's iOS 18 deployment target. The modifier belongs on the player
+/// content—not a background child—so Liquid Glass shares the bar's hit path.
+private struct MiniPlayerGlassSurface: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.clear.interactive(), in: Capsule())
+                .overlay { border }
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay { border }
         }
-        .overlay {
-            Capsule().strokeBorder(Color.black.opacity(0.10), lineWidth: 0.75)
-        }
+    }
+
+    private var border: some View {
+        Capsule().strokeBorder(Color.black.opacity(0.10), lineWidth: 0.75)
     }
 }
 
