@@ -57,6 +57,10 @@ targets:
       - path: VoicePreviews
         type: folder
         buildPhase: resources
+      # Decorative 200pt My Shelf header artwork. Kept as a standalone PNG
+      # resource so the shelf can load it by the stable `halftone` name.
+      - path: assets/theme/halftone.png
+        buildPhase: resources
       # hexgrad/Kokoro-82M's 8 officially-named, officially-graded Mandarin
       # voice tensors (zf_xiaobei/zf_xiaoni/zf_xiaoxiao/zf_xiaoyi,
       # zm_yunjian/zm_yunxi/zm_yunxia/zm_yunyang), converted to the same
@@ -94,6 +98,11 @@ targets:
         # next generate. Settings > About reads this back via
         # Bundle.main.infoDictionary.
         CFBundleShortVersionString: "0.1.0"
+        # Bundled reading-surface fonts: EB Garamond styles the Shelf title,
+        # while Inter styles book names in the expanded detail card.
+        UIAppFonts:
+          - EBGaramond-Italic.ttf
+          - Inter-Variable.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest

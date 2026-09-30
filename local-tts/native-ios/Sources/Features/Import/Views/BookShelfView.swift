@@ -1,5 +1,6 @@
 import LucideSwift
 import SwiftUI
+import UIKit
 
 enum BookShelfPalette {
     static let background = Color.whitePaper
@@ -129,28 +130,42 @@ struct BookShelfView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            ZStack(alignment: .top) {
                 ScrollView {
-                    VStack(spacing: 0) {
-                        shelfHeader
+                    // Keep the artwork in the scroll content itself instead
+                    // of attaching it with `.background`, which the platform
+                    // scroll host can composite away. This preserves its
+                    // visibility while letting it scroll with the shelf.
+                    ZStack(alignment: .top) {
+                        ShelfHalftoneBackdrop()
 
-                        if shelfEntries.isEmpty {
-                            emptyState
-                                .frame(minHeight: max(0, geometry.size.height - 100))
-                        } else {
-                            shelf(for: geometry.size.width)
+                        VStack(spacing: 0) {
+                            shelfHeader
+
+                            if shelfEntries.isEmpty {
+                                emptyState
+                                    .frame(minHeight: max(0, geometry.size.height - 100))
+                            } else {
+                                shelf(for: geometry.size.width)
+                            }
                         }
+                        // Home draws its Settings/avatar controls as a floating
+                        // overlay rather than a navigation bar (see
+                        // ImportHomeView.headerControls), so the shelf reserves
+                        // that height itself instead of inheriting a bar inset.
+                        .padding(
+                            .top,
+                            geometry.safeAreaInsets.top + Self.headerControlsInset)
+                        // Keep only a small trailing inset so shelves can pass
+                        // underneath the progressive blur and Add Books action.
+                        .padding(.bottom, 24)
                     }
-                    // Home draws its Settings/avatar controls as a floating
-                    // overlay rather than a navigation bar (see
-                    // ImportHomeView.headerControls), so the shelf reserves
-                    // that height itself instead of inheriting a bar inset.
-                    .padding(.top, Self.headerControlsInset)
-                    // Keep only a small trailing inset so shelves can pass
-                    // underneath the progressive blur and Add Books action.
-                    .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
+                // Let the 200pt halftone canvas begin at the physical top of
+                // the display. The VStack's matching safe-area padding above
+                // keeps the title and shelves at their existing positions.
+                .ignoresSafeArea(edges: .top)
                 .scrollDisabled(selectedBook != nil || arrangingBook != nil)
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
@@ -260,15 +275,13 @@ struct BookShelfView: View {
     private var shelfHeader: some View {
         ZStack {
             ShelfHeaderBackdrop(books: Array(completedBooks.prefix(3)))
-                // The decorative canvas is intentionally larger than the
-                // header's layout footprint, so its soft colour can extend
-                // behind the shelf without moving the title or shelf rows.
                 .frame(height: 160)
                 .clipped()
 
             VStack(spacing: 3) {
                 Text("My Shelf")
-                    .font(.custom("SnellRoundhand-Bold", size: 36, relativeTo: .title))
+                    .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
+                    .fontWeight(.medium)
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .accessibilityAddTraits(.isHeader)
 
@@ -584,14 +597,43 @@ private struct ShelfBottomBlur: View {
     }
 }
 
-/// A restrained, decorative echo of the newest covers. It is deliberately
-/// blurred enough to read as colour and depth behind the Shelf title rather
-/// than as another actionable set of books.
+/// Decorative artwork behind the top 200pt of the shelf. The mask keeps the
+/// image fully visible around the title, then dissolves it into the paper
+/// background instead of ending on a hard horizontal edge.
+private struct ShelfHalftoneBackdrop: View {
+    var body: some View {
+        Group {
+            if let url = Bundle.main.url(forResource: "halftone", withExtension: "png"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 200)
+        .clipped()
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.58),
+                    .init(color: .black.opacity(0.72), location: 0.74),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A restrained, decorative echo of the newest covers. It remains layered
+/// above the halftone artwork and behind the title, preserving the original
+/// Shelf header.
 private struct ShelfHeaderBackdrop: View {
     let books: [SavedGenerationSummary]
 
-    // Fits inside the compact decorative canvas even after the outer covers'
-    // rotation, so the blurred artwork does not clip at either edge.
     private let coverSize = CGSize(width: 64, height: 96)
     private let positions: [CGFloat] = [0.30, 0.5, 0.70]
     private let angles: [Double] = [-11, 0, 11]
@@ -1272,7 +1314,7 @@ private struct BookShelfDetailModal: View, Animatable {
 
             VStack(spacing: 18) {
                 Text(book.title)
-                    .font(.custom("Didot-Bold", size: 22, relativeTo: .title2))
+                    .font(.custom("Inter", size: 22, relativeTo: .title2).weight(.medium))
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
