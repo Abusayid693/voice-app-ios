@@ -22,6 +22,8 @@ struct ImportHomeView: View {
     @State private var openPageIndex: Int?
     @State private var isBookDetailPresented = false
     @State private var isReadingStatsPresented = false
+    /// Stable device inset so keyboard height never becomes chrome padding.
+    @State private var deviceBottomInset: CGFloat? = nil
     // Seeded with 7 zero-activity days so the strip never flashes empty
     // before the real one-shot load below finishes.
     @State private var recentActivity: [DayActivity] = ImportHomeView.emptyRecentDays()
@@ -35,7 +37,14 @@ struct ImportHomeView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
-                shelfRoot(safeAreaBottom: geometry.safeAreaInsets.bottom)
+                shelfRoot(
+                    safeAreaBottom: deviceBottomInset ?? geometry.safeAreaInsets.bottom
+                )
+                .onAppear {
+                    if deviceBottomInset == nil {
+                        deviceBottomInset = geometry.safeAreaInsets.bottom
+                    }
+                }
             }
             .navigationDestination(item: $openProject) { project in
                 ChapterPlayerView(
@@ -68,6 +77,8 @@ struct ImportHomeView: View {
                     .environment(\.colorScheme, .light)
             }
         }
+        // Keep shelf chrome behind the keyboard.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .task { await loadRecentActivity() }
         // Reload when a reader page is closed — that's the natural moment
         // a new session may have just been recorded for today.
@@ -133,9 +144,24 @@ struct ImportHomeView: View {
                     }
             }
         }
+        // Reserve scroll room separately because visible safe-area insets follow the keyboard.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            shelfBottomChrome(safeAreaBottom: safeAreaBottom)
+            Color.clear
+                .frame(height: shelfBottomChromeHeight(safeAreaBottom: safeAreaBottom))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
+        // The visible controls stay on the device edge and are covered by the keyboard.
+        .overlay(alignment: .bottom) {
+            shelfBottomChrome(safeAreaBottom: safeAreaBottom)
+                .padding(.bottom, safeAreaBottom)
+        }
+    }
+
+    private func shelfBottomChromeHeight(safeAreaBottom: CGFloat) -> CGFloat {
+        // Mirrors CustomTabBar and the optional 60pt player plus 12pt spacing.
+        let tabBarHeight = 69 + max(safeAreaBottom - 31, 8)
+        return tabBarHeight + (player.activeRef == nil ? 0 : 72)
     }
 
     private func shelfBottomChrome(safeAreaBottom: CGFloat) -> some View {

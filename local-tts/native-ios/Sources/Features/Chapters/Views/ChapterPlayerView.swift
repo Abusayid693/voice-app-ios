@@ -237,6 +237,7 @@ struct ChapterPlayerView: View {
     @State private var isOptionsSheetPresented = false
     @State private var isPagePickerPresented = false
     @State private var isVoiceSelectionPresented = false
+    @State private var isPlaybackSpeedPresented = false
     @State private var isVoiceChangeErrorPresented = false
     // Persisted across sessions — set once, stays that way for every chapter
     // opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
@@ -445,6 +446,13 @@ struct ChapterPlayerView: View {
                 restrictedEngine: project.engine,
                 selectedVoiceName: selectedVoiceName,
                 onVoiceSelected: changeVoice)
+        }
+        .sheet(isPresented: $isPlaybackSpeedPresented) {
+            PlaybackSpeedSheet(
+                rate: Binding(
+                    get: { player.playbackRate },
+                    set: player.setPlaybackRate),
+                theme: readerTheme)
         }
         .alert("Voice Couldn’t Be Changed", isPresented: $isVoiceChangeErrorPresented) {
             Button("OK", role: .cancel) {}
@@ -1071,10 +1079,11 @@ struct ChapterPlayerView: View {
                 .frame(maxWidth: .infinity)
 
                 Button {
-                    setSurface(.audio)
+                    isPlaybackSpeedPresented = true
                 } label: {
-                    Image(systemName: "headphones")
-                        .font(.system(size: 23, weight: .semibold))
+                    Text(PlaybackRateFormatter.string(player.playbackRate))
+                        .font(.system(size: 15, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundStyle(readerTheme.primaryText)
                         .frame(width: 52, height: 52)
                         .background(
@@ -1084,7 +1093,9 @@ struct ChapterPlayerView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
-                .accessibilityLabel("Show audio player")
+                .accessibilityLabel("Playback speed")
+                .accessibilityValue(PlaybackRateFormatter.string(player.playbackRate))
+                .accessibilityHint("Opens playback speed controls")
             }
         }
         .padding(.horizontal, 12)

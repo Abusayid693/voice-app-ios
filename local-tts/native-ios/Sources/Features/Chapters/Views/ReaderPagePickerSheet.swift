@@ -18,7 +18,12 @@ struct ReaderPagePickerSheet: View {
     @State private var previews: [Int: ReaderPagePreview] = [:]
 
     var body: some View {
-        ZStack(alignment: .top) {
+        InteractiveGlassBottomSheet(
+            theme: theme,
+            detents: [.medium, .large],
+            closeAccessibilityLabel: "Close page picker",
+            onClose: { dismiss() }
+        ) { headerInset in
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach(0..<project.pageCount, id: \.self) { index in
@@ -27,50 +32,12 @@ struct ReaderPagePickerSheet: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 70)
+                .padding(.top, headerInset)
                 .padding(.bottom, 16)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
-
-            header
-                .background(.ultraThinMaterial)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.background.ignoresSafeArea())
-        .presentationBackground(theme.background)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        .presentationContentInteraction(.scrolls)
-        .preferredColorScheme(theme.colorScheme)
-    }
-
-    private var header: some View {
-        ZStack {
-            Text("Pages")
-                .font(AppTextStyle.rowTitle.font)
-                .foregroundStyle(theme.primaryText)
-
-            HStack {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.optionsAccent)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            theme.primaryText.opacity(theme.colorScheme == .dark ? 0.12 : 0.07),
-                            in: Circle())
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close page picker")
-
-                Spacer()
-            }
-        }
-        .frame(height: 54)
-        .padding(.horizontal, 10)
     }
 
     private func pageRow(index: Int) -> some View {

@@ -45,6 +45,10 @@ final class BookAudioPlayer: ObservableObject {
     /// priority lane, so an unbounded march would queue a seek behind a
     /// whole page of synthesis.
     static let maxSynthesisLookahead = 2
+    static let minimumPlaybackRate = 0.5
+    static let maximumPlaybackRate = 3.0
+    static let presetPlaybackRates = [0.8, 1.0, 1.2, 1.5, 2.0, 2.5]
+    private static let playbackRateDefaultsKey = "bookAudioPlayer.playbackRate"
 
     @Published private(set) var activeRef: ReaderPageRef?
     @Published private(set) var isPlaying = false
@@ -74,6 +78,7 @@ final class BookAudioPlayer: ObservableObject {
     /// question ("can synthesis stay ahead while locked?") is answered by
     /// reading this after a long locked-screen run, not by guessing.
     @Published private(set) var events: [String] = []
+    @Published private(set) var playbackRate: Double
 
     /// The current page's chunk texts — the source `ChapterPlayerView`
     /// derives its entire paragraph structure from. Published despite
@@ -101,6 +106,7 @@ final class BookAudioPlayer: ObservableObject {
 
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    private let timePitch = AVAudioUnitTimePitch()
     private var isConnected = false
     /// Whether `node` is currently attached to `engine`. Tracked separately
     /// from `isConnected`, which only turns true once a buffer has actually
@@ -240,6 +246,11 @@ final class BookAudioPlayer: ObservableObject {
     init(synthesis: ChapterSynthesisService, statsTracker: ReadingStatsTracker) {
         self.synthesis = synthesis
         self.statsTracker = statsTracker
+        let storedRate = UserDefaults.standard.double(forKey: Self.playbackRateDefaultsKey)
+        playbackRate = (Self.minimumPlaybackRate...Self.maximumPlaybackRate).contains(storedRate)
+            ? storedRate
+            : 1
+        timePitch.rate = Float(playbackRate)
     }
 
     func isActive(_ ref: ReaderPageRef) -> Bool { activeRef == ref }
@@ -282,6 +293,7 @@ final class BookAudioPlayer: ObservableObject {
         observeSystemEvents()
         if !isAttached {
             engine.attach(node)
+            engine.attach(timePitch)
             isAttached = true
         }
         startedAt = Date()
@@ -327,6 +339,16 @@ final class BookAudioPlayer: ObservableObject {
 
     func setContinuousPlaybackEnabled(_ enabled: Bool) {
         continuesToNextPage = enabled
+    }
+
+    func setPlaybackRate(_ requestedRate: Double) {
+        let rate = min(max(requestedRate, Self.minimumPlaybackRate), Self.maximumPlaybackRate)
+        guard abs(rate - playbackRate) > 0.001 else { return }
+        _ = resolvedPosition()
+        playbackRate = rate
+        timePitch.rate = Float(rate)
+        UserDefaults.standard.set(rate, forKey: Self.playbackRateDefaultsKey)
+        updateNowPlaying()
     }
 
     /// Works before the first chunk has landed too — pausing while the
@@ -414,6 +436,7 @@ final class BookAudioPlayer: ObservableObject {
         }
         if isAttached {
             engine.detach(node)
+            engine.detach(timePitch)
             isAttached = false
         }
         MPRemoteCommandCenter.shared().playCommand.removeTarget(nil)
@@ -422,6 +445,7 @@ final class BookAudioPlayer: ObservableObject {
         MPRemoteCommandCenter.shared().skipForwardCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().skipBackwardCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().changePlaybackPositionCommand.removeTarget(nil)
+        MPRemoteCommandCenter.shared().changePlaybackRateCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().nextTrackCommand.removeTarget(nil)
         MPRemoteCommandCenter.shared().previousTrackCommand.removeTarget(nil)
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -869,7 +893,8 @@ final class BookAudioPlayer: ObservableObject {
         _ buffer: AVAudioPCMBuffer, at index: Int, chunkOffset: TimeInterval
     ) {
         if !isConnected {
-            engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
+            engine.connect(node, to: timePitch, format: buffer.format)
+            engine.connect(timePitch, to: engine.mainMixerNode, format: buffer.format)
             format = buffer.format
             engine.prepare()
             do {
@@ -1103,6 +1128,7 @@ final class BookAudioPlayer: ObservableObject {
         center.skipForwardCommand.removeTarget(nil)
         center.skipBackwardCommand.removeTarget(nil)
         center.changePlaybackPositionCommand.removeTarget(nil)
+        center.changePlaybackRateCommand.removeTarget(nil)
         center.nextTrackCommand.removeTarget(nil)
         center.previousTrackCommand.removeTarget(nil)
 
@@ -1138,6 +1164,14 @@ final class BookAudioPlayer: ObservableObject {
             guard let self, let event = event as? MPChangePlaybackPositionCommandEvent
             else { return .commandFailed }
             self.seek(to: event.positionTime)
+            return .success
+        }
+        center.changePlaybackRateCommand.supportedPlaybackRates =
+            Self.presetPlaybackRates.map(NSNumber.init(value:))
+        center.changePlaybackRateCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPChangePlaybackRateCommandEvent
+            else { return .commandFailed }
+            self.setPlaybackRate(Double(event.playbackRate))
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in
@@ -1261,10 +1295,7 @@ final class BookAudioPlayer: ObservableObject {
         info[MPMediaItemPropertyArtist] = VoiceDisplayName.forCode(voice)
         info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedNow()
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        // Posted alongside the rate so the lock screen knows this is a
-        // 1.0x-when-playing source and extrapolates the elapsed time
-        // correctly between our 1Hz updates.
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackRate : 0.0
         info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
         if duration > 0 {
             info[MPMediaItemPropertyPlaybackDuration] = duration

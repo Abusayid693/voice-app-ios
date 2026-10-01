@@ -21,31 +21,21 @@ struct ReaderPDFPageView: View {
 
     @State private var page: UIImage?
     @State private var isRendering = true
+    @State private var zoomScale: CGFloat = 1
+    @State private var settledZoomScale: CGFloat = 1
+    @State private var zoomOffset: CGSize = .zero
+    @State private var settledZoomOffset: CGSize = .zero
+
+    private let maximumZoomScale: CGFloat = 4
 
     var body: some View {
         GeometryReader { proxy in
             let size = renderedSize(fitting: proxy.size)
             ZStack {
                 if let page {
-                    Image(uiImage: page)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: size.width, height: size.height)
-                        .overlay { highlightLayer(in: size) }
-                        // Confines the highlight's `.multiply` to the page it
-                        // marks. A blend mode composites against whatever sits
-                        // beneath it in the same group, which without this is
-                        // the screen's own background as well as the page.
-                        .compositingGroup()
-                        // The page is paper-white whatever the reader theme is,
-                        // so it needs its own edge rather than dissolving into
-                        // a light background.
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .stroke(theme.secondaryText.opacity(0.25), lineWidth: 1)
-                        }
-                        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+                    pageImage(page, size: size)
+                        .scaleEffect(zoomScale)
+                        .offset(zoomOffset)
                 } else if isRendering {
                     ProgressView().tint(theme.primaryText)
                 } else {
@@ -53,8 +43,110 @@ struct ReaderPDFPageView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .clipped()
+            .gesture(zoomGesture(pageSize: size, viewportSize: proxy.size))
+            .onTapGesture(count: 2) { toggleZoom() }
+            .accessibilityAction(named: "Zoom in") {
+                setZoom(min(maximumZoomScale, settledZoomScale + 1))
+            }
+            .accessibilityAction(named: "Zoom out") {
+                setZoom(max(1, settledZoomScale - 1))
+            }
+            .accessibilityAction(named: "Reset zoom") { setZoom(1) }
         }
-        .task(id: pageIndex) { await render() }
+        .task(id: pageIndex) {
+            resetZoom()
+            await render()
+        }
+    }
+
+    private func pageImage(_ image: UIImage, size: CGSize) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size.width, height: size.height)
+            .overlay { highlightLayer(in: size) }
+            .compositingGroup()
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(theme.secondaryText.opacity(0.25), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+
+    private func zoomGesture(pageSize: CGSize, viewportSize: CGSize) -> some Gesture {
+        let magnification = MagnificationGesture()
+            .onChanged { value in
+                zoomScale = min(max(settledZoomScale * value, 0.85), maximumZoomScale + 0.2)
+                zoomOffset = clampedOffset(
+                    zoomOffset, pageSize: pageSize, viewportSize: viewportSize,
+                    scale: max(zoomScale, 1))
+            }
+            .onEnded { _ in
+                settleZoom(pageSize: pageSize, viewportSize: viewportSize)
+            }
+
+        let pan = DragGesture(minimumDistance: 5)
+            .onChanged { value in
+                guard zoomScale > 1 else { return }
+                let proposed = CGSize(
+                    width: settledZoomOffset.width + value.translation.width,
+                    height: settledZoomOffset.height + value.translation.height)
+                zoomOffset = clampedOffset(
+                    proposed, pageSize: pageSize, viewportSize: viewportSize,
+                    scale: zoomScale)
+            }
+            .onEnded { _ in
+                settleZoom(pageSize: pageSize, viewportSize: viewportSize)
+            }
+
+        return magnification.simultaneously(with: pan)
+    }
+
+    private func settleZoom(pageSize: CGSize, viewportSize: CGSize) {
+        let scale = min(max(zoomScale, 1), maximumZoomScale)
+        let offset = clampedOffset(
+            scale == 1 ? .zero : zoomOffset,
+            pageSize: pageSize, viewportSize: viewportSize, scale: scale)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            zoomScale = scale
+            zoomOffset = offset
+        }
+        settledZoomScale = scale
+        settledZoomOffset = offset
+    }
+
+    private func clampedOffset(
+        _ proposed: CGSize, pageSize: CGSize, viewportSize: CGSize, scale: CGFloat
+    ) -> CGSize {
+        let maximumX = max((pageSize.width * scale - viewportSize.width) / 2, 0)
+        let maximumY = max((pageSize.height * scale - viewportSize.height) / 2, 0)
+        return CGSize(
+            width: min(max(proposed.width, -maximumX), maximumX),
+            height: min(max(proposed.height, -maximumY), maximumY))
+    }
+
+    private func toggleZoom() {
+        setZoom(settledZoomScale > 1 ? 1 : 2.5)
+    }
+
+    private func setZoom(_ requestedScale: CGFloat) {
+        let scale = min(max(requestedScale, 1), maximumZoomScale)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            zoomScale = scale
+            zoomOffset = .zero
+        }
+        settledZoomScale = scale
+        settledZoomOffset = .zero
+    }
+
+    private func resetZoom() {
+        zoomScale = 1
+        settledZoomScale = 1
+        zoomOffset = .zero
+        settledZoomOffset = .zero
     }
 
     private var unavailable: some View {

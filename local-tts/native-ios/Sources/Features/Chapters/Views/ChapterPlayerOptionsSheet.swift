@@ -20,82 +20,36 @@ struct ChapterPlayerOptionsSheet: View {
         case root
         case controls
         case font
-
-        var title: String {
-            switch self {
-            case .root: return "Reader options"
-            case .controls: return "Controls"
-            case .font: return "Font"
-            }
-        }
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        InteractiveGlassBottomSheet(
+            theme: theme,
+            detents: [.medium],
+            showsDragIndicator: false,
+            closeAccessibilityLabel: "Close reader options",
+            onClose: { dismiss() },
+            onBack: backAction
+        ) { headerInset in
             ScrollView {
                 pageContent
                     .padding(.horizontal, 16)
-                    .padding(.top, 70)
+                    .padding(.top, headerInset)
                     .padding(.bottom, 16)
             }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
-
-            // Content scrolls underneath this material so it softly blurs
-            // instead of meeting a solid header or divider line.
-            header
-                .background(.ultraThinMaterial)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(theme.background.ignoresSafeArea())
-        // Color the native presentation itself instead of drawing an inset
-        // card, so the active reader theme reaches every sheet edge and the
-        // system owns the sheet's outer corner shape.
-        .presentationBackground(theme.background)
-        // One detent keeps the sheet at its initial height. All overflow is
-        // handled by the ScrollView above rather than expanding the sheet.
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.hidden)
-        .presentationContentInteraction(.scrolls)
-        .preferredColorScheme(theme.colorScheme)
         .animation(.easeInOut(duration: 0.18), value: theme)
     }
 
-    private var header: some View {
-        ZStack {
-            Text(page.title)
-                .font(AppTextStyle.rowTitle.font)
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
-
-            HStack {
-                Button {
-                    if page == .root {
-                        dismiss()
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            page = .root
-                        }
-                    }
-                } label: {
-                    Image(systemName: page == .root ? "xmark" : "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.optionsAccent)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            theme.primaryText.opacity(theme.colorScheme == .dark ? 0.12 : 0.07),
-                            in: Circle())
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(page == .root ? "Close" : "Back")
-
-                Spacer()
+    private var backAction: (() -> Void)? {
+        guard page != .root else { return nil }
+        return {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                page = .root
             }
         }
-        .frame(height: 54)
-        .padding(.horizontal, 10)
     }
 
     @ViewBuilder
