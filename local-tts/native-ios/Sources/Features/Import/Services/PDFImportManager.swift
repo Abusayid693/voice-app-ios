@@ -180,12 +180,9 @@ final class PDFImportManager: ObservableObject {
                 $0.errorMessage = nil
                 $0.updatedAt = Date()
             }
-            // Keep the import cover alive while its progress bar fades first,
-            // then the cover settles. The completed project underneath has
-            // the same ID, so removing this transient state cannot reflow it.
-            Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(900))
-                self?.shelfStore.remove(id: id)
+            // Visible covers hand off after their actual settling animation, not a timer.
+            if shelfStore.items.first(where: { $0.id == id })?.presentationCount == 0 {
+                shelfStore.finishPresentation(id: id)
             }
             sendCompletionNotification(for: job)
         } catch is CancellationError {

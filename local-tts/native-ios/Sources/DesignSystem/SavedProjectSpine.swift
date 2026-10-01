@@ -34,7 +34,7 @@ struct SavedProjectSpine: View {
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .task(id: coverURL) {
-            image = coverURL.flatMap { UIImage(contentsOfFile: $0.path) }
+            image = SavedProjectArtwork.loadImage(at: coverURL)
         }
         .accessibilityLabel("Spine for \(title)")
     }
@@ -50,7 +50,7 @@ struct SavedProjectSpine: View {
     /// -90° as `verticalTitle`, so artwork and title run the same way.
     private var artwork: some View {
         Group {
-            if let image {
+            if let image = image ?? SavedProjectArtwork.cachedImage(at: coverURL) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()

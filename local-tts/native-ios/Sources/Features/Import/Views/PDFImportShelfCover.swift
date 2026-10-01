@@ -10,6 +10,7 @@ struct PDFImportShelfCover: View {
     let onCancel: () -> Void
     let onRetry: () -> Void
     let onDelete: () -> Void
+    let onSettled: () -> Void
 
     @State private var image: UIImage?
     @State private var isProgressHidden = false
@@ -40,9 +41,14 @@ struct PDFImportShelfCover: View {
         .contentShape(Rectangle())
         .offset(y: isSettled ? 0 : -liftDistance)
         .shadow(
-            color: .black.opacity(isSettled ? 0.12 : 0.20),
-            radius: isSettled ? 4 : 9,
-            y: isSettled ? 2 : 6)
+            color: .black.opacity(isSettled ? 0 : 0.20),
+            radius: isSettled ? 0 : 9,
+            y: isSettled ? 0 : 6)
+        .onAppear { item.presentationCount += 1 }
+        .onDisappear {
+            item.presentationCount = max(0, item.presentationCount - 1)
+            if item.isCompleted, item.presentationCount == 0 { finishPresentation() }
+        }
         .task(id: item.isCompleted) { await updateCompletionState() }
         .task(id: item.coverURL) { await loadCover() }
         .accessibilityElement(children: .contain)
@@ -51,21 +57,19 @@ struct PDFImportShelfCover: View {
 
     private var artwork: some View {
         ZStack {
-            MatrixCoverLoader(seed: item.title, isAnimated: !reduceMotion)
+            MatrixCoverLoader(seed: item.title, isAnimated: !reduceMotion && image == nil && !isSettled)
                 .opacity(image == nil && !isSettled ? 1 : 0)
 
-            LinearGradient.stablePlaceholder(seed: item.title)
-                .overlay {
-                    LucideIcon(
-                        .book, style: .filled, size: min(size.width, size.height) * 0.26,
-                        color: .white.opacity(0.9))
-                }
+            RotatingBookFaces(
+                coverURL: nil, title: item.title, coverSize: size,
+                spineWidth: 5, showsSpineTitle: false, angle: 0)
                 .opacity(image == nil && isSettled ? 1 : 0)
 
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if image != nil {
+                // Match the saved shelf cover's shading as well as its bitmap and bounds.
+                RotatingBookFaces(
+                    coverURL: item.coverURL, title: item.title, coverSize: size,
+                    spineWidth: 5, showsSpineTitle: false, angle: 0)
                     .transition(.opacity)
             }
         }
@@ -118,29 +122,48 @@ struct PDFImportShelfCover: View {
             isSettled = false
             return
         }
+        // Finish the first-frame artwork load before beginning the completion handoff.
+        if image == nil { await loadCover() }
+        guard !Task.isCancelled, item.isCompleted else { return }
         guard !reduceMotion else {
             isProgressHidden = true
             isSettled = true
+            finishPresentation()
             return
         }
 
         withAnimation(.easeOut(duration: 0.18)) { isProgressHidden = true }
         try? await Task.sleep(for: .milliseconds(200))
         guard !Task.isCancelled else { return }
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.88), completionCriteria: .removed) {
             isSettled = true
+        } completion: {
+            guard item.isCompleted else { return }
+            finishPresentation()
         }
+    }
+
+    private func finishPresentation() {
+        // The import and project URLs differ, but both must draw the very same bitmap.
+        if let image { SavedProjectArtwork.store(image, at: SavedGeneration.coverFileURL(id: item.id)) }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { onSettled() }
     }
 
     @MainActor
     private func loadCover() async {
-        guard let url = item.coverURL else {
-            image = nil
+        guard let url = item.coverURL else { return }
+        if image != nil { return }
+        if let cached = SavedProjectArtwork.cachedImage(at: url) {
+            image = cached
             return
         }
         let loaded = await Task.detached(priority: .utility) {
             UIImage(contentsOfFile: url.path)
         }.value
+        guard !Task.isCancelled, item.coverURL == url else { return }
+        if let loaded { SavedProjectArtwork.store(loaded, at: url) }
         if reduceMotion {
             image = loaded
         } else {
