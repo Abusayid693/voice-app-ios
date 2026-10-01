@@ -99,6 +99,10 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    static func spineFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("spine.jpg")
+    }
+
     /// The project's own copy of the imported document, kept so the reader can
     /// show the original page. The import job also holds a copy, but that
     /// directory is the importer's to delete — a project cannot depend on it.

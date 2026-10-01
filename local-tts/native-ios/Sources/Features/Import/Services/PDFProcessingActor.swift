@@ -1,3 +1,4 @@
+import CoreImage
 import Foundation
 import PDFKit
 import UIKit
@@ -7,6 +8,8 @@ import UIKit
 actor PDFProcessingActor {
     private let extractor: any PDFTextExtractor
     private let assembler = PDFParagraphAssembler()
+    /// Reused for actor-isolated cover-to-spine rendering.
+    private let imageContext = CIContext(options: [.cacheIntermediates: false])
 
     init(extractor: any PDFTextExtractor = PDFKitTextExtractor()) {
         self.extractor = extractor
@@ -138,19 +141,20 @@ actor PDFProcessingActor {
             pagesDirectory: job.readerPagesDirectory,
             sourceURL: job.sourceURL,
             pageCount: pageCount,
-            coverURL: coverURL)
+            coverURL: coverURL,
+            spineURL: FileManager.default.fileExists(atPath: job.spineURL.path)
+                ? job.spineURL
+                : nil)
     }
 
-    /// Uses PDFKit's rendered crop-box image instead of retaining a PDF page
-    /// object beyond this actor. The final JPEG is a 600×900 2:3 book-cover
-    /// image; pages with another aspect ratio are center-cropped, never
-    /// stretched, into that presentation format.
+    /// Renders bounded cover and spine artwork without exporting PDFKit objects.
     private func makeCoverThumbnail(document: PDFDocument, job: PDFImportJob) -> URL? {
         if FileManager.default.fileExists(atPath: job.coverURL.path) {
+            makeSpineArtworkIfNeeded(coverURL: job.coverURL, spineURL: job.spineURL)
             return job.coverURL
         }
         guard let firstPage = document.page(at: 0) else { return nil }
-        let data: Data? = autoreleasepool {
+        let artwork: (cover: Data, spine: Data?)? = autoreleasepool {
             let coverSize = CGSize(width: 600, height: 900)
             let pageImage = firstPage.thumbnail(
                 of: CGSize(width: 1200, height: 1800), for: .cropBox)
@@ -167,14 +171,76 @@ actor PDFProcessingActor {
                     width: renderedSize.width,
                     height: renderedSize.height))
             }
-            return coverImage.jpegData(compressionQuality: 0.84)
+            guard let coverData = coverImage.jpegData(compressionQuality: 0.84) else {
+                return nil
+            }
+            return (
+                cover: coverData,
+                spine: makeSpineArtwork(from: coverImage)?.jpegData(compressionQuality: 0.82))
         }
-        guard let data else { return nil }
+        guard let artwork else { return nil }
         do {
-            try data.write(to: job.coverURL, options: .atomic)
+            try artwork.cover.write(to: job.coverURL, options: .atomic)
+            if let spine = artwork.spine {
+                // Spine artwork is optional visual polish.
+                try? spine.write(to: job.spineURL, options: .atomic)
+            }
             return job.coverURL
         } catch {
             return nil
+        }
+    }
+
+    private func makeSpineArtworkIfNeeded(coverURL: URL, spineURL: URL) {
+        guard !FileManager.default.fileExists(atPath: spineURL.path) else { return }
+        guard
+            let cover = UIImage(contentsOfFile: coverURL.path),
+            let data = makeSpineArtwork(from: cover)?.jpegData(compressionQuality: 0.82)
+        else { return }
+        try? data.write(to: spineURL, options: .atomic)
+    }
+
+    /// Dissolves the full cover palette without retaining a recognizable crop.
+    private func makeSpineArtwork(from cover: UIImage) -> UIImage? {
+        guard let input = CIImage(image: cover), input.extent.width > 0, input.extent.height > 0
+        else { return nil }
+
+        let spineSize = CGSize(width: 180, height: 900)
+        let normalized = input.transformed(by: CGAffineTransform(
+            translationX: -input.extent.minX,
+            y: -input.extent.minY))
+        let compressed = normalized.transformed(by: CGAffineTransform(
+            scaleX: spineSize.width / input.extent.width,
+            y: spineSize.height / input.extent.height))
+        let extent = CGRect(origin: .zero, size: spineSize)
+        let dissolved = compressed
+            .clampedToExtent()
+            .applyingFilter(
+                "CIGaussianBlur",
+                parameters: [kCIInputRadiusKey: 38])
+            .cropped(to: extent)
+        guard let cgImage = imageContext.createCGImage(dissolved, from: extent) else { return nil }
+        let blurred = UIImage(cgImage: cgImage)
+
+        return UIGraphicsImageRenderer(size: spineSize).image { renderer in
+            blurred.draw(in: extent)
+            let context = renderer.cgContext
+            let colors = [
+                UIColor.white.withAlphaComponent(0.12).cgColor,
+                UIColor.clear.cgColor,
+                UIColor.black.withAlphaComponent(0.14).cgColor,
+            ] as CFArray
+            if let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: colors,
+                locations: [0, 0.48, 1])
+            {
+                context.drawLinearGradient(
+                    gradient,
+                    start: CGPoint(x: spineSize.width / 2, y: 0),
+                    end: CGPoint(x: spineSize.width / 2, y: spineSize.height),
+                    options: [])
+            }
         }
     }
 

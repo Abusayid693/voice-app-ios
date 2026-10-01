@@ -15,7 +15,6 @@ struct KokoroAneTestApp: App {
     // The app's one playback owner — read-along and the audio surface are
     // two views of it (docs/adr/0013-unified-player.md).
     private let player: BookAudioPlayer
-    private let navigationChrome = NavigationChromeVisibility()
     private let readingStatsTracker: ReadingStatsTracker
 
     init() {
@@ -38,8 +37,7 @@ struct KokoroAneTestApp: App {
         AppEnvironment(
             tts: viewModel, library: libraryViewModel,
             pdfImports: pdfImportManager, previewPlayer: previewPlayer, player: player,
-            readingStats: dependencies.readingStatsStore,
-            navigationChrome: navigationChrome)
+            readingStats: dependencies.readingStatsStore)
     }
 
     var body: some Scene {

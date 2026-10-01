@@ -52,7 +52,6 @@
 		5DA838693E2EDA4ABF0526CC /* BookShelfLayoutStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BCC98B433DA0FAE80E2D756 /* BookShelfLayoutStore.swift */; };
 		655CE0F29DF8F2A9F95FBF3E /* AudioPlaybackDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C12A8BE1808AF7DAB49001 /* AudioPlaybackDelegate.swift */; };
 		6A225837E81094AE1AA23308 /* ReadingStatsStorageActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B562D273C55541E9030B31BC /* ReadingStatsStorageActor.swift */; };
-		6B3AB04404997DF611932628 /* NavigationChromeVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */; };
 		6E83C50488A8F997D309F0EF /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = CE49DCF4046639135F678D6A /* FluidAudio */; };
 		6F472653E642C80C019641E4 /* OrbSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18121D12A0F604DBEC00BBD /* OrbSpec.swift */; };
 		7044F026164DB619211B6BD5 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */; };
@@ -172,7 +171,6 @@
 		3E216E7D8A7A543D1795B03D /* VoiceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceCatalog.swift; sourceTree = "<group>"; };
 		3FC67F8DD1499FD208A8BCB8 /* ThinkingOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingOrb.swift; sourceTree = "<group>"; };
 		431DE4486B7A993178A4B2F8 /* KokoroEngineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroEngineService.swift; sourceTree = "<group>"; };
-		4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationChromeVisibility.swift; sourceTree = "<group>"; };
 		4567A06F6893E77FF005B84F /* KokoroVariant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KokoroVariant.swift; sourceTree = "<group>"; };
 		471B59358982E4F826EFA34E /* ShelfScrollLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfScrollLock.swift; sourceTree = "<group>"; };
 		4F42E5198184BC798C05ABC2 /* PlaybackScrubber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackScrubber.swift; sourceTree = "<group>"; };
@@ -405,7 +403,6 @@
 				83247F6E3B113FE5D6C0D79C /* CustomTabBar.swift */,
 				BE23F44396B6BCD75DE243A1 /* DependencyContainer.swift */,
 				3081602D9C4D12815F162223 /* KokoroAneTestApp.swift */,
-				4400236AF465B7C97A171C61 /* NavigationChromeVisibility.swift */,
 				30A3AE469CA3D6649CCD731F /* RootTabView.swift */,
 			);
 			path = App;
@@ -867,7 +864,6 @@
 				5D53FD681D3827C7A2A9E49C /* LoopingVideoPlayerView.swift in Sources */,
 				EF89517ED991FCE23715C482 /* MiniPlayerBar.swift in Sources */,
 				E5E4F90206956CE7D69BDC3A /* Morph.swift in Sources */,
-				6B3AB04404997DF611932628 /* NavigationChromeVisibility.swift in Sources */,
 				5100BD838A395DB683AFF1E2 /* NowPlayingSurface.swift in Sources */,
 				792F45C4E05CD6090CB81095 /* OpenSourceCard.swift in Sources */,
 				3700C9D10AE9D7A7FEA4073F /* OrbCoverArt.swift in Sources */,

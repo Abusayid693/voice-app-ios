@@ -2,16 +2,7 @@ import LucideSwift
 import SwiftUI
 import UIKit
 
-/// A book turned spine-out on the Book Shelf — the same persisted
-/// `cover.jpg` `SavedProjectCover` draws, center-cropped to a narrow strip,
-/// with the title running vertically over it when the book is thick enough.
-///
-/// `scaledToFill` inside a spine-width frame is what does the cropping: the
-/// image keeps its aspect ratio and overflows horizontally, so what's left
-/// is the middle slice of the artwork rather than a squashed whole cover.
-/// The two edge gradients are what make that strip read as a *spine* and not
-/// just a clipped cover — a real one catches light along its hinge and falls
-/// into shadow at the fore edge.
+/// A spine-out book using persisted dissolved artwork when available.
 struct SavedProjectSpine: View {
     let coverURL: URL?
     let title: String
@@ -19,7 +10,12 @@ struct SavedProjectSpine: View {
     var cornerRadius: CGFloat = 3
     var showsTitle = true
 
-    @State private var image: UIImage?
+    @State private var spineImage: UIImage?
+    @State private var legacyCoverImage: UIImage?
+
+    private var spineURL: URL? {
+        coverURL?.deletingLastPathComponent().appendingPathComponent("spine.jpg")
+    }
 
     var body: some View {
         ZStack {
@@ -34,34 +30,33 @@ struct SavedProjectSpine: View {
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .task(id: coverURL) {
-            image = SavedProjectArtwork.loadImage(at: coverURL)
+            spineImage = SavedProjectArtwork.loadImage(at: spineURL)
+            legacyCoverImage = spineImage == nil
+                ? SavedProjectArtwork.loadImage(at: coverURL)
+                : nil
         }
         .accessibilityLabel("Spine for \(title)")
     }
 
-    /// The cover turned on its side and run down the spine, so the artwork
-    /// follows the spine's long axis instead of being cropped to a thin
-    /// upright sliver of itself.
-    ///
-    /// The frame is deliberately **swapped** (`height × width`) *before*
-    /// rotating: `rotationEffect` doesn't change layout, so filling the
-    /// rotated shape means filling the pre-rotation rectangle it came from.
-    /// The outer frame afterwards reclaims the spine's real footprint. Same
-    /// -90° as `verticalTitle`, so artwork and title run the same way.
+    /// Legacy projects dissolve their cover at render time.
     private var artwork: some View {
         Group {
-            if let image = image ?? SavedProjectArtwork.cachedImage(at: coverURL) {
+            if let image = spineImage ?? SavedProjectArtwork.cachedImage(at: spineURL) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+            } else if let image = legacyCoverImage ?? SavedProjectArtwork.cachedImage(at: coverURL) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(1.18)
+                    .blur(radius: 12)
             } else {
                 LinearGradient.stablePlaceholder(seed: title)
             }
         }
-        .frame(width: size.height, height: size.width)
-        .clipped()
-        .rotationEffect(.degrees(-90))
         .frame(width: size.width, height: size.height)
+        .clipped()
     }
 
     /// Darkened overall so white title text stays legible over whatever the

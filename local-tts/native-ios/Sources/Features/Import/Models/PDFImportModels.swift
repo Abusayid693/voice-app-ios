@@ -93,6 +93,8 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
     /// A small raster of the first physical page, retained during import so
     /// it can be copied beside the final project's independently stored pages.
     var coverURL: URL { directory.appendingPathComponent("cover.jpg") }
+    /// Pre-rendered artwork for spine-out shelf books.
+    var spineURL: URL { directory.appendingPathComponent("spine.jpg") }
     var pagesDirectory: URL { directory.appendingPathComponent("pages", isDirectory: true) }
     var readerPagesDirectory: URL {
         directory.appendingPathComponent("reader-pages", isDirectory: true)
@@ -246,6 +248,8 @@ struct PDFImportResult: Sendable {
     /// Optional so a thumbnail rendering failure cannot discard otherwise
     /// readable imported content; callers use the standard project icon then.
     let coverURL: URL?
+    /// Optional visual derivative copied beside the final project cover.
+    let spineURL: URL?
 }
 
 struct PDFProcessingProgress: Sendable {

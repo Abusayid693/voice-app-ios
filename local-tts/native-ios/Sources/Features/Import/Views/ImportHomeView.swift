@@ -1,23 +1,18 @@
 import Hugeicons
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The app's books-first Home. It owns navigation and Home-specific chrome;
 /// `BookShelfView` owns the shelf content and its detail transition.
 struct ImportHomeView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject private var player: BookAudioPlayer
     let app: AppEnvironment
-    /// Driven by the Explore menu in `RootTabView`'s floating bar — Library,
-    /// Voices and Tools are pushed here rather than mounted as peer tabs.
-    @Binding var exploreDestination: ExploreDestination?
-    /// Set by `RootTabView`'s mini player to reopen whatever is playing on
-    /// the audio surface. Consumed here, since Home owns the only stack.
-    @Binding var openBookRequest: OpenBookRequest?
-    /// RootTabView owns the PDF file importer (it's global, reachable from
-    /// Add Books too) — forwarded into Tools' "Upload File" row so it
-    /// triggers the exact same picker rather than a second one.
-    let onAddBooks: () -> Void
 
     @State private var isSettingsPresented = false
+    @State private var isExploreExpanded = false
+    @State private var exploreDestination: ExploreDestination?
+    @State private var isDocumentPickerPresented = false
     @State private var openProject: SavedGeneration?
     /// Which surface the pending push should open on — nil means "use the
     /// reader's stored preference".
@@ -31,39 +26,17 @@ struct ImportHomeView: View {
     // before the real one-shot load below finishes.
     @State private var recentActivity: [DayActivity] = ImportHomeView.emptyRecentDays()
 
+    init(libraryViewModel: LibraryViewModel, app: AppEnvironment) {
+        self.libraryViewModel = libraryViewModel
+        self.app = app
+        self._player = ObservedObject(wrappedValue: app.player)
+    }
+
     var body: some View {
         NavigationStack {
-            BookShelfView(
-                library: libraryViewModel,
-                importShelf: app.pdfImports.shelfStore,
-                pdfImports: app.pdfImports,
-                readingStats: app.readingStats,
-                isDetailPresented: $isBookDetailPresented,
-                onOpenBook: { book in
-                    openSurfaceMode = nil
-                    openProject = libraryViewModel.project(for: book.id)
-                },
-                onListen: { book in
-                    // Same push as "Read this", only landing on the audio
-                    // surface — one screen, one player, two surfaces.
-                    openSurfaceMode = .audio
-                    openPageIndex = nil
-                    openProject = libraryViewModel.project(for: book.id)
-                })
-            // Home draws its own header controls instead of using the
-            // navigation bar: a `ToolbarItem` renders through nav-bar
-            // chrome (Liquid Glass on iOS 26, plus bar-button padding
-            // around custom content), which these flat controls don't want.
-            // Overlaid rather than inset, so
-            // the shelf backdrop still runs to the top of the screen.
-            .toolbar(.hidden, for: .navigationBar)
-            // Applied before the controls so it sits under them: shelf rows
-            // scrolling up soften into the top edge instead of running
-            // straight into the icons.
-            .overlay(alignment: .top) {
-                ShelfTopBlur().ignoresSafeArea(edges: .top)
+            GeometryReader { geometry in
+                shelfRoot(safeAreaBottom: geometry.safeAreaInsets.bottom)
             }
-            .overlay(alignment: .top) { headerControls }
             .navigationDestination(item: $openProject) { project in
                 ChapterPlayerView(
                     project: project,
@@ -94,9 +67,6 @@ struct ImportHomeView: View {
                 ReadingStatsView(readingStats: app.readingStats)
                     .environment(\.colorScheme, .light)
             }
-            .tabRootChrome(
-                app.navigationChrome,
-                isPushed: openProject != nil || exploreDestination != nil || isReadingStatsPresented)
         }
         .task { await loadRecentActivity() }
         // Reload when a reader page is closed — that's the natural moment
@@ -105,31 +75,113 @@ struct ImportHomeView: View {
             guard oldValue != nil, newValue == nil else { return }
             Task { await loadRecentActivity() }
         }
-        // The mini player asked for a book: load it and push, on the audio
-        // surface. Cleared immediately so tapping it again after popping
-        // back re-triggers.
-        .onChange(of: openBookRequest) { _, request in
-            guard let request, let project = libraryViewModel.project(for: request.projectID)
-            else { return }
-            openPageIndex = request.pageIndex
-            openSurfaceMode = request.surfaceMode
-            openProject = project
-            openBookRequest = nil
-        }
-        // The single writer of `isReaderOpen`, same convention as
-        // `tabRootChrome`'s own `isAtTabRoot` above — see that property's
-        // doc comment for why a pushed screen must not write this itself.
-        .onAppear { app.navigationChrome.isReaderOpen = openProject != nil }
-        .onChange(of: openProject) { _, newValue in
-            app.navigationChrome.isReaderOpen = newValue != nil
-        }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsSheet(viewModel: app.tts)
+        }
+        .fileImporter(
+            isPresented: $isDocumentPickerPresented,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first else { return }
+            Task {
+                await app.pdfImports.importPDF(
+                    from: url,
+                    engine: .kokoroAne,
+                    voiceName: app.tts.kokoroVoice)
+            }
         }
         // Window-level (status bar, nav-bar material) counterpart to the
         // `.environment` above: light for the shelf, dark while an Explore
         // destination is on top of it.
         .preferredColorScheme(exploreDestination == nil ? .light : .dark)
+    }
+
+    /// Keeps Shelf and its fixed chrome on one navigation surface.
+    private func shelfRoot(safeAreaBottom: CGFloat) -> some View {
+        BookShelfView(
+            library: libraryViewModel,
+            importShelf: app.pdfImports.shelfStore,
+            pdfImports: app.pdfImports,
+            readingStats: app.readingStats,
+            isDetailPresented: $isBookDetailPresented,
+            onOpenBook: { book in
+                openSurfaceMode = nil
+                openProject = libraryViewModel.project(for: book.id)
+            },
+            onListen: { book in
+                // Reuse the reader route and land on its audio surface.
+                openSurfaceMode = .audio
+                openPageIndex = nil
+                openProject = libraryViewModel.project(for: book.id)
+            })
+        // Overlaying the custom header preserves status-bar artwork.
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            ShelfTopBlur().ignoresSafeArea(edges: .top)
+        }
+        .overlay(alignment: .top) { headerControls }
+        // Keep Explore dismissal on the same root as its controls.
+        .overlay {
+            if isExploreExpanded {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                            isExploreExpanded = false
+                        }
+                    }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            shelfBottomChrome(safeAreaBottom: safeAreaBottom)
+        }
+    }
+
+    private func shelfBottomChrome(safeAreaBottom: CGFloat) -> some View {
+        VStack(spacing: 12) {
+            if player.activeRef != nil {
+                MiniPlayerBar(player: player, onExpand: openPlayingBook)
+                    .padding(.horizontal, 19)
+                    // Retain player identity while Explore uses this space.
+                    .opacity(isExploreExpanded ? 0 : 1)
+                    .allowsHitTesting(!isExploreExpanded)
+                    .animation(.easeInOut(duration: 0.18), value: isExploreExpanded)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .offset(y: 30)
+            }
+
+            CustomTabBar(
+                isExploreExpanded: $isExploreExpanded,
+                safeAreaBottom: safeAreaBottom,
+                onSelect: open,
+                onAddBooks: presentDocumentPicker)
+        }
+        .animation(.easeInOut(duration: 0.22), value: player.activeRef)
+    }
+
+    /// Reopens the active project through Home's route state.
+    private func openPlayingBook() {
+        guard
+            let ref = player.activeRef,
+            let project = libraryViewModel.project(for: ref.projectID)
+        else { return }
+        openPageIndex = ref.pageIndex
+        openSurfaceMode = .audio
+        openProject = project
+    }
+
+    private func open(_ destination: ExploreDestination) {
+        isExploreExpanded = false
+        exploreDestination = destination
+    }
+
+    private func presentDocumentPicker() {
+        isExploreExpanded = false
+        Task { @MainActor in
+            await Task.yield()
+            isDocumentPickerPresented = true
+        }
     }
 
     @ViewBuilder
@@ -140,7 +192,10 @@ struct ImportHomeView: View {
         case .voices:
             VoicesTabView(packs: app.tts.packs, app: app)
         case .tools:
-            ToolsView(libraryViewModel: libraryViewModel, app: app, onAddBooks: onAddBooks)
+            ToolsView(
+                libraryViewModel: libraryViewModel,
+                app: app,
+                onAddBooks: presentDocumentPicker)
         }
     }
 
@@ -271,7 +326,5 @@ extension Array {
 
 #Preview {
     let app = AppEnvironment.preview()
-    return ImportHomeView(
-        libraryViewModel: app.library, app: app, exploreDestination: .constant(nil),
-        openBookRequest: .constant(nil), onAddBooks: {})
+    return ImportHomeView(libraryViewModel: app.library, app: app)
 }
