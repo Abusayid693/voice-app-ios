@@ -69,7 +69,7 @@ struct ShelfDraggedBook: View {
                 RotatingBookFaces(
                     coverURL: book.coverURL, title: book.title,
                     coverSize: drag.coverSize, spineWidth: book.spineWidth,
-                    showsSpineTitle: book.showsSpineTitle,
+                    spineArtworkURL: book.spineArtworkURL,
                     angle: mode == .spine ? 90 : 0)
             }
             .shadow(color: .black.opacity(0.22), radius: 10, y: 6)

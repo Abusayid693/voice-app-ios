@@ -99,8 +99,13 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    static func spineFileURL(id: UUID) -> URL {
-        projectDirectory(id: id).appendingPathComponent("spine.jpg")
+    static func spineArtworkFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("spine-artwork-v1.png")
+    }
+
+    static func existingSpineArtworkURL(id: UUID) -> URL? {
+        let url = spineArtworkFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     /// The project's own copy of the imported document, kept so the reader can
@@ -222,6 +227,10 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     /// The square root gives thin books enough visible presence without the
     /// old fixed 14pt base making every small PDF look equally thick.
     var spineWidth: CGFloat {
+        Self.spineWidth(forPageCount: pageCount)
+    }
+
+    static func spineWidth(forPageCount pageCount: Int) -> CGFloat {
         let minimumWidth: CGFloat = 5
         let maximumWidth: CGFloat = 36
         let maximumPageCount: CGFloat = 900
@@ -229,9 +238,6 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         let normalizedPages = min(pagesAfterFirst / (maximumPageCount - 1), 1)
         return minimumWidth + (maximumWidth - minimumWidth) * sqrt(normalizedPages)
     }
-
-    /// Very thin documents do not have enough usable spine area for a title.
-    var showsSpineTitle: Bool { pageCount >= 45 }
 
     var pageCountLabel: String {
         "\(pageCount) \(pageCount == 1 ? "page" : "pages")"
@@ -241,5 +247,9 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     /// thumbnails use the standard engine icon in row UI instead.
     var coverURL: URL? {
         SavedGeneration.existingCoverURL(id: id)
+    }
+
+    var spineArtworkURL: URL? {
+        SavedGeneration.existingSpineArtworkURL(id: id)
     }
 }

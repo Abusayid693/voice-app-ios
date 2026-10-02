@@ -62,14 +62,14 @@ struct PDFImportShelfCover: View {
 
             RotatingBookFaces(
                 coverURL: nil, title: item.title, coverSize: size,
-                spineWidth: 5, showsSpineTitle: false, angle: 0)
+                spineWidth: 5, angle: 0)
                 .opacity(image == nil && isSettled ? 1 : 0)
 
             if image != nil {
                 // Match the saved shelf cover's shading as well as its bitmap and bounds.
                 RotatingBookFaces(
                     coverURL: item.coverURL, title: item.title, coverSize: size,
-                    spineWidth: 5, showsSpineTitle: false, angle: 0)
+                    spineWidth: 5, angle: 0)
                     .transition(.opacity)
             }
         }

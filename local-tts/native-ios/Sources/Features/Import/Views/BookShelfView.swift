@@ -1107,7 +1107,7 @@ private struct BookShelfRow: View {
                     title: book.title,
                     coverSize: coverSize,
                     spineWidth: book.spineWidth,
-                    showsSpineTitle: book.showsSpineTitle,
+                    spineArtworkURL: book.spineArtworkURL,
                     angle: angle)
                     .animation(reduceMotion ? nil : rotationAnimation, value: angle)
             }
@@ -1348,7 +1348,7 @@ private struct BookShelfDetailModal: View, Animatable {
                 title: book.title,
                 coverSize: metrics.coverSize,
                 spineWidth: book.spineWidth,
-                showsSpineTitle: book.showsSpineTitle,
+                spineArtworkURL: book.spineArtworkURL,
                 angle: metrics.coverAngle)
                 .frame(
                     width: metrics.coverSize.width,

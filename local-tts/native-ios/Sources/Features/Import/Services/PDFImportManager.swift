@@ -168,7 +168,7 @@ final class PDFImportManager: ObservableObject {
                 shelfOrder: job.shelfOrder, pagesDirectory: result.pagesDirectory,
                 sourceURL: result.sourceURL,
                 pageCount: result.pageCount, coverURL: result.coverURL,
-                spineURL: result.spineURL,
+                spineArtworkURL: result.spineArtworkURL,
                 engine: job.engine, voiceName: job.voiceName
             ) else {
                 throw PDFImportError.noReadableContent

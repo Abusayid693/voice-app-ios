@@ -26,7 +26,7 @@ final class LibraryViewModel: ObservableObject {
     func saveImportedPDF(
         id: UUID, title: String, createdAt: Date, shelfOrder: Int?,
         pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
-        spineURL: URL?,
+        spineArtworkURL: URL?,
         engine: Engine, voiceName: String
     ) -> UUID? {
         guard pageCount > 0 else { return nil }
@@ -62,9 +62,12 @@ final class LibraryViewModel: ObservableObject {
                 try? FileManager.default.copyItem(
                     at: coverURL, to: SavedGeneration.coverFileURL(id: id))
             }
-            if let spineURL, FileManager.default.fileExists(atPath: spineURL.path) {
+            if let spineArtworkURL,
+               FileManager.default.fileExists(atPath: spineArtworkURL.path)
+            {
                 try? FileManager.default.copyItem(
-                    at: spineURL, to: SavedGeneration.spineFileURL(id: id))
+                    at: spineArtworkURL,
+                    to: SavedGeneration.spineArtworkFileURL(id: id))
             }
             if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
                 // Best-effort for the same reason: without it the reader just
