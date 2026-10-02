@@ -1431,22 +1431,35 @@ private struct BookShelfDetailModal: View, Animatable {
                         width: geometry.size.width,
                         height: geometry.size.height / 2)
                     .clipped()
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.72),
-                                .init(color: .clear, location: 1),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom)
-                    }
+                    .mask { modalHeaderFade }
                     .opacity(showsDetails ? 0.58 : 0)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+
+                if showsDetails {
+                    ModalCoverGrain(seed: book.title)
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height / 2)
+                        .mask { modalHeaderFade }
+                        .opacity(0.62)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private var modalHeaderFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.72),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom)
     }
 
     private func heroMetrics(in geometry: GeometryProxy) -> BookHeroMetrics {
@@ -1715,6 +1728,50 @@ private struct BookShelfDetailModal: View, Animatable {
         if hours == 0 { return "~\(minutes) min" }
         if remainder == 0 { return "~\(hours) hr" }
         return "~\(hours) hr \(remainder) min"
+    }
+}
+
+private struct ModalCoverGrain: View {
+    let seed: String
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+            let spacing: CGFloat = 2.75
+            let columns = Int(ceil(size.width / spacing))
+            let rows = Int(ceil(size.height / spacing))
+
+            for row in 0..<rows {
+                for column in 0..<columns {
+                    let value = noise(column: column, row: row)
+                    let offsetX = CGFloat(value & 0xff) / 255 * spacing
+                    let offsetY = CGFloat((value >> 8) & 0xff) / 255 * spacing
+                    let diameter = 0.65 + CGFloat((value >> 16) & 0x3) * 0.22
+                    let opacity = 0.20 + Double((value >> 20) & 0x7) * 0.024
+                    let rect = CGRect(
+                        x: CGFloat(column) * spacing + offsetX,
+                        y: CGFloat(row) * spacing + offsetY,
+                        width: diameter,
+                        height: diameter)
+                    let color = value.isMultiple(of: 3) ? Color.white : Color.black
+                    context.fill(Path(ellipseIn: rect), with: .color(color.opacity(opacity)))
+                }
+            }
+        }
+    }
+
+    private var seedValue: UInt64 {
+        seed.utf8.reduce(1_469_598_103_934_665_603) {
+            ($0 ^ UInt64($1)) &* 1_099_511_628_211
+        }
+    }
+
+    private func noise(column: Int, row: Int) -> UInt64 {
+        var value = seedValue
+            ^ UInt64(column) &* 73_856_093
+            ^ UInt64(row) &* 19_349_663
+        value ^= value >> 13
+        value &*= 1_274_126_177
+        return value ^ (value >> 16)
     }
 }
 
