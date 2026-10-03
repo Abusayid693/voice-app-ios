@@ -59,6 +59,9 @@ targets:
         buildPhase: resources
       # Decorative 200pt My Shelf header artwork. Kept as a standalone PNG
       # resource so the shelf can load it by the stable `halftone` name.
+      # `assets/` is otherwise a source-of-truth export folder that is NOT
+      # bundled, so an image dropped there renders nothing until it is listed
+      # here as well.
       - path: assets/theme/halftone.png
         buildPhase: resources
       # hexgrad/Kokoro-82M's 8 officially-named, officially-graded Mandarin

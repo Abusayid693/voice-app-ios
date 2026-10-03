@@ -146,7 +146,7 @@ struct BookShelfView: View {
                     // scroll host can composite away. This preserves its
                     // visibility while letting it scroll with the shelf.
                     ZStack(alignment: .top) {
-                        ShelfHalftoneBackdrop()
+                        ShelfHeaderTextureBackdrop()
 
                         VStack(spacing: 0) {
                             shelfHeader
@@ -166,14 +166,25 @@ struct BookShelfView: View {
                             .top,
                             geometry.safeAreaInsets.top + Self.headerControlsInset
                         )
-                        // Keep only a small trailing inset so shelves can pass
-                        // underneath the progressive blur and Add Books action.
-                        .padding(.bottom, 24)
+                        // Enough trailing inset for the LAST shelf to scroll
+                        // clear of ShelfBottomBlur's heavily opaque lower
+                        // half (the gradient only gets dense past its own
+                        // midpoint — see ShelfBottomBlur). A flat 24pt left
+                        // no further room to scroll to at all, so the last
+                        // shelf sat stuck in the white-out with nowhere to
+                        // go; matching the blur's *full* height fixed that
+                        // but overshot into a stretch of empty scroll past
+                        // where the shelf was already clear, which is its
+                        // own complaint. Half the band's height (still scaled
+                        // by the reserved bottom chrome, so it grows when the
+                        // mini player is showing) is enough room to escape
+                        // the dense part without the extra blank tail.
+                        .padding(.bottom, 24 + (120 + geometry.safeAreaInsets.bottom) / 2)
                         .background(ShelfScrollLock(isLocked: arrangingBook != nil || selectedBook != nil))
                     }
                 }
                 .scrollIndicators(.hidden)
-                // Let the 200pt halftone canvas begin at the physical top of
+                // Let the 200pt texture canvas begin at the physical top of
                 // the display. The VStack's matching safe-area padding above
                 // keeps the title and shelves at their existing positions.
                 .ignoresSafeArea(edges: .top)
@@ -182,7 +193,17 @@ struct BookShelfView: View {
                 .accessibilityHidden(selectedBook != nil)
 
                 if selectedBook == nil {
+                    // Matches ShelfBottomBlur's own `.ignoresSafeArea(edges:
+                    // .bottom)` just below. Without this, ShelfGlassLayer's
+                    // `.clipped()` bound stops at the bottom safe-area line
+                    // rather than the true screen edge, hard-cutting the
+                    // last shelf's glass panel exactly where the blur (and
+                    // the scrolled book covers, which keep rendering past
+                    // that line) still extend further down — the panel's
+                    // flat material reads as an abrupt edge there where a
+                    // textured book cover does not.
                     ShelfGlassLayer(frames: shelfFrames)
+                        .ignoresSafeArea(edges: .bottom)
                 }
 
                 ShelfBottomBlur()
@@ -858,17 +879,40 @@ private struct ShelfBottomBlur: View {
     }
 }
 
-/// Decorative artwork behind the top 200pt of the shelf. The mask keeps the
-/// image fully visible around the title, then dissolves it into the paper
-/// background instead of ending on a hard horizontal edge.
-private struct ShelfHalftoneBackdrop: View {
+/// Fine black paper grain behind the top 200pt of the shelf. The texture is
+/// deterministic and fades into the page instead of ending on a hard edge.
+private struct ShelfHeaderTextureBackdrop: View {
     var body: some View {
-        Group {
-            if let url = Bundle.main.url(forResource: "halftone", withExtension: "png"),
-               let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.045),
+                    Color.black.opacity(0.018),
+                    .clear,
+                ],
+                startPoint: .top,
+                endPoint: .bottom)
+
+            Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+                let spacing: CGFloat = 2.4
+                let columns = Int(ceil(size.width / spacing))
+                let rows = Int(ceil(size.height / spacing))
+
+                for row in 0..<rows {
+                    for column in 0..<columns {
+                        let value = noise(column: column, row: row)
+                        let diameter = 0.42 + CGFloat((value >> 16) & 0x3) * 0.16
+                        let rect = CGRect(
+                            x: CGFloat(column) * spacing + CGFloat(value & 0xff) / 255 * spacing,
+                            y: CGFloat(row) * spacing + CGFloat((value >> 8) & 0xff) / 255 * spacing,
+                            width: diameter,
+                            height: diameter)
+                        let opacity = 0.035 + Double((value >> 20) & 0x7) * 0.006
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(Color.black.opacity(opacity)))
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -887,10 +931,19 @@ private struct ShelfHalftoneBackdrop: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+
+    private func noise(column: Int, row: Int) -> UInt64 {
+        var value = UInt64(0xD1B54A32D192ED03)
+            ^ UInt64(column) &* 73_856_093
+            ^ UInt64(row) &* 19_349_663
+        value ^= value >> 13
+        value &*= 1_274_126_177
+        return value ^ (value >> 16)
+    }
 }
 
 /// A restrained, decorative echo of the newest covers. It remains layered
-/// above the halftone artwork and behind the title, preserving the original
+/// above the paper texture and behind the title, preserving the original
 /// Shelf header.
 private struct ShelfHeaderBackdrop: View {
     let books: [SavedGenerationSummary]

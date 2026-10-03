@@ -59,8 +59,24 @@ struct GhostButtonStyle: ButtonStyle {
     }
 }
 
+/// Press feedback with no chrome of its own — for a button whose label is
+/// already fully styled (an icon, a custom layout) and only needs the same
+/// `isPressed` dimming the three chrome styles above apply, without a
+/// background or shape riding along.
+struct PressOpacityButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.5 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 extension ButtonStyle where Self == PrimaryButtonStyle {
     static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
+}
+
+extension ButtonStyle where Self == PressOpacityButtonStyle {
+    static var pressOpacity: PressOpacityButtonStyle { PressOpacityButtonStyle() }
 }
 
 extension ButtonStyle where Self == SecondaryButtonStyle {

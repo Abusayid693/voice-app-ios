@@ -8,6 +8,7 @@ import SwiftUI
 /// `Canvas`: each cell needs its own tap target to open that day's detail,
 /// not just a color.
 struct ContributionGraphView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let weeks: [[DayActivity?]]
     let onSelectDay: (Date) -> Void
 
@@ -73,7 +74,7 @@ struct ContributionGraphView: View {
             onSelectDay(activity.day)
         } label: {
             Circle()
-                .fill(Color.statsIntensity(level: activity.intensityLevel))
+                .fill(Color.statsIntensity(level: activity.intensityLevel, colorScheme: colorScheme))
                 .frame(width: cellSize, height: cellSize)
                 // Wider tap target than the dot itself, without changing
                 // row height — a taller frame here was the row spacing
@@ -113,6 +114,6 @@ struct ContributionGraphView: View {
     let weeks = stride(from: 0, to: days.count, by: 7).map { Array(days[$0..<$0 + 7]) }
     return ContributionGraphView(weeks: weeks) { _ in }
         .padding()
-        .background(BookShelfPalette.background)
-        .environment(\.colorScheme, .light)
+        .background(Color.appBackground)
+        .environment(\.colorScheme, .dark)
 }

@@ -35,6 +35,42 @@ struct ImportHomeView: View {
     }
 
     var body: some View {
+        SettingsDrawerPresentation(
+            viewModel: app.tts,
+            isPresented: $isSettingsPresented,
+            isEdgeSwipeEnabled: openProject == nil && exploreDestination == nil
+                && !isBookDetailPresented && !isReadingStatsPresented
+                && !isDocumentPickerPresented && !isExploreExpanded,
+            content: homeNavigation)
+        .ignoresSafeArea(.container)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .task { await loadRecentActivity() }
+        .onChange(of: openProject) { oldValue, newValue in
+            guard oldValue != nil, newValue == nil else { return }
+            Task { await loadRecentActivity() }
+        }
+        .sheet(isPresented: $isReadingStatsPresented) {
+            ReadingStatsView(readingStats: app.readingStats)
+        }
+        .fileImporter(
+            isPresented: $isDocumentPickerPresented,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first else { return }
+            Task {
+                await app.pdfImports.importPDF(
+                    from: url,
+                    engine: .kokoroAne,
+                    voiceName: app.tts.kokoroVoice)
+            }
+        }
+        // Settings is hosted in its own dark UIKit child. Changing Home's scheme when the
+        // drawer opens rebuilds the shelf chrome and causes the bottom bar to jump.
+        .preferredColorScheme(exploreDestination != nil ? .dark : .light)
+    }
+
+    private var homeNavigation: some View {
         NavigationStack {
             GeometryReader { geometry in
                 shelfRoot(
@@ -67,45 +103,9 @@ struct ImportHomeView: View {
                     // preference an ancestor can override.
                     .environment(\.colorScheme, .dark)
             }
-            .navigationDestination(isPresented: $isReadingStatsPresented) {
-                // Explicit even though Home's own window scheme is already
-                // light here (isReadingStatsPresented doesn't touch
-                // exploreDestination) — same convention as the Explore
-                // destinations above: the push site states the theme
-                // rather than a pushed screen inheriting it implicitly.
-                ReadingStatsView(readingStats: app.readingStats)
-                    .environment(\.colorScheme, .light)
-            }
         }
         // Keep shelf chrome behind the keyboard.
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .task { await loadRecentActivity() }
-        // Reload when a reader page is closed — that's the natural moment
-        // a new session may have just been recorded for today.
-        .onChange(of: openProject) { oldValue, newValue in
-            guard oldValue != nil, newValue == nil else { return }
-            Task { await loadRecentActivity() }
-        }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsSheet(viewModel: app.tts)
-        }
-        .fileImporter(
-            isPresented: $isDocumentPickerPresented,
-            allowedContentTypes: [.pdf],
-            allowsMultipleSelection: false
-        ) { result in
-            guard case let .success(urls) = result, let url = urls.first else { return }
-            Task {
-                await app.pdfImports.importPDF(
-                    from: url,
-                    engine: .kokoroAne,
-                    voiceName: app.tts.kokoroVoice)
-            }
-        }
-        // Window-level (status bar, nav-bar material) counterpart to the
-        // `.environment` above: light for the shelf, dark while an Explore
-        // destination is on top of it.
-        .preferredColorScheme(exploreDestination == nil ? .light : .dark)
     }
 
     /// Keeps Shelf and its fixed chrome on one navigation surface.
@@ -238,14 +238,7 @@ struct ImportHomeView: View {
         .padding(.top, 4)
     }
 
-    /// A 7-dot grid for the current week (Monday first), 3 per row wrapping
-    /// to a 4th partial row, reading left-to-right then top-to-bottom, same
-    /// chronological convention as `ContributionGraphView`. A day later in
-    /// the week than today just has no sessions yet, so it renders as an
-    /// empty dot rather than needing to be hidden. Tapping it opens the full
-    /// `ReadingStatsView` route. Intensity reuses `Color.statsIntensity` —
-    /// the same ramp `ContributionGraphView` draws its dots from, so this
-    /// teaser and the full graph it opens into read as one system.
+    /// Current-week activity opens the dark Reading Stats sheet.
     private var recentActivityDots: some View {
         Button {
             isReadingStatsPresented = true
@@ -264,7 +257,7 @@ struct ImportHomeView: View {
             .padding(6)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressOpacity)
         .disabled(isBookDetailPresented)
         .accessibilityLabel("Reading stats")
         .accessibilityHint("Opens this week's listening activity")
@@ -322,7 +315,7 @@ struct ImportHomeView: View {
 
     private var settingsButton: some View {
         Button {
-            isSettingsPresented = true
+            presentSettings()
         } label: {
             Hugeicons.menu02.image()
                 .renderingMode(.template)
@@ -333,16 +326,18 @@ struct ImportHomeView: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressOpacity)
         .disabled(isBookDetailPresented)
         .accessibilityLabel("Settings")
+    }
+
+    private func presentSettings() {
+        isExploreExpanded = false
+        isSettingsPresented = true
     }
 }
 
 extension Array {
-    /// Splits into consecutive groups of at most `size`, last group short if
-    /// the count doesn't divide evenly. Used only to wrap `recentActivityDots`
-    /// into rows.
     fileprivate func chunked(into size: Int) -> [[Element]] {
         stride(from: 0, to: count, by: size).map {
             Array(self[$0..<Swift.min($0 + size, count)])

@@ -1,13 +1,10 @@
 import LucideSwift
 import SwiftUI
 
-/// Pushed from Book Shelf's weekly activity dots (`ImportHomeView.
+/// Presented from Book Shelf's weekly activity dots (`ImportHomeView.
 /// recentActivityDots`) — a GitHub-style contribution graph of listening
 /// activity, with a tappable day showing per-book detail, plus today's own
-/// date header and a half-circle goal gauge. Styled with `BookShelfPalette`
-/// to match the light page it's reached from rather than the rest of the
-/// app's dark chrome; the push site sets `.environment(\.colorScheme,
-/// .light)`, so this view doesn't declare its own `.preferredColorScheme`.
+/// date header and a half-circle goal gauge. Uses the app's dark palette.
 /// See `ReadingStatsViewModel` for how the graph is derived (SwiftData has
 /// no raw `GROUP BY`, so the day-bucketing happens here in Swift over rows
 /// already filtered by the background actor).
@@ -23,27 +20,44 @@ struct ReadingStatsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                currentDayHeader
+        NavigationStack {
+            ZStack {
+                TexturedDarkBackground()
+                    .ignoresSafeArea()
 
-                if viewModel.weeks.isEmpty {
-                    emptyState
-                } else {
-                    ContributionGraphView(weeks: viewModel.weeks) { day in
-                        Task { await viewModel.selectDay(day) }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        currentDayHeader
+
+                        if viewModel.weeks.isEmpty {
+                            emptyState
+                        } else {
+                            ContributionGraphView(weeks: viewModel.weeks) { day in
+                                Task { await viewModel.selectDay(day) }
+                            }
+                        }
+
+                        dailyGoalGauge
+                            .frame(maxWidth: .infinity)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                dailyGoalGauge
-                    .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Reading Stats")
+                        .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.appPrimaryText)
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
         }
-        .background(BookShelfPalette.background)
-        .navigationTitle("Reading Stats")
+        .preferredColorScheme(.dark)
         .task { await viewModel.loadIfNeeded() }
         .sheet(
             item: Binding(
@@ -63,18 +77,18 @@ struct ReadingStatsView: View {
     private var currentDayHeader: some View {
         Text(Self.currentDayFormatter.string(from: Date()))
             .font(AppTextStyle.sectionTitle.font)
-            .foregroundStyle(BookShelfPalette.primaryText)
+            .foregroundStyle(Color.appPrimaryText)
     }
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            LucideIcon(.chartColumn, style: .filled, size: 40, color: BookShelfPalette.secondaryText)
+            LucideIcon(.chartColumn, style: .filled, size: 40, color: Color.appSecondaryText)
             Text("No reading activity yet")
                 .font(AppTextStyle.body.font)
-                .foregroundStyle(BookShelfPalette.primaryText)
+                .foregroundStyle(Color.appPrimaryText)
             Text("Finish listening to a page and it'll show up here.")
                 .font(AppTextStyle.label.font)
-                .foregroundStyle(BookShelfPalette.secondaryText)
+                .foregroundStyle(Color.appSecondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -90,15 +104,15 @@ struct ReadingStatsView: View {
                 VStack(spacing: 2) {
                     Text("\(minutes)")
                         .font(AppTextStyle.title.font)
-                        .foregroundStyle(BookShelfPalette.primaryText)
+                        .foregroundStyle(Color.appPrimaryText)
                     Text(minutes == 1 ? "min read today" : "mins read today")
                         .font(AppTextStyle.labelDim.font)
-                        .foregroundStyle(BookShelfPalette.secondaryText)
+                        .foregroundStyle(Color.appSecondaryText)
                 }
             }
             Text("of \(dailyGoalMinutes) min goal")
                 .font(AppTextStyle.meta.font)
-                .foregroundStyle(BookShelfPalette.secondaryText)
+                .foregroundStyle(Color.appSecondaryText)
         }
         .padding(.top, 8)
     }
@@ -135,14 +149,14 @@ private struct HalfCircleGaugeView<Content: View>: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            arc(from: 0.5, to: 1, color: BookShelfPalette.primaryText.opacity(0.12))
+            arc(from: 0.5, to: 1, color: Color.appPrimaryText.opacity(0.12))
             // Always present (not gated on progress > 0) so it has
             // something to animate *from* — conditionally inserting the
             // view at a later progress would just pop in at full length
             // instead of sweeping.
             arc(
                 from: 0.5, to: 0.5 + 0.5 * animatedProgress,
-                color: BookShelfPalette.primaryText)
+                color: Color.appPrimaryText)
         }
         // A round `lineCap` stroke extends past the mathematical circle in
         // every direction it has an endpoint or apex — not just the top —
@@ -184,8 +198,5 @@ private struct HalfCircleGaugeView<Content: View>: View {
 
 #Preview {
     let dependencies = DependencyContainer()
-    NavigationStack {
-        ReadingStatsView(readingStats: dependencies.readingStatsStore)
-    }
-    .environment(\.colorScheme, .light)
+    ReadingStatsView(readingStats: dependencies.readingStatsStore)
 }
