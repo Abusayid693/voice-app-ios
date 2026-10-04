@@ -156,7 +156,7 @@ struct ReaderPage: Codable, Identifiable, Hashable, Sendable {
 
     /// Bump whenever a change to extraction or assembly would produce different
     /// styling for the same PDF.
-    static let currentFormatVersion = 4
+    static let currentFormatVersion = 5
 
     var id: Int { index }
     var number: Int { index + 1 }
