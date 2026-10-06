@@ -104,7 +104,7 @@ struct ReaderPagePickerSheet: View {
 
         InteractiveGlassBottomSheet(
             theme: theme,
-            detents: [.medium, .large],
+            detents: [.large],
             closeAccessibilityLabel: "Close page picker",
             onClose: { dismiss() }
         ) { headerInset in

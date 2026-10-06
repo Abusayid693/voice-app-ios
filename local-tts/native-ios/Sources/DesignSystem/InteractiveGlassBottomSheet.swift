@@ -13,8 +13,11 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     let onBack: (() -> Void)?
     let content: (CGFloat) -> Content
 
-    private let headerHeight: CGFloat = 54
-    private let blurHeight: CGFloat = 78
+    // headerButton is a fixed 44×44 — headerHeight must stay at or above
+    // that, and blurHeight at or above headerHeight, or the Back/Close
+    // buttons overflow past the blurred band onto the content below it.
+    private let headerHeight: CGFloat = 44
+    private let blurHeight: CGFloat = 60
 
     init(
         theme: ReaderTheme,
@@ -50,7 +53,10 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     }
 
     private var header: some View {
-        ZStack(alignment: .top) {
+        // Centered, not top-aligned: the button row is shorter than the
+        // blurred band so it sits with even space above and below, rather
+        // than flush against the top edge with the slack landing below it.
+        ZStack {
             progressiveBlur
 
             HStack(spacing: 8) {
@@ -84,7 +90,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     /// see `InteractiveGlassSheetSurface` — so it reads as glass over
     /// whatever scrolled beneath, not a tinted color block.
     private var progressiveBlur: some View {
-        VariableBlurView(maxBlurRadius: 20, direction: .blurredTopClearBottom)
+        VariableBlurView(maxBlurRadius: 12, direction: .blurredTopClearBottom)
             // Unlike the `Rectangle` this replaced, a `UIViewRepresentable`
             // doesn't default to greedily filling its proposed space, so
             // this is explicit rather than assumed.
@@ -112,21 +118,22 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     }
 }
 
-/// The native local highlight and compression response on iOS 26; a material
-/// circle with normal SwiftUI button feedback on earlier systems.
+/// A clear glass circle on iOS 26; a material circle with normal SwiftUI
+/// button feedback on earlier systems.
 private struct InteractiveGlassHeaderButton: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(.clear.interactive(), in: Circle())
+            content.glassEffect(.clear, in: Circle())
         } else {
             content.background(.ultraThinMaterial, in: Circle())
         }
     }
 }
 
-/// Full-sheet interactive glass on iOS 26. The surface remains rectangular
-/// and edge-to-edge; older systems use an opaque reader-theme background.
+/// Full-sheet glass on iOS 26, static rather than touch-reactive. The
+/// surface remains rectangular and edge-to-edge; older systems use an
+/// opaque reader-theme background.
 ///
 /// The fill is clear for exactly `headerHeight` at the top, not the full
 /// rect: the header's own `VariableBlurView` sits in that band with nothing
@@ -152,7 +159,7 @@ private struct InteractiveGlassSheetSurface: ViewModifier {
             content
                 .background(fill.opacity(0.82).ignoresSafeArea())
                 .glassEffect(
-                    .regular.tint(theme.background).interactive(),
+                    .regular.tint(theme.background),
                     in: Rectangle())
                 .presentationBackground(.clear)
         } else {
