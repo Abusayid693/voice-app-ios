@@ -10,7 +10,7 @@ enum PlaybackRateFormatter {
 
 struct PlaybackSpeedSheet: View {
     @Binding var rate: Double
-    let theme: ReaderTheme
+    let chromeTheme: ReaderChromeTheme
 
     @Environment(\.dismiss) private var dismiss
 
@@ -18,7 +18,7 @@ struct PlaybackSpeedSheet: View {
 
     var body: some View {
         InteractiveGlassBottomSheet(
-            theme: theme,
+            theme: chromeTheme,
             detents: [.height(340)],
             closeAccessibilityLabel: "Close playback speed",
             contentTopInset: 78,
@@ -28,7 +28,7 @@ struct PlaybackSpeedSheet: View {
                 VStack(spacing: 18) {
                     Text(speedCharacter)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(theme.primaryText)
+                        .foregroundStyle(chromeTheme.primaryText)
 
                     stepControls
                     presets
@@ -38,8 +38,8 @@ struct PlaybackSpeedSheet: View {
                     value: $rate,
                     range: BookAudioPlayer.minimumPlaybackRate...BookAudioPlayer.maximumPlaybackRate,
                     accessibilityStep: 0.1,
-                    track: theme.controlBackground,
-                    fill: theme.controlAccent)
+                    track: chromeTheme.controlBackground,
+                    fill: chromeTheme.accent)
                     .frame(width: 54, height: 226)
             }
             .padding(.horizontal, 18)
@@ -56,7 +56,7 @@ struct PlaybackSpeedSheet: View {
             Text(PlaybackRateFormatter.string(rate))
                 .font(.system(size: 43, weight: .medium))
                 .monospacedDigit()
-                .foregroundStyle(theme.primaryText)
+                .foregroundStyle(chromeTheme.primaryText)
                 .frame(maxWidth: .infinity)
                 .contentTransition(.numericText(value: rate))
                 .animation(.snappy(duration: 0.22), value: rate)
@@ -71,9 +71,9 @@ struct PlaybackSpeedSheet: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 25, weight: .medium))
-                .foregroundStyle(theme.primaryText)
+                .foregroundStyle(chromeTheme.primaryText)
                 .frame(width: 52, height: 52)
-                .background(theme.controlBackground, in: Circle())
+                .background(chromeTheme.controlBackground, in: Circle())
         }
         .buttonStyle(PlaybackSpeedPressStyle())
         .disabled(delta < 0
@@ -94,9 +94,9 @@ struct PlaybackSpeedSheet: View {
                     Text(PlaybackRateFormatter.string(preset))
                         .font(.system(size: 15, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(theme.primaryText)
+                        .foregroundStyle(chromeTheme.primaryText)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(theme.controlBackground, in: Capsule())
+                        .background(chromeTheme.controlBackground, in: Capsule())
                 }
                 .buttonStyle(PlaybackSpeedPressStyle())
                 .accessibilityLabel("\(PlaybackRateFormatter.string(preset)) speed")
@@ -200,5 +200,5 @@ private struct PlaybackSpeedPressStyle: ButtonStyle {
 }
 
 #Preview {
-    PlaybackSpeedSheet(rate: .constant(1), theme: .warmPaper)
+    PlaybackSpeedSheet(rate: .constant(1), chromeTheme: .light)
 }

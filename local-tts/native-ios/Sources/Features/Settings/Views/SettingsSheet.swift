@@ -25,7 +25,7 @@ struct SettingsSheet: View {
                         .accessibilityAddTraits(.isHeader)
                         .padding(.top, 4)
 
-                    field(label: "Your voice", value: VoiceDisplayName.forCode(viewModel.kokoroVoice))
+                    voiceGallery
                         .padding(.top, 34)
 
                     VStack(spacing: 12) {
@@ -70,19 +70,77 @@ struct SettingsSheet: View {
         .environment(\.colorScheme, .dark)
     }
 
-    /// An uppercase caption over its value — the reference layout's way of
-    /// labelling a standing fact rather than offering a control.
-    private func field(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
+    private var voiceGallery: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("YOUR VOICE")
                 .font(.system(size: 13, weight: .medium))
                 .tracking(1.1)
                 .foregroundStyle(Color.appSecondaryText)
-            Text(value)
-                .font(.system(size: 26, weight: .regular))
+
+            HStack(spacing: -24) {
+                ForEach(Array(galleryVoices.enumerated()), id: \.element.id) { index, voice in
+                    let distance = abs(index - 3)
+
+                    Image(VoiceCoverArt.assetName(for: voice.code))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: gallerySize(for: distance), height: gallerySize(for: distance))
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    Color.appPrimaryText.opacity(distance == 0 ? 0.88 : 0.16),
+                                    lineWidth: distance == 0 ? 2 : 0.75)
+                        }
+                        .shadow(
+                            color: .black.opacity(distance == 0 ? 0.34 : 0.20),
+                            radius: distance == 0 ? 14 : 7,
+                            y: 4)
+                        .opacity(galleryOpacity(for: distance))
+                        .zIndex(Double(4 - distance))
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 94, alignment: .center)
+
+            Text(VoiceDisplayName.forCode(viewModel.kokoroVoice))
+                .font(.system(size: 21, weight: .medium))
                 .foregroundStyle(Color.appPrimaryText)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Your voice, \(VoiceDisplayName.forCode(viewModel.kokoroVoice))")
+    }
+
+    private var galleryVoices: [Voice] {
+        let voices = VoiceCatalog.allVoices
+        guard !voices.isEmpty else { return [] }
+        let selectedIndex = voices.firstIndex { $0.code == viewModel.kokoroVoice } ?? 0
+
+        return (-3...3).map { offset in
+            let index = (selectedIndex + offset + voices.count) % voices.count
+            return voices[index]
+        }
+    }
+
+    private func gallerySize(for distance: Int) -> CGFloat {
+        switch distance {
+        case 0: return 92
+        case 1: return 76
+        case 2: return 62
+        default: return 50
+        }
+    }
+
+    private func galleryOpacity(for distance: Int) -> Double {
+        switch distance {
+        case 0: return 1
+        case 1: return 0.90
+        case 2: return 0.74
+        default: return 0.58
+        }
     }
 
     /// Capsule rows with the icon trailing, so the titles form one clean left

@@ -12,7 +12,7 @@ struct ReaderPagePickerSheet: View {
     let project: SavedGeneration
     let library: LibraryViewModel
     let currentPageIndex: Int
-    let theme: ReaderTheme
+    let chromeTheme: ReaderChromeTheme
     /// Distinct pages with at least one completed listen — fetched once by
     /// the presenter (ChapterPlayerView) before opening this sheet, not
     /// owned or re-fetched here.
@@ -103,7 +103,7 @@ struct ReaderPagePickerSheet: View {
         let allRows = rows(for: sections)
 
         InteractiveGlassBottomSheet(
-            theme: theme,
+            theme: chromeTheme,
             detents: [.large],
             closeAccessibilityLabel: "Close page picker",
             onClose: { dismiss() }
@@ -151,21 +151,23 @@ struct ReaderPagePickerSheet: View {
             HStack(spacing: 10) {
                 LucideIcon(
                     .chevronRight, size: 14,
-                    color: containsCurrentPage ? theme.highlightedText : theme.secondaryText)
+                    color: containsCurrentPage
+                        ? chromeTheme.contrastingText : chromeTheme.secondaryText)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .accessibilityHidden(true)
 
                 Text(section.chapter.title)
                     .font(AppTextStyle.body.font.weight(.semibold))
                     .foregroundStyle(
-                        containsCurrentPage ? theme.highlightedText : theme.primaryText)
+                        containsCurrentPage
+                            ? chromeTheme.contrastingText : chromeTheme.primaryText)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                containsCurrentPage ? theme.wordHighlightBackground : theme.controlBackground,
+                containsCurrentPage ? chromeTheme.accent : chromeTheme.controlBackground,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
@@ -188,32 +190,35 @@ struct ReaderPagePickerSheet: View {
                     .font(AppTextStyle.body.font)
                     .foregroundStyle(
                         isCurrentPage
-                            ? theme.highlightedText
-                            : (preview?.isBlank == true ? theme.secondaryText : theme.primaryText))
+                            ? chromeTheme.contrastingText
+                            : (preview?.isBlank == true
+                                ? chromeTheme.secondaryText : chromeTheme.primaryText))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if completedPageIndices.contains(index) {
                     LucideIcon(
                         .check, size: 14,
-                        color: isCurrentPage ? theme.highlightedText : theme.secondaryText)
+                        color: isCurrentPage
+                            ? chromeTheme.contrastingText : chromeTheme.secondaryText)
                         .accessibilityHidden(true)
                 }
 
                 Text("\(index + 1)")
                     .font(AppTextStyle.label.font)
                     .monospacedDigit()
-                    .foregroundStyle(isCurrentPage ? theme.highlightedText : theme.secondaryText)
+                    .foregroundStyle(
+                        isCurrentPage ? chromeTheme.contrastingText : chromeTheme.secondaryText)
                     .frame(minWidth: 28, alignment: .trailing)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(
-                isCurrentPage ? theme.wordHighlightBackground : theme.controlBackground,
+                isCurrentPage ? chromeTheme.accent : chromeTheme.controlBackground,
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isCurrentPage ? theme.optionsAccent : .clear, lineWidth: 1.5)
+                    .stroke(isCurrentPage ? chromeTheme.accent : .clear, lineWidth: 1.5)
             }
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }

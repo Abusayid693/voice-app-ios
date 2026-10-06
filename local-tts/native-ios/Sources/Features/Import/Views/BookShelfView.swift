@@ -2,12 +2,6 @@ import LucideSwift
 import SwiftUI
 import UIKit
 
-enum BookShelfPalette {
-    static let background = Color.whitePaper
-    static let primaryText = Color(hex: 0x171715)
-    static let secondaryText = Color(hex: 0x686761)
-}
-
 /// Progressive blur under Home's floating header controls: one
 /// `.ultraThinMaterial` band whose gradient mask starts fading immediately,
 /// so the softening is strongest behind the icons and gone well before the

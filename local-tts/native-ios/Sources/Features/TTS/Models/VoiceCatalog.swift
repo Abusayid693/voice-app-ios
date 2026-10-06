@@ -19,7 +19,7 @@ enum VoiceCatalog {
         }
     }
 
-    private static let all: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese
+    static let allVoices: [Voice] = kokoroEnglish + kokoroMandarin + kokoroJapanese
 
     /// Precomputed rather than scanned: cover-art resolution calls this
     /// once per visible tile while a voice grid scrolls, and a linear scan
@@ -27,7 +27,7 @@ enum VoiceCatalog {
     /// unique across packs today; `uniquingKeysWith` keeps the first entry
     /// rather than trapping if that ever stops being true.
     private static let byCode: [String: Voice] = Dictionary(
-        all.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
+        allVoices.map { ($0.code, $0) }, uniquingKeysWith: { first, _ in first })
 
     static func voice(for code: String) -> Voice? { byCode[code] }
 

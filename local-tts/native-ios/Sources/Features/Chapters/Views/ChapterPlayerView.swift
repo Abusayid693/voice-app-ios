@@ -254,7 +254,7 @@ struct ChapterPlayerView: View {
     @AppStorage("chapterPlayerWordHighlightEnabled") private var wordHighlightEnabled = true
     @AppStorage("chapterPlayerFontSize") private var readerFontSize: ReaderFontSize = .medium
     @AppStorage("chapterPlayerFontFamily") private var readerFontFamily: ReaderFontFamily = .sfProText
-    @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .carbon
+    @AppStorage("chapterPlayerTheme") private var readerTheme: ReaderTheme = .graphite
     /// Which of the three surfaces this screen is showing. All three are
     /// branches of one view over one player, so switching is a view change
     /// and never touches playback — see `readingSurface`.
@@ -440,7 +440,8 @@ struct ChapterPlayerView: View {
         .sheet(isPresented: $isPagePickerPresented) {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
-                theme: readerTheme, completedPageIndices: completedPageIndices,
+                chromeTheme: readerTheme.chromeTheme,
+                completedPageIndices: completedPageIndices,
                 chapters: chapters, onSelect: selectPage)
         }
         .sheet(isPresented: $isVoiceSelectionPresented) {
@@ -457,7 +458,7 @@ struct ChapterPlayerView: View {
                 rate: Binding(
                     get: { player.playbackRate },
                     set: player.setPlaybackRate),
-                theme: readerTheme)
+                chromeTheme: readerTheme.chromeTheme)
         }
         .alert("Voice Couldn’t Be Changed", isPresented: $isVoiceChangeErrorPresented) {
             Button("OK", role: .cancel) {}
@@ -591,14 +592,17 @@ struct ChapterPlayerView: View {
                 .foregroundStyle(headerPrimaryColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 // The page count is an overlay, not part of this title's
-                // layout, so the title remains vertically centered in the
-                // header while its metadata sits just beneath it.
+                // layout, so the title remains vertically centered. Apply
+                // it after the flexible frame: EPUB has no original-page
+                // control and therefore receives a different HStack width
+                // proposal than PDF. Anchoring to the resolved title column
+                // keeps both formats on the same leading edge.
                 .overlay(alignment: .bottomLeading) {
                     animatedPageTitle
                         .offset(y: 20)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
             readerSurfaceButton
 
@@ -656,22 +660,8 @@ struct ChapterPlayerView: View {
     }
 
     private var readerHeaderBackdrop: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(readerTheme.background.opacity(0.08))
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.62),
-                        .init(color: .black.opacity(0.35), location: 0.84),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom))
+        ProgressiveHeaderBlur()
             .frame(height: 130)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 
     /// Artwork supplies all Audio Player color, so its controls have no
@@ -1024,6 +1014,8 @@ struct ChapterPlayerView: View {
 
     // MARK: - Floating player
 
+    private var readerChromeTheme: ReaderChromeTheme { readerTheme.chromeTheme }
+
     /// Full-width floating transport modeled after a compact audiobook
     /// controller: page list/time/page-turn controls in the header, and
     /// voice/seek/play controls beneath it.
@@ -1035,7 +1027,7 @@ struct ChapterPlayerView: View {
                 Text("\(Self.formattedPlayerTime(playerElapsed))  /  \(Self.formattedPlayerTime(playerDuration))")
                     .font(.system(size: 15, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(readerTheme.secondaryText)
+                    .foregroundStyle(readerChromeTheme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
@@ -1068,7 +1060,7 @@ struct ChapterPlayerView: View {
             }
 
             HStack(spacing: 0) {
-                voiceButton
+                voiceButton(strokeColor: readerChromeTheme.border)
                     .frame(maxWidth: .infinity)
 
                 skipButton(icon: .rotateCcw, label: "10") {
@@ -1090,10 +1082,10 @@ struct ChapterPlayerView: View {
                     Text(PlaybackRateFormatter.string(player.playbackRate))
                         .font(.system(size: 15, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(readerTheme.primaryText)
+                        .foregroundStyle(readerChromeTheme.primaryText)
                         .frame(width: 52, height: 52)
                         .background(
-                            readerTheme.controlBackground,
+                            readerChromeTheme.controlBackground,
                             in: Circle())
                         .contentShape(Circle())
                 }
@@ -1109,7 +1101,7 @@ struct ChapterPlayerView: View {
         .padding(.bottom, 8)
         .background { playerBackground(cornerRadius: 24) }
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
+        .shadow(color: readerChromeTheme.shadow, radius: 18, y: 8)
         .onTapGesture { }
     }
 
@@ -1120,7 +1112,7 @@ struct ChapterPlayerView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(readerTheme.primaryText)
+                .foregroundStyle(readerChromeTheme.primaryText)
                 .frame(width: 38, height: 38)
                 .contentShape(Circle())
         }
@@ -1150,14 +1142,13 @@ struct ChapterPlayerView: View {
     }
 
     // Liquid Glass is only available on iOS 26+. Its tint follows the
-    // active reader palette; older systems use the matching translucent
-    // theme surface instead.
+    // derived light/dark chrome; older systems use the same two-mode surface.
     @ViewBuilder
     private func playerBackground(cornerRadius: CGFloat) -> some View {
         if #available(iOS 26.0, *) {
             Color.clear
                 .glassEffect(
-                    .regular.tint(readerTheme.controlBackground),
+                    .regular.tint(readerChromeTheme.controlBackground),
                     in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 )
         } else {
@@ -1165,11 +1156,11 @@ struct ChapterPlayerView: View {
                 .fill(.regularMaterial)
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(readerTheme.controlBackground.opacity(0.58))
+                        .fill(readerChromeTheme.controlBackground.opacity(0.58))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(readerTheme.primaryText.opacity(0.1), lineWidth: 0.75)
+                        .stroke(readerChromeTheme.border, lineWidth: 0.75)
                 }
         }
     }
@@ -1181,13 +1172,13 @@ struct ChapterPlayerView: View {
             action: toggleKokoroPlayback
         ) { isPlaying in
             ZStack {
-                Circle().fill(readerTheme.controlAccent)
+                Circle().fill(readerChromeTheme.accent)
                 (isPlaying ? Hugeicons.pause : Hugeicons.play)
                     .image()
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(readerTheme.highlightedText)
+                    .foregroundStyle(readerChromeTheme.contrastingText)
                     .frame(width: 31, height: 31)
             }
             .frame(width: 68, height: 68)
@@ -1212,7 +1203,7 @@ struct ChapterPlayerView: View {
                     Circle()
                         .trim(from: 0, to: 0.72)
                         .stroke(
-                            readerTheme.wordHighlightBackground,
+                            readerChromeTheme.accent,
                             style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         // Inside the 64pt button, not around the whole pill —
                         // at 72pt (bigger than the button's own frame) nothing
@@ -1276,6 +1267,10 @@ struct ChapterPlayerView: View {
     }
 
     private var voiceButton: some View {
+        voiceButton(strokeColor: readerTheme.primaryText.opacity(0.16))
+    }
+
+    private func voiceButton(strokeColor: Color) -> some View {
         Button {
             presentVoiceSelection()
         } label: {
@@ -1285,7 +1280,7 @@ struct ChapterPlayerView: View {
                 .frame(width: 54, height: 54)
                 .clipShape(Circle())
                 .overlay {
-                    Circle().stroke(readerTheme.primaryText.opacity(0.16), lineWidth: 1)
+                    Circle().stroke(strokeColor, lineWidth: 1)
                 }
                 .contentShape(Circle())
         }
@@ -1307,10 +1302,10 @@ struct ChapterPlayerView: View {
     private func skipButton(icon: LucideIconName, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             ZStack {
-                LucideIcon(icon, size: 28, color: readerTheme.primaryText)
+                LucideIcon(icon, size: 28, color: readerChromeTheme.primaryText)
                 Text(label)
                     .appText(.meta)
-                    .foregroundStyle(readerTheme.secondaryText)
+                    .foregroundStyle(readerChromeTheme.secondaryText)
             }
             .frame(width: 52, height: 52)
         }
