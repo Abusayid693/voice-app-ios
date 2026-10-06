@@ -42,7 +42,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
             header
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(InteractiveGlassSheetSurface(theme: theme))
+        .modifier(InteractiveGlassSheetSurface(theme: theme, headerHeight: blurHeight))
         .presentationDetents(detents)
         .presentationDragIndicator(showsDragIndicator ? .visible : .hidden)
         .presentationContentInteraction(.scrolls)
@@ -74,19 +74,21 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
         .frame(height: blurHeight, alignment: .top)
     }
 
+    /// True variable-radius blur — strength follows a gradient, not a single
+    /// fixed-radius `.ultraThinMaterial` faded by *opacity* (what was here
+    /// before: full-strength blur for the band's own top 56%, then a quick
+    /// alpha fade — a flat plateau, not a gradient). SwiftUI/UIKit have no
+    /// public API for a true radius gradient; `VariableBlurView` is vendored
+    /// rather than hand-rolled for the reason its own README gives. Composited
+    /// directly over `content` with nothing opaque behind it in this band —
+    /// see `InteractiveGlassSheetSurface` — so it reads as glass over
+    /// whatever scrolled beneath, not a tinted color block.
     private var progressiveBlur: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.56),
-                        .init(color: .black.opacity(0.32), location: 0.8),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom))
+        VariableBlurView(maxBlurRadius: 20, direction: .blurredTopClearBottom)
+            // Unlike the `Rectangle` this replaced, a `UIViewRepresentable`
+            // doesn't default to greedily filling its proposed space, so
+            // this is explicit rather than assumed.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -125,21 +127,37 @@ private struct InteractiveGlassHeaderButton: ViewModifier {
 
 /// Full-sheet interactive glass on iOS 26. The surface remains rectangular
 /// and edge-to-edge; older systems use an opaque reader-theme background.
+///
+/// The fill is clear for exactly `headerHeight` at the top, not the full
+/// rect: the header's own `VariableBlurView` sits in that band with nothing
+/// else layered behind it, so at rest (nothing scrolled up yet) it reveals
+/// this modifier's own glass tint on iOS 26, rather than every reader sheet
+/// showing a flat `theme.background` block under its header regardless of
+/// what the sheet otherwise is doing — the exact failure mode a progressive
+/// blur is supposed to avoid.
 private struct InteractiveGlassSheetSurface: ViewModifier {
     let theme: ReaderTheme
+    let headerHeight: CGFloat
+
+    private var fill: some View {
+        VStack(spacing: 0) {
+            Color.clear.frame(height: headerHeight)
+            theme.background
+        }
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .background(theme.background.opacity(0.82).ignoresSafeArea())
+                .background(fill.opacity(0.82).ignoresSafeArea())
                 .glassEffect(
                     .regular.tint(theme.background).interactive(),
                     in: Rectangle())
                 .presentationBackground(.clear)
         } else {
             content
-                .background(theme.background.ignoresSafeArea())
+                .background(fill.ignoresSafeArea())
                 .presentationBackground(theme.background)
         }
     }
