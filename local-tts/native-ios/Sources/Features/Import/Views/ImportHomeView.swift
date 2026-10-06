@@ -54,12 +54,12 @@ struct ImportHomeView: View {
         }
         .fileImporter(
             isPresented: $isDocumentPickerPresented,
-            allowedContentTypes: [.pdf],
+            allowedContentTypes: [.pdf, .epub],
             allowsMultipleSelection: false
         ) { result in
             guard case let .success(urls) = result, let url = urls.first else { return }
             Task {
-                await app.pdfImports.importPDF(
+                await app.pdfImports.importBook(
                     from: url,
                     engine: .kokoroAne,
                     voiceName: app.tts.kokoroVoice)

@@ -24,7 +24,7 @@ struct ToolsView: View {
                 }
                 ToolActionRow(
                     icon: .upload, title: "Upload File",
-                    subtitle: "Import a PDF from your device", isEnabled: true,
+                    subtitle: "Import a PDF or EPUB from your device", isEnabled: true,
                     onTap: onAddBooks)
                 // Share Link and Upload Image have no backend yet — no URL
                 // content fetcher and no image/OCR pipeline exist anywhere

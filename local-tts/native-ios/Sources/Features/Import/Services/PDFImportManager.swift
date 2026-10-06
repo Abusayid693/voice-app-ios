@@ -29,10 +29,23 @@ final class PDFImportManager: ObservableObject {
     /// Copies the picked file while its security-scoped permission is active,
     /// then starts a utility-priority parse that does not block the picker or
     /// SwiftUI's main actor.
-    func importPDF(from url: URL, engine: Engine, voiceName: String) async {
+    ///
+    /// The format is taken from the picked file's own extension; the picker
+    /// already restricts what can be chosen, so anything unrecognized is
+    /// treated as a PDF rather than rejected here.
+    func importBook(from url: URL, engine: Engine, voiceName: String) async {
+        let format: BookImportFormat =
+            url.pathExtension.lowercased() == "epub" ? .epub : .pdf
+        await importBook(from: url, format: format, engine: engine, voiceName: voiceName)
+    }
+
+    func importBook(
+        from url: URL, format: BookImportFormat, engine: Engine, voiceName: String
+    ) async {
         let job = PDFImportJob(
             sourceFileName: FileNameFormatter.displayTitle(from: url.lastPathComponent),
-            engine: engine, voiceName: voiceName, shelfOrder: nextShelfOrder())
+            engine: engine, voiceName: voiceName, format: format,
+            shelfOrder: nextShelfOrder())
         // Reserve the shelf slot before copying or parsing begins. Large files
         // therefore cannot make the rest of the shelf jump when they finish.
         jobs.insert(job, at: 0)
@@ -56,7 +69,7 @@ final class PDFImportManager: ObservableObject {
         } catch {
             update(job.id) {
                 $0.phase = .failed
-                $0.errorMessage = "Could not copy the selected PDF: \(error.localizedDescription)"
+                $0.errorMessage = "Could not copy the selected file: \(error.localizedDescription)"
                 $0.updatedAt = Date()
             }
         }
@@ -151,7 +164,6 @@ final class PDFImportManager: ObservableObject {
             return
         }
         defer { processingTasks[id] = nil }
-        let processor = PDFProcessingActor()
         update(id) {
             $0.phase = .validating
             $0.errorMessage = nil
@@ -159,16 +171,31 @@ final class PDFImportManager: ObservableObject {
         }
 
         do {
-            let result = try await processor.process(job: job) { [weak self] progress in
-                self?.receive(progress, for: id)
+            // Both actors expose the same `process(job:progress:)` contract and
+            // return the same `PDFImportResult`, so everything after this
+            // branch is format-agnostic. The progress closure stays written
+            // out per branch rather than hoisted into a `let`: inline, it
+            // inherits this method's main-actor isolation, which is what lets
+            // it call `receive(_:for:)` at all.
+            let result: PDFImportResult
+            switch job.resolvedFormat {
+            case .pdf:
+                result = try await PDFProcessingActor().process(job: job) { [weak self] progress in
+                    self?.receive(progress, for: id)
+                }
+            case .epub:
+                result = try await EPUBProcessingActor().process(job: job) { [weak self] progress in
+                    self?.receive(progress, for: id)
+                }
             }
             guard !Task.isCancelled else { return }
-            guard let projectID = library.saveImportedPDF(
+            guard let projectID = library.saveImportedBook(
                 id: job.id, title: result.title, createdAt: job.createdAt,
                 shelfOrder: job.shelfOrder, pagesDirectory: result.pagesDirectory,
                 sourceURL: result.sourceURL,
                 pageCount: result.pageCount, coverURL: result.coverURL,
-                spineArtworkURL: result.spineArtworkURL,
+                spineArtworkURL: result.spineArtworkURL, chaptersURL: result.chaptersURL,
+                source: job.resolvedFormat.projectSource,
                 engine: job.engine, voiceName: job.voiceName
             ) else {
                 throw PDFImportError.noReadableContent
@@ -253,7 +280,7 @@ final class PDFImportManager: ObservableObject {
     }
 
     private func nextShelfOrder() -> Int {
-        let savedPDFs = library.savedGenerations.filter { $0.source == .pdf }
+        let savedPDFs = library.savedGenerations.filter { $0.source.isShelfBook }
         let legacyLast = savedPDFs.filter { $0.shelfOrder == nil }.count - 1
         let savedLast = savedPDFs.compactMap(\.shelfOrder).max() ?? -1
         let jobLast = jobs.compactMap(\.shelfOrder).max() ?? -1
@@ -263,7 +290,7 @@ final class PDFImportManager: ObservableObject {
     private static func assignMissingShelfOrders(
         to jobs: inout [PDFImportJob], library: LibraryViewModel
     ) {
-        let savedPDFs = library.savedGenerations.filter { $0.source == .pdf }
+        let savedPDFs = library.savedGenerations.filter { $0.source.isShelfBook }
         let legacyLast = savedPDFs.filter { $0.shelfOrder == nil }.count - 1
         let savedLast = savedPDFs.compactMap(\.shelfOrder).max() ?? -1
         var next = max(

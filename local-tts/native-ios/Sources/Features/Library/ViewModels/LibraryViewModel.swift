@@ -21,17 +21,23 @@ final class LibraryViewModel: ObservableObject {
             engine: engine, voiceName: voiceName)
     }
 
-    /// Copies finalized PDF page files without decoding the full document.
+    /// Copies finalized page files without decoding the full document. Shared
+    /// by every imported format — only `source` and the two format-specific
+    /// side files (the source document, the chapter list) differ.
     @discardableResult
-    func saveImportedPDF(
+    func saveImportedBook(
         id: UUID, title: String, createdAt: Date, shelfOrder: Int?,
         pagesDirectory: URL, sourceURL: URL?, pageCount: Int, coverURL: URL?,
-        spineArtworkURL: URL?,
+        spineArtworkURL: URL?, chaptersURL: URL? = nil,
+        source: SavedProjectSource = .pdf,
         engine: Engine, voiceName: String
     ) -> UUID? {
         guard pageCount > 0 else { return nil }
         if let existing = project(for: id) {
-            guard existing.source == .pdf else { return nil }
+            // Absorbs a duplicate completion callback. Still refuses to adopt
+            // a project that was saved as something other than an imported
+            // book, so typed text can never be clobbered by a colliding id.
+            guard existing.source.isShelfBook else { return nil }
             savedGenerations.removeAll { $0.id == id }
             savedGenerations.append(existing.summary)
             savedGenerations.sort { $0.createdAt > $1.createdAt }
@@ -41,7 +47,7 @@ final class LibraryViewModel: ObservableObject {
 
         let entry = SavedGeneration(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: createdAt, pageCount: pageCount, source: .pdf,
+            createdAt: createdAt, pageCount: pageCount, source: source,
             shelfOrder: shelfOrder)
         let projectDirectory = SavedGeneration.projectDirectory(id: id)
         let destination = SavedGeneration.projectPagesDirectory(id: id)
@@ -69,12 +75,22 @@ final class LibraryViewModel: ObservableObject {
                     at: spineArtworkURL,
                     to: SavedGeneration.spineArtworkFileURL(id: id))
             }
-            if let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) {
-                // Best-effort for the same reason: without it the reader just
-                // can't offer the original-page view for this book, which is
-                // no reason to fail an otherwise readable import.
+            // PDFs only. `existingSourcePDFURL` is what gates the reader's
+            // original-page view, and that view renders its file *as a PDF* —
+            // so copying an EPUB to the same path would offer a control that
+            // cannot work. An EPUB simply has no original-page mode.
+            if source == .pdf, let sourceURL,
+               FileManager.default.fileExists(atPath: sourceURL.path)
+            {
+                // Best-effort for the same reason as the artwork above:
+                // without it the reader just can't offer the original-page
+                // view, which is no reason to fail a readable import.
                 try? FileManager.default.copyItem(
                     at: sourceURL, to: SavedGeneration.sourcePDFFileURL(id: id))
+            }
+            if let chaptersURL, FileManager.default.fileExists(atPath: chaptersURL.path) {
+                try? FileManager.default.copyItem(
+                    at: chaptersURL, to: SavedGeneration.chaptersFileURL(id: id))
             }
             try persist(entry)
             return id
@@ -96,6 +112,15 @@ final class LibraryViewModel: ObservableObject {
         let url = SavedGeneration.pageFileURL(projectID: project.id, index: index)
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(ReaderPage.self, from: data)
+    }
+
+    /// `[]` for a PDF, or an EPUB with no table of contents resolved — both
+    /// are the same "nothing to show" case to a caller.
+    func chapters(for project: SavedGeneration) -> [EPUBChapter] {
+        guard let url = SavedGeneration.existingChaptersURL(id: project.id),
+              let data = try? Data(contentsOf: url)
+        else { return [] }
+        return (try? JSONDecoder().decode([EPUBChapter].self, from: data)) ?? []
     }
 
     /// Reads one page only when its row becomes visible in the picker, then

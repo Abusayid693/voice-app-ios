@@ -169,6 +169,11 @@ struct ChapterPlayerView: View {
     // main via ReadingStatsStore, never a synchronous call; see
     // refreshCompletedPages().
     @State private var completedPageIndices: Set<Int> = []
+    // EPUB's table of contents, resolved to page indexes — [] for a PDF or an
+    // EPUB with none. Unlike completedPageIndices this never changes for a
+    // project, so it loads once in .onAppear rather than being refreshed
+    // before every picker presentation.
+    @State private var chapters: [EPUBChapter] = []
 
     @State private var isAutoScrollPaused = false
     // Reference type, not @State: rows cross the scroll-visibility
@@ -436,7 +441,7 @@ struct ChapterPlayerView: View {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
                 theme: readerTheme, completedPageIndices: completedPageIndices,
-                onSelect: selectPage)
+                chapters: chapters, onSelect: selectPage)
         }
         .sheet(isPresented: $isVoiceSelectionPresented) {
             VoiceSettingsSheet(
@@ -536,6 +541,7 @@ struct ChapterPlayerView: View {
             if let initialSurfaceMode { surfaceMode = initialSurfaceMode }
             isAutoScrollPaused = false
             refreshCompletedPages()
+            chapters = library.chapters(for: project)
             player.configureContinuousPlayback(
                 enabled: continuousPlaybackEnabled,
                 nextPageProvider: { [library, project] index in

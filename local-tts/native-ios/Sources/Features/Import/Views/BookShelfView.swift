@@ -105,7 +105,7 @@ struct BookShelfView: View {
 
     private var completedBooks: [SavedGenerationSummary] {
         library.savedGenerations
-            .filter { $0.source == .pdf }
+            .filter { $0.source.isShelfBook }
     }
 
     private var shelfEntries: [ShelfEntry] {

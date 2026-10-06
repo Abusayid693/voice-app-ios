@@ -154,9 +154,14 @@ struct ReaderPage: Codable, Identifiable, Hashable, Sendable {
     /// derive, and for everything written before this existed.
     let formatVersion: Int
 
-    /// Bump whenever a change to extraction or assembly would produce different
-    /// styling for the same PDF.
-    static let currentFormatVersion = 5
+    /// Bump whenever a change to extraction or assembly would produce
+    /// different text or styling for the same source document — for either
+    /// format, since both share this counter and both resume from checkpoints.
+    /// 6: EPUB paging moved from packing the whole book by word count to
+    /// starting a new page at every spine document and table-of-contents
+    /// anchor, so a page written by the previous pipeline holds different text
+    /// at the same index and must not be reused.
+    static let currentFormatVersion = 6
 
     var id: Int { index }
     var number: Int { index + 1 }

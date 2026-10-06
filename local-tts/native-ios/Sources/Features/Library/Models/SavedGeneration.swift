@@ -1,12 +1,19 @@
 import Foundation
 
-/// Distinguishes newly persisted PDF books from manually entered text. The
-/// explicit `.unknown` case keeps pre-shelf project metadata decodable
+/// Distinguishes newly persisted imported books from manually entered text.
+/// The explicit `.unknown` case keeps pre-shelf project metadata decodable
 /// without guessing from optional cover artwork.
+///
+/// `isShelfBook` is what the Book Shelf and shelf-order allocation filter on,
+/// rather than `== .pdf` — an imported book belongs on the shelf whatever
+/// format it came from.
 enum SavedProjectSource: String, Codable, Equatable, Hashable {
     case pdf
+    case epub
     case enteredText
     case unknown
+
+    var isShelfBook: Bool { self == .pdf || self == .epub }
 }
 
 /// How one book sits on the Book Shelf — face-out (full cover) or turned to
@@ -125,6 +132,19 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     static func pageFileURL(projectID: UUID, index: Int) -> URL {
         projectPagesDirectory(id: projectID)
             .appendingPathComponent(String(format: "%06d.json", index))
+    }
+
+    /// An imported EPUB's table of contents, resolved to page indexes. Kept
+    /// as its own file rather than a field on this struct, so this model's
+    /// hand-written `Codable` — see the landmine documented on `CodingKeys`
+    /// below — needs no change at all.
+    static func chaptersFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("chapters.json")
+    }
+
+    static func existingChaptersURL(id: UUID) -> URL? {
+        let url = chaptersFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     var summary: SavedGenerationSummary {

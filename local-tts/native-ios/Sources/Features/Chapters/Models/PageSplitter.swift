@@ -101,3 +101,83 @@ enum PageSplitter {
         text.split(whereSeparator: \.isWhitespace).count
     }
 }
+
+extension PageSplitter {
+    /// One styled unit of text to pack into pages — generic over whatever
+    /// produced it, so this file stays free of any one import format's own
+    /// models, the same reason `ReaderTextRect` is its own type rather than
+    /// reusing `Features/Import`'s `PDFNormalizedRect`.
+    struct StyledUnit {
+        let text: String
+        /// `nil` renders as plain body — no `ReaderStyledRange` is emitted,
+        /// matching `PDFProcessingActor.isPlainBody`'s reason for skipping
+        /// an ordinary paragraph: a page with no styling at all is the
+        /// common case, and `ChapterPlayerView` already treats an empty
+        /// `styledRanges` as a fast path.
+        let style: ReaderTextStyle?
+    }
+
+    /// Packs pre-structured units (one EPUB *section* — the span between two
+    /// chapter boundaries, already cut by `EPUBProcessingActor` at every
+    /// spine document and TOC anchor) using the same greedy word-count
+    /// packing as `split(_ text:)`, so a long single unit still falls
+    /// through to the existing sentence- then word-level fallback rather
+    /// than a second implementation of it.
+    ///
+    /// No tag or page-index map: every chapter boundary already starts its
+    /// own call to this function (`EPUBProcessingActor` never spans one call
+    /// across two chapters), so a chapter's start page is simply the running
+    /// page count before that call — nothing here needs to help resolve it.
+    /// `formatVersion` is left at the `ReaderPage` default; the caller
+    /// re-stamps it when re-indexing each page onto the book's running total.
+    static func split(units: [StyledUnit], maxWords: Int = defaultMaxWords) -> [ReaderPage] {
+        guard maxWords > 0, !units.isEmpty else { return [] }
+
+        var pageGroups: [[StyledUnit]] = []
+        var current: [StyledUnit] = []
+        var currentWordCount = 0
+
+        func flush() {
+            guard !current.isEmpty else { return }
+            pageGroups.append(current)
+            current = []
+            currentWordCount = 0
+        }
+
+        for unit in units {
+            let count = wordCount(unit.text)
+            if count > maxWords {
+                flush()
+                // Each split piece keeps the original unit's style, and
+                // becomes its own page — the same shape `split(_ text:)`
+                // already gives an overlong paragraph.
+                for piece in splitOverlongParagraph(unit.text, maxWords: maxWords) {
+                    pageGroups.append([StyledUnit(text: piece, style: unit.style)])
+                }
+            } else if current.isEmpty || currentWordCount + count <= maxWords {
+                current.append(unit)
+                currentWordCount += count
+            } else {
+                flush()
+                current = [unit]
+                currentWordCount = count
+            }
+        }
+        flush()
+
+        return pageGroups.enumerated().map { pageIndex, group in
+            var text = ""
+            var styledRanges: [ReaderStyledRange] = []
+            for unit in group {
+                if !text.isEmpty { text += "\n\n" }
+                let base = text.count
+                if let style = unit.style {
+                    styledRanges.append(ReaderStyledRange(
+                        start: base, length: unit.text.count, style: style))
+                }
+                text += unit.text
+            }
+            return ReaderPage(index: pageIndex, text: text, styledRanges: styledRanges)
+        }
+    }
+}

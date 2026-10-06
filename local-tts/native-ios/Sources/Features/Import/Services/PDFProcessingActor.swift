@@ -150,7 +150,10 @@ actor PDFProcessingActor {
             sourceURL: job.sourceURL,
             pageCount: pageCount,
             coverURL: coverURL,
-            spineArtworkURL: spineArtworkURL)
+            spineArtworkURL: spineArtworkURL,
+            // A PDF has no table of contents this pipeline reads; chapter
+            // titles are an EPUB-only concept for now.
+            chaptersURL: nil)
     }
 
     /// Renders bounded cover artwork without exporting PDFKit objects.
