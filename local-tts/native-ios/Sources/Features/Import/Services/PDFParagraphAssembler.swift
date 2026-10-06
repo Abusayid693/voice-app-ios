@@ -161,10 +161,23 @@ struct PDFParagraphAssembler {
         // The gap ceiling is what keeps a two-column layout's two columns apart:
         // a gutter is far wider than any inter-word space, so two blocks that
         // merely sit at the same height are never merged.
-        guard rhs.bounds.x >= lhs.bounds.x, gap < max(12, reference * 2) else { return nil }
+        //
+        // `rhs` must also begin where `lhs` *ended*, not merely start further
+        // right than `lhs` began. A drop cap is tall enough to share a row with
+        // two body lines at once, so comparing left edges let the line below the
+        // one it belongs to merge in at a hugely negative gap — "…to torture" +
+        // "humanity" came out as "torturehumanity".
+        guard gap >= -1, gap < max(12, reference * 2) else { return nil }
         // No space when the pieces abut — that is one word PDFKit split, so
         // "nice." + "'" has to rejoin as "nice.'" rather than "nice. '".
-        let separator = gap > reference * 0.22 ? " " : ""
+        //
+        // Measured against the *smaller* of the two sizes: a 48pt drop cap
+        // beside 15pt body text put this bar at 10.5pt, which an ordinary 2.4pt
+        // word space cannot clear, so the cap glued itself on as "Iam
+        // convinced". A word space runs ~0.22em of its own text's size, so a
+        // bar well under that separates a spaced pair from a touching one.
+        let spacing = max(min(lhs.fontSize, rhs.fontSize), 8)
+        let separator = gap > spacing * 0.08 ? " " : ""
         let x = min(lhs.bounds.x, rhs.bounds.x)
         let y = min(lhs.bounds.y, rhs.bounds.y)
         let union = CGRect(
@@ -262,8 +275,18 @@ struct PDFParagraphAssembler {
         // dominant run happened to differ in weight.
         if currentIsHeading != previousIsHeading { return true }
 
-        // 2. Extra leading between the two lines.
-        if metrics.leading > 0.5,
+        // A drop cap stands several lines tall, so the line carrying it reports
+        // a top well above its own text and a height to match. Both of the
+        // position rules below read those as paragraph signals when they are
+        // nothing of the sort — see each for what it mistakes them for.
+        let previousCarriesDropCap =
+            metrics.bodyFontSize > 0 && previous.bounds.height > metrics.bodyFontSize * 2
+
+        // 2. Extra leading between the two lines. Measured from the previous
+        // line's *top*, which a drop cap raises by its own overhang — enough on
+        // its own to clear this threshold and split "…to torture" from
+        // "humanity…" even though the two lines are normally spaced.
+        if !previousCarriesDropCap, metrics.leading > 0.5,
            current.bounds.y - previous.bounds.y > metrics.leading * 1.5
         {
             return true
@@ -284,9 +307,16 @@ struct PDFParagraphAssembler {
         // 4. First-line indent, the convention the old code missed entirely.
         // Requiring the previous line to sit at the margin is what stops a
         // wholly indented block quote from breaking on every one of its lines.
+        //
+        // A drop cap inverts the very convention this reads. Its own line starts
+        // at the margin, because the cap is part of that line, while the next
+        // line or two are inset *around* the cap — which looks exactly like an
+        // indented first line. (The inset is a different width, too: 14.7pt
+        // around the cap against that book's own 23.3pt paragraph indent.)
         let indent = max(3, metrics.bodyFontSize * 0.5)
         let atMargin = max(2, metrics.bodyFontSize * 0.2)
-        if current.bounds.x - metrics.columnLeft > indent,
+        if !previousCarriesDropCap,
+           current.bounds.x - metrics.columnLeft > indent,
            previous.bounds.x - metrics.columnLeft <= atMargin
         {
             return true
@@ -375,9 +405,27 @@ struct PDFParagraphAssembler {
     }
 
     /// Bullets, `1.`/`1)` up to three digits (so a year opening a sentence is
-    /// not mistaken for a list), and `a)` but never `a.` — the latter would
-    /// match an initial like "J. Alfred" starting a line.
-    private static let listMarker = #"^\s*(?:[•◦▪‣·*]|\(?\d{1,3}[.)]|\(?[a-z]\))\s"#
+    /// not mistaken for a list), `a)` but never `a.` — the latter would match
+    /// an initial like "J. Alfred" starting a line — and roman numerals.
+    ///
+    /// The roman branch exists because `\(?[a-z]\)` only ever matched a *single*
+    /// letter: `(i)` and `(v)` were recognised while `(ii)`, `(iii)` and `(iv)`
+    /// were not, so a list broke into items unpredictably depending on whether
+    /// some other rule (a ragged line above it, usually) happened to break it
+    /// anyway.
+    ///
+    /// It demands a well-formed numeral rather than any run of `ivxlcdm`,
+    /// because those letters spell plenty of ordinary words: a looser
+    /// `[ivxlcdm]{2,6}` also matched `(civil)`, `(did)`, `(vivid)`, `(dill)`,
+    /// `(mild)` and `(lid)` at the start of a line. A closing paren is required
+    /// for the same reason — `mix.` opening a sentence must not read as a list.
+    ///
+    /// Every quantifier in that numeral is optional, so it also matches the
+    /// empty string: without the leading lookahead a bare `") "` satisfies the
+    /// branch on its closing paren alone.
+    private static let listMarker =
+        #"^\s*(?:[•◦▪‣·*]|\(?\d{1,3}[.)]|\(?[a-z]\)"#
+        + #"|\(?(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})\))\s"#
 
     private func startsWithListMarker(_ text: String) -> Bool {
         text.range(of: Self.listMarker, options: .regularExpression) != nil

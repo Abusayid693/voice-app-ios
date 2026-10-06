@@ -37,6 +37,7 @@ struct RotatingBookFaces: View {
     let title: String
     let coverSize: CGSize
     let spineWidth: CGFloat
+    var spineArtworkURL: URL? = nil
     /// 0 = cover face-on, 90 = spine face-on.
     let angle: Double
 
@@ -61,7 +62,7 @@ struct RotatingBookFaces: View {
 
             face(isSpine: true, facing: spineFacing) {
                 SavedProjectSpine(
-                    coverURL: coverURL, title: title,
+                    coverURL: coverURL, artworkURL: spineArtworkURL, title: title,
                     size: CGSize(width: spineWidth, height: coverSize.height))
             }
         }

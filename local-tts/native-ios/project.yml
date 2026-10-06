@@ -38,6 +38,18 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+        # Vendored libraries each keep their own README/LICENSE for
+        # attribution (see Sources/Vendor/*'s own doc comments) — excluded
+        # here because the whole-folder scan otherwise bundles them as
+        # resources, and two vendored folders both naming theirs README.md
+        # collide at the app bundle's flattened root ("Multiple commands
+        # produce .../README.md"), the first time a second vendored library
+        # was added after ThinkingOrbsKit. Docs, not resources, so excluding
+        # them changes nothing the app actually uses.
+        excludes:
+          - "**/README.md"
+          - "**/LICENSE"
+          - "**/LICENSE.md"
       # Locally-converted (laishere/kokoro-coreml) Kokoro-ANE models, staged
       # for a one-off custom-voice test — see DependencyContainer.swift.
       # `type: folder` forces Xcode to copy this as a single folder
@@ -56,6 +68,13 @@ targets:
       # `type: folder` preserves the real directory structure instead.
       - path: VoicePreviews
         type: folder
+        buildPhase: resources
+      # Decorative 200pt My Shelf header artwork. Kept as a standalone PNG
+      # resource so the shelf can load it by the stable `halftone` name.
+      # `assets/` is otherwise a source-of-truth export folder that is NOT
+      # bundled, so an image dropped there renders nothing until it is listed
+      # here as well.
+      - path: assets/theme/halftone.png
         buildPhase: resources
       # hexgrad/Kokoro-82M's 8 officially-named, officially-graded Mandarin
       # voice tensors (zf_xiaobei/zf_xiaoni/zf_xiaoxiao/zf_xiaoyi,
@@ -94,6 +113,11 @@ targets:
         # next generate. Settings > About reads this back via
         # Bundle.main.infoDictionary.
         CFBundleShortVersionString: "0.1.0"
+        # Bundled reading-surface fonts: EB Garamond styles the Shelf title,
+        # while Inter styles book names in the expanded detail card.
+        UIAppFonts:
+          - EBGaramond-Italic.ttf
+          - Inter-Variable.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest

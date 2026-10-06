@@ -1,7 +1,36 @@
 import CoreGraphics
 import Foundation
 
-/// Durable lifecycle for an on-device PDF import. Jobs are intentionally
+/// Which kind of book a job is importing. The surrounding types keep their
+/// historical `PDF…` names — the durable job machinery (jobs.json, retry,
+/// `BGProcessingTask`, shelf reservation) never touched PDFKit and works
+/// unchanged for either format, and renaming it would orphan in-flight jobs
+/// plus the background-task identifier declared in `project.yml` and
+/// `Info.plist`. Same convention as `Features/Chapters/` and `LibraryTabView`.
+enum BookImportFormat: String, Codable, Equatable {
+    case pdf
+    case epub
+
+    /// Extension for the copy kept inside the job directory. `source.pdf` is
+    /// also what `SavedGeneration.existingSourcePDFURL` looks for, which is
+    /// what gates the reader's original-page view — so an EPUB deliberately
+    /// never produces that filename.
+    var sourceFileExtension: String {
+        switch self {
+        case .pdf: return "pdf"
+        case .epub: return "epub"
+        }
+    }
+
+    var projectSource: SavedProjectSource {
+        switch self {
+        case .pdf: return .pdf
+        case .epub: return .epub
+        }
+    }
+}
+
+/// Durable lifecycle for an on-device book import. Jobs are intentionally
 /// independent of SwiftUI presentation so they can resume after the user
 /// leaves the import screen or the system interrupts processing.
 enum PDFImportPhase: String, Codable, Equatable {
@@ -17,7 +46,7 @@ enum PDFImportPhase: String, Codable, Equatable {
     var title: String {
         switch self {
         case .queued: return "Queued"
-        case .validating: return "Checking PDF"
+        case .validating: return "Checking book"
         case .extracting: return "Reading pages"
         case .preparingPages: return "Preparing pages"
         case .finalizing: return "Saving book"
@@ -49,10 +78,18 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
     var shelfOrder: Int?
     /// Stage-weighted progress that never moves backwards across resumes.
     var overallProgress: Double?
+    /// Optional for the same reason `shelfOrder` is: synthesized `Decodable`
+    /// reads an Optional with `decodeIfPresent`, so every job already in
+    /// `jobs.json` from before EPUB support still decodes. Read
+    /// `resolvedFormat`, never this directly.
+    var format: BookImportFormat?
+
+    /// Jobs written before EPUB support carry no format and are PDFs.
+    var resolvedFormat: BookImportFormat { format ?? .pdf }
 
     init(
         id: UUID = UUID(), sourceFileName: String, engine: Engine, voiceName: String,
-        shelfOrder: Int? = nil
+        format: BookImportFormat = .pdf, shelfOrder: Int? = nil
     ) {
         self.id = id
         self.sourceFileName = sourceFileName
@@ -65,6 +102,7 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
         self.completedPages = 0
         self.shelfOrder = shelfOrder
         self.overallProgress = 0
+        self.format = format
     }
 
     var progress: Double {
@@ -89,10 +127,18 @@ struct PDFImportJob: Identifiable, Codable, Equatable {
         Self.baseDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
     }
 
-    var sourceURL: URL { directory.appendingPathComponent("source.pdf") }
+    var sourceURL: URL {
+        directory.appendingPathComponent("source.\(resolvedFormat.sourceFileExtension)")
+    }
     /// A small raster of the first physical page, retained during import so
     /// it can be copied beside the final project's independently stored pages.
     var coverURL: URL { directory.appendingPathComponent("cover.jpg") }
+    var spineArtworkURL: URL { directory.appendingPathComponent("spine-artwork-v1.png") }
+    /// EPUB table of contents resolved to page indexes. Written only for
+    /// formats that have one, and kept out of `SavedGeneration` so that
+    /// model's hand-written `Codable` — and its documented landmine about
+    /// defaulted properties silently not round-tripping — stays untouched.
+    var chaptersURL: URL { directory.appendingPathComponent("chapters.json") }
     var pagesDirectory: URL { directory.appendingPathComponent("pages", isDirectory: true) }
     var readerPagesDirectory: URL {
         directory.appendingPathComponent("reader-pages", isDirectory: true)
@@ -246,6 +292,10 @@ struct PDFImportResult: Sendable {
     /// Optional so a thumbnail rendering failure cannot discard otherwise
     /// readable imported content; callers use the standard project icon then.
     let coverURL: URL?
+    /// Pre-rendered shelf spine; optional visual polish like the cover.
+    let spineArtworkURL: URL?
+    /// Present only for formats carrying a table of contents (EPUB today).
+    let chaptersURL: URL?
 }
 
 struct PDFProcessingProgress: Sendable {

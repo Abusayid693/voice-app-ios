@@ -169,6 +169,11 @@ struct ChapterPlayerView: View {
     // main via ReadingStatsStore, never a synchronous call; see
     // refreshCompletedPages().
     @State private var completedPageIndices: Set<Int> = []
+    // EPUB's table of contents, resolved to page indexes — [] for a PDF or an
+    // EPUB with none. Unlike completedPageIndices this never changes for a
+    // project, so it loads once in .onAppear rather than being refreshed
+    // before every picker presentation.
+    @State private var chapters: [EPUBChapter] = []
 
     @State private var isAutoScrollPaused = false
     // Reference type, not @State: rows cross the scroll-visibility
@@ -237,6 +242,7 @@ struct ChapterPlayerView: View {
     @State private var isOptionsSheetPresented = false
     @State private var isPagePickerPresented = false
     @State private var isVoiceSelectionPresented = false
+    @State private var isPlaybackSpeedPresented = false
     @State private var isVoiceChangeErrorPresented = false
     // Persisted across sessions — set once, stays that way for every chapter
     // opened afterward. See the ⋯ menu (ChapterPlayerOptionsSheet).
@@ -435,7 +441,7 @@ struct ChapterPlayerView: View {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
                 theme: readerTheme, completedPageIndices: completedPageIndices,
-                onSelect: selectPage)
+                chapters: chapters, onSelect: selectPage)
         }
         .sheet(isPresented: $isVoiceSelectionPresented) {
             VoiceSettingsSheet(
@@ -445,6 +451,13 @@ struct ChapterPlayerView: View {
                 restrictedEngine: project.engine,
                 selectedVoiceName: selectedVoiceName,
                 onVoiceSelected: changeVoice)
+        }
+        .sheet(isPresented: $isPlaybackSpeedPresented) {
+            PlaybackSpeedSheet(
+                rate: Binding(
+                    get: { player.playbackRate },
+                    set: player.setPlaybackRate),
+                theme: readerTheme)
         }
         .alert("Voice Couldn’t Be Changed", isPresented: $isVoiceChangeErrorPresented) {
             Button("OK", role: .cancel) {}
@@ -528,6 +541,7 @@ struct ChapterPlayerView: View {
             if let initialSurfaceMode { surfaceMode = initialSurfaceMode }
             isAutoScrollPaused = false
             refreshCompletedPages()
+            chapters = library.chapters(for: project)
             player.configureContinuousPlayback(
                 enabled: continuousPlaybackEnabled,
                 nextPageProvider: { [library, project] index in
@@ -1071,10 +1085,11 @@ struct ChapterPlayerView: View {
                 .frame(maxWidth: .infinity)
 
                 Button {
-                    setSurface(.audio)
+                    isPlaybackSpeedPresented = true
                 } label: {
-                    Image(systemName: "headphones")
-                        .font(.system(size: 23, weight: .semibold))
+                    Text(PlaybackRateFormatter.string(player.playbackRate))
+                        .font(.system(size: 15, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundStyle(readerTheme.primaryText)
                         .frame(width: 52, height: 52)
                         .background(
@@ -1084,7 +1099,9 @@ struct ChapterPlayerView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
-                .accessibilityLabel("Show audio player")
+                .accessibilityLabel("Playback speed")
+                .accessibilityValue(PlaybackRateFormatter.string(player.playbackRate))
+                .accessibilityHint("Opens playback speed controls")
             }
         }
         .padding(.horizontal, 12)

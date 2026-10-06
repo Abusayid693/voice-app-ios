@@ -10,6 +10,8 @@ final class PDFImportShelfItem: ObservableObject, Identifiable {
     let createdAt: Date
     let shelfOrder: Int
     let storedCoverURL: URL
+    // Lifecycle bookkeeping only; does not republish progress or shelf geometry.
+    var presentationCount = 0
 
     @Published private(set) var phase: PDFImportPhase
     @Published private(set) var progress: Double
@@ -72,5 +74,10 @@ final class PDFImportShelfStore: ObservableObject {
 
     func remove(id: UUID) {
         items.removeAll { $0.id == id }
+    }
+
+    func finishPresentation(id: UUID) {
+        guard items.first(where: { $0.id == id })?.isCompleted == true else { return }
+        remove(id: id)
     }
 }

@@ -104,7 +104,7 @@ struct CustomTabBar: View {
         .background(Capsule().fill(Color.appBackground))
         .shadow(color: .black.opacity(0.22), radius: 9, y: 4)
         .accessibilityLabel("Add Books")
-        .accessibilityHint("Choose a PDF to add to your shelf")
+        .accessibilityHint("Choose a PDF or EPUB to add to your shelf")
     }
 }
 

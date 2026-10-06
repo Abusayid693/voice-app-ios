@@ -27,15 +27,9 @@ struct AppEnvironment {
     let previewPlayer: VoicePreviewPlayer
     /// The app's one playback owner, rendered either as read-along text or
     /// as a music-style now-playing surface — see
-    /// `docs/adr/0013-unified-player.md`. Not pass-through: `RootTabView`
-    /// observes it directly for the floating mini player.
+    /// `docs/adr/0013-unified-player.md`; Home observes it for the mini player.
     let player: BookAudioPlayer
     let readingStats: ReadingStatsStore
-    // Not "pass-through" like the others above — a live flag Home writes
-    // to and RootTabView observes, so RootTabView's floating Explore/Add
-    // Books bar (see CustomTabBar) can hide itself on pushed screens. See
-    // NavigationChromeVisibility's own doc comment.
-    let navigationChrome: NavigationChromeVisibility
 }
 
 extension AppEnvironment {
@@ -53,7 +47,6 @@ extension AppEnvironment {
             tts: tts,
             library: library, pdfImports: PDFImportManager(library: library), previewPlayer: VoicePreviewPlayer(),
             player: BookAudioPlayer(synthesis: synthesis, statsTracker: statsTracker),
-            readingStats: dependencies.readingStatsStore,
-            navigationChrome: NavigationChromeVisibility())
+            readingStats: dependencies.readingStatsStore)
     }
 }

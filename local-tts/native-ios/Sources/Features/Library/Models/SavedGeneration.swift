@@ -1,12 +1,19 @@
 import Foundation
 
-/// Distinguishes newly persisted PDF books from manually entered text. The
-/// explicit `.unknown` case keeps pre-shelf project metadata decodable
+/// Distinguishes newly persisted imported books from manually entered text.
+/// The explicit `.unknown` case keeps pre-shelf project metadata decodable
 /// without guessing from optional cover artwork.
+///
+/// `isShelfBook` is what the Book Shelf and shelf-order allocation filter on,
+/// rather than `== .pdf` — an imported book belongs on the shelf whatever
+/// format it came from.
 enum SavedProjectSource: String, Codable, Equatable, Hashable {
     case pdf
+    case epub
     case enteredText
     case unknown
+
+    var isShelfBook: Bool { self == .pdf || self == .epub }
 }
 
 /// How one book sits on the Book Shelf — face-out (full cover) or turned to
@@ -99,6 +106,15 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
+    static func spineArtworkFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("spine-artwork-v1.png")
+    }
+
+    static func existingSpineArtworkURL(id: UUID) -> URL? {
+        let url = spineArtworkFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     /// The project's own copy of the imported document, kept so the reader can
     /// show the original page. The import job also holds a copy, but that
     /// directory is the importer's to delete — a project cannot depend on it.
@@ -116,6 +132,19 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     static func pageFileURL(projectID: UUID, index: Int) -> URL {
         projectPagesDirectory(id: projectID)
             .appendingPathComponent(String(format: "%06d.json", index))
+    }
+
+    /// An imported EPUB's table of contents, resolved to page indexes. Kept
+    /// as its own file rather than a field on this struct, so this model's
+    /// hand-written `Codable` — see the landmine documented on `CodingKeys`
+    /// below — needs no change at all.
+    static func chaptersFileURL(id: UUID) -> URL {
+        projectDirectory(id: id).appendingPathComponent("chapters.json")
+    }
+
+    static func existingChaptersURL(id: UUID) -> URL? {
+        let url = chaptersFileURL(id: id)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     var summary: SavedGenerationSummary {
@@ -213,13 +242,21 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
     }
 
-    /// Spine thickness scales with the book's own page count, the way a real
-    /// book's does — clamped so a 12-page PDF is still tappable and a
-    /// 900-page one doesn't eat the row. Roughly 1pt per 45 pages between
-    /// those bounds.
+    /// A continuous, perceptual thickness curve keeps short documents close
+    /// to a 5pt pamphlet while allowing long books to approach a 36pt spine.
+    /// The square root gives thin books enough visible presence without the
+    /// old fixed 14pt base making every small PDF look equally thick.
     var spineWidth: CGFloat {
-        let scaled = 14 + CGFloat(pageCount) / 45
-        return min(max(scaled, 14), 36)
+        Self.spineWidth(forPageCount: pageCount)
+    }
+
+    static func spineWidth(forPageCount pageCount: Int) -> CGFloat {
+        let minimumWidth: CGFloat = 5
+        let maximumWidth: CGFloat = 36
+        let maximumPageCount: CGFloat = 900
+        let pagesAfterFirst = CGFloat(max(pageCount - 1, 0))
+        let normalizedPages = min(pagesAfterFirst / (maximumPageCount - 1), 1)
+        return minimumWidth + (maximumWidth - minimumWidth) * sqrt(normalizedPages)
     }
 
     var pageCountLabel: String {
@@ -230,5 +267,9 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     /// thumbnails use the standard engine icon in row UI instead.
     var coverURL: URL? {
         SavedGeneration.existingCoverURL(id: id)
+    }
+
+    var spineArtworkURL: URL? {
+        SavedGeneration.existingSpineArtworkURL(id: id)
     }
 }

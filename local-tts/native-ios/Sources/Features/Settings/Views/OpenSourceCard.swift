@@ -9,9 +9,20 @@ import SwiftUI
 /// subtle stroke border instead — visually equivalent, works back to 17.
 struct OpenSourceCard: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let githubURL = URL(string: "https://github.com/Abusayid693/voice-app-ios")!
-    private static let cardShape = RoundedRectangle(cornerRadius: 0, style: .continuous)
+    private static let cardShape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+    // The inner content block (checkmarks + Contribute button) sits flush
+    // against the header above it, so only its bottom corners carry the
+    // card's own radius — its top stays explicitly square rather than
+    // relying on being an unshaped seam under the header.
+    private static let contentShape = UnevenRoundedRectangle(
+        topLeadingRadius: 0, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 0,
+        style: .continuous)
+    /// One full sweep, slow enough to read as ambient rather than a loading
+    /// spinner — this card sits at rest on the page, not mid-task.
+    private static let sweepPeriod: TimeInterval = 6
 
     // Short and parallel on purpose — each needs to fit on one line
     // without wrapping (see the `.lineLimit(1)` below).
@@ -38,11 +49,24 @@ struct OpenSourceCard: View {
                     .padding(.top, 4)
             }
             .padding(16)
-            .background(Color.appSecondaryBackground)
+            .background(Color.appSecondaryBackground, in: Self.contentShape)
         }
         .background(.ultraThinMaterial, in: Self.cardShape)
-        .overlay(Self.cardShape.strokeBorder(Color.white.opacity(0.12)))
         .clipShape(Self.cardShape)
+        .overlay {
+            // A dim base stroke keeps the card's edge visible even where the
+            // bright sweep isn't currently passing, so the border never
+            // disappears between passes.
+            Self.cardShape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            rotatingBorder
+        }
+    }
+
+    @ViewBuilder
+    private var rotatingBorder: some View {
+        if !reduceMotion {
+            BorderSweep(shape: Self.cardShape, lineWidth: 1.5, period: Self.sweepPeriod)
+        }
     }
 
     private var header: some View {
@@ -105,6 +129,58 @@ struct OpenSourceCard: View {
             Text("Contribute")
         }
         .buttonStyle(.primary)
+    }
+}
+
+/// A bright arc travelling clockwise around the card's edge.
+///
+/// The gradient itself never changes and the mask never changes — only a
+/// `rotationEffect` animates, which Core Animation runs on the render server.
+/// Nothing here re-evaluates per frame.
+///
+/// That matters because the first version drove this from
+/// `TimelineView(.animation)`, rebuilding the gradient and re-stroking the
+/// shape every display refresh (120Hz on ProMotion) directly on top of a view
+/// whose background is `.ultraThinMaterial` — so each tick re-blended the
+/// material behind it, competing with scrolling for the same frame budget.
+/// `PDFImportShelfCover`'s shimmer can afford `TimelineView` because its
+/// `Canvas` is the only thing on that surface; this one sits over a material
+/// card inside a scroll view, so it cannot.
+private struct BorderSweep<S: InsettableShape>: View {
+    let shape: S
+    let lineWidth: CGFloat
+    let period: Double
+
+    @State private var angle: Double = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            // Square, sized to the card's diagonal: a smaller one would leave
+            // the corners uncovered as it turns.
+            let side = hypot(proxy.size.width, proxy.size.height)
+            AngularGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.82),
+                    .init(color: Color.white.opacity(0.9), location: 0.94),
+                    .init(color: .clear, location: 1),
+                ],
+                center: .center)
+                .frame(width: side, height: side)
+                .rotationEffect(.degrees(angle))
+                .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
+        .mask(shape.strokeBorder(Color.white, lineWidth: lineWidth))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onAppear {
+            // Reset first: scrolling the card out and back fires this again,
+            // and resuming from a stale angle would restart mid-sweep.
+            angle = 0
+            withAnimation(.linear(duration: period).repeatForever(autoreverses: false)) {
+                angle = 360
+            }
+        }
     }
 }
 

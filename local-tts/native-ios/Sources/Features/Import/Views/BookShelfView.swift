@@ -1,5 +1,6 @@
 import LucideSwift
 import SwiftUI
+import UIKit
 
 enum BookShelfPalette {
     static let background = Color.whitePaper
@@ -37,6 +38,7 @@ struct ShelfTopBlur: View {
 /// book collection or copying reader-page content.
 struct BookShelfView: View {
     @ObservedObject var library: LibraryViewModel
+    @StateObject private var shelfLayout = BookShelfLayoutStore()
     /// Publishes structural additions/removals only. Each import tile observes
     /// its own progress object so page updates do not invalidate shelf geometry.
     @ObservedObject var importShelf: PDFImportShelfStore
@@ -85,6 +87,16 @@ struct BookShelfView: View {
     /// finished. Clearing `arrangingBook` up front instead made the offset
     /// snap to 0 rather than animate down.
     @State private var isArrangeMenuVisible = false
+    @State private var arrangeDrag: ShelfBookDrag?
+    @State private var preparedDrag: ShelfBookDrag?
+    // Hold identity without subscribing this entire shelf to finger-rate publications.
+    @State private var dragMotion = BookShelfDragMotion()
+    @State private var frozenDragRows: [[ShelfEntry]]?
+    @State private var isSettlingDrag = false
+    @State private var longPressDragID: UUID?
+    @State private var editingShelfIndex: Int?
+    @State private var shelfTitleDraft = ""
+    @Environment(\.scenePhase) private var scenePhase
     private let arrangeLiftDistance: CGFloat = 18
     /// Height of `ImportHomeView`'s floating header controls (4pt top pad +
     /// a 44pt tap target), reserved at the top of the scroll content.
@@ -93,7 +105,7 @@ struct BookShelfView: View {
 
     private var completedBooks: [SavedGenerationSummary] {
         library.savedGenerations
-            .filter { $0.source == .pdf }
+            .filter { $0.source.isShelfBook }
     }
 
     private var shelfEntries: [ShelfEntry] {
@@ -119,44 +131,79 @@ struct BookShelfView: View {
     }
 
     private var shelfRows: [[ShelfEntry]] {
+        if let frozenDragRows { return frozenDragRows }
         let entries = shelfEntries
-        var rows = stride(from: 0, to: entries.count, by: 5).map { start in
-            Array(entries[start..<min(start + 5, entries.count)])
-        }
-        while rows.count < 3 { rows.append([]) }
-        return rows
+        let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        return shelfLayout.layout(for: entries.map(\.id)).map { $0.compactMap { byID[$0] } }
     }
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            ZStack(alignment: .top) {
                 ScrollView {
-                    VStack(spacing: 0) {
-                        shelfHeader
+                    // Keep the artwork in the scroll content itself instead
+                    // of attaching it with `.background`, which the platform
+                    // scroll host can composite away. This preserves its
+                    // visibility while letting it scroll with the shelf.
+                    ZStack(alignment: .top) {
+                        ShelfHeaderTextureBackdrop()
 
-                        if shelfEntries.isEmpty {
-                            emptyState
-                                .frame(minHeight: max(0, geometry.size.height - 100))
-                        } else {
-                            shelf(for: geometry.size.width)
+                        VStack(spacing: 0) {
+                            shelfHeader
+
+                            if shelfEntries.isEmpty {
+                                emptyState
+                                    .frame(minHeight: max(0, geometry.size.height - 100))
+                            } else {
+                                shelf(for: geometry.size.width)
+                            }
                         }
+                        // Home draws its Settings/avatar controls as a floating
+                        // overlay rather than a navigation bar (see
+                        // ImportHomeView.headerControls), so the shelf reserves
+                        // that height itself instead of inheriting a bar inset.
+                        .padding(
+                            .top,
+                            geometry.safeAreaInsets.top + Self.headerControlsInset
+                        )
+                        // Enough trailing inset for the LAST shelf to scroll
+                        // clear of ShelfBottomBlur's heavily opaque lower
+                        // half (the gradient only gets dense past its own
+                        // midpoint — see ShelfBottomBlur). A flat 24pt left
+                        // no further room to scroll to at all, so the last
+                        // shelf sat stuck in the white-out with nowhere to
+                        // go; matching the blur's *full* height fixed that
+                        // but overshot into a stretch of empty scroll past
+                        // where the shelf was already clear, which is its
+                        // own complaint. Half the band's height (still scaled
+                        // by the reserved bottom chrome, so it grows when the
+                        // mini player is showing) is enough room to escape
+                        // the dense part without the extra blank tail.
+                        .padding(.bottom, 24 + (120 + geometry.safeAreaInsets.bottom) / 2)
+                        .background(ShelfScrollLock(isLocked: arrangingBook != nil || selectedBook != nil))
                     }
-                    // Home draws its Settings/avatar controls as a floating
-                    // overlay rather than a navigation bar (see
-                    // ImportHomeView.headerControls), so the shelf reserves
-                    // that height itself instead of inheriting a bar inset.
-                    .padding(.top, Self.headerControlsInset)
-                    // Keep only a small trailing inset so shelves can pass
-                    // underneath the progressive blur and Add Books action.
-                    .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
+                // Let the 200pt texture canvas begin at the physical top of
+                // the display. The VStack's matching safe-area padding above
+                // keeps the title and shelves at their existing positions.
+                .ignoresSafeArea(edges: .top)
                 .scrollDisabled(selectedBook != nil || arrangingBook != nil)
                 .allowsHitTesting(selectedBook == nil)
                 .accessibilityHidden(selectedBook != nil)
 
                 if selectedBook == nil {
+                    // Matches ShelfBottomBlur's own `.ignoresSafeArea(edges:
+                    // .bottom)` just below. Without this, ShelfGlassLayer's
+                    // `.clipped()` bound stops at the bottom safe-area line
+                    // rather than the true screen edge, hard-cutting the
+                    // last shelf's glass panel exactly where the blur (and
+                    // the scrolled book covers, which keep rendering past
+                    // that line) still extend further down — the panel's
+                    // flat material reads as an abrupt edge there where a
+                    // textured book cover does not.
                     ShelfGlassLayer(frames: shelfFrames)
+                        .ignoresSafeArea(edges: .bottom)
                 }
 
                 ShelfBottomBlur()
@@ -173,17 +220,39 @@ struct BookShelfView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { endArranging() }
+                        .allowsHitTesting(arrangeDrag == nil)
                         .accessibilityLabel("Dismiss book options")
                         .zIndex(2)
                 }
 
+                if let arrangingBook, !isSettlingDrag {
+                    // The menu's backdrop intercepts taps, but a lifted book remains draggable.
+                    if let frame = arrangeDrag?.sourceFrame ?? coverFrames[arrangingBook.id] {
+                        Color.clear
+                            .frame(width: max(frame.width, 44), height: frame.height)
+                            .contentShape(Rectangle())
+                            .position(x: frame.midX, y: frame.midY + arrangeLiftOffset)
+                            .modifier(ShelfLiftDragGesture(
+                                requiresLongPress: false,
+                                onChanged: { updateArrangeDrag(for: arrangingBook, value: $0) },
+                                onEnded: { finishArrangeDrag() },
+                                onCancelled: { finishArrangeDrag(cancelled: true) }))
+                            .accessibilityHidden(true)
+                            .allowsHitTesting(isArrangeMenuVisible)
+                            .zIndex(3)
+                    }
+                }
                 if let arrangingBook, isArrangeMenuVisible {
-                    BookArrangeMenu(
-                        isSpine: (previewDisplayMode ?? arrangingBook.shelfDisplayMode) == .spine,
-                        anchor: coverFrames[arrangingBook.id],
+                    ShelfArrangeOverlay(
+                        motion: dragMotion,
+                        book: arrangingBook,
+                        mode: previewDisplayMode ?? arrangingBook.shelfDisplayMode,
+                        drag: arrangeDrag,
+                        preparedDrag: preparedDrag,
+                        restingAnchor: coverFrames[arrangingBook.id]?.offsetBy(dx: 0, dy: arrangeLiftOffset),
                         onRotate: toggleRotation,
                         onDelete: { deleteCandidate = arrangingBook })
-                    .zIndex(3)
+                    .zIndex(5)
                 }
 
                 if let selectedBook {
@@ -205,6 +274,18 @@ struct BookShelfView: View {
             }
             .accessibilityLabel("PDF book shelves")
             .coordinateSpace(name: bookShelfModalCoordinateSpace)
+            .modifier(ShelfLiftDragGesture(
+                onChanged: handleShelfLongPress,
+                onEnded: {
+                    guard longPressDragID != nil else { return }
+                    longPressDragID = nil
+                    finishArrangeDrag()
+                },
+                onCancelled: {
+                    guard longPressDragID != nil else { return }
+                    longPressDragID = nil
+                    finishArrangeDrag(cancelled: true)
+                }))
             .onPreferenceChange(BookCoverFramePreferenceKey.self) { frames in
                 coverFrames = frames
             }
@@ -216,6 +297,34 @@ struct BookShelfView: View {
             }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
+        .onChange(of: shelfEntries.map(\.id), initial: true) { _, ids in
+            if arrangeDrag == nil { shelfLayout.synchronize(ids) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active, arrangeDrag != nil { finishArrangeDrag(cancelled: true) }
+        }
+        .onDisappear {
+            resetArrangeDrag()
+        }
+        .alert("Shelf arrangement", isPresented: Binding(
+            get: { shelfLayout.errorMessage != nil },
+            set: { if !$0 { shelfLayout.errorMessage = nil } })
+        ) {
+            Button("OK") { shelfLayout.errorMessage = nil }
+        } message: {
+            Text(shelfLayout.errorMessage ?? "")
+        }
+        .alert("Rename Shelf", isPresented: Binding(
+            get: { editingShelfIndex != nil },
+            set: { if !$0 { editingShelfIndex = nil } })
+        ) {
+            TextField("Shelf name", text: $shelfTitleDraft)
+            Button("Cancel", role: .cancel) { editingShelfIndex = nil }
+            Button("Save") { saveShelfTitle() }
+                .disabled(normalizedShelfTitle.isEmpty)
+        } message: {
+            Text("Choose a name for this shelf.")
+        }
         .confirmationDialog(
             "Delete “\(deleteCandidate?.title ?? "")”?",
             isPresented: Binding(
@@ -260,15 +369,13 @@ struct BookShelfView: View {
     private var shelfHeader: some View {
         ZStack {
             ShelfHeaderBackdrop(books: Array(completedBooks.prefix(3)))
-                // The decorative canvas is intentionally larger than the
-                // header's layout footprint, so its soft colour can extend
-                // behind the shelf without moving the title or shelf rows.
                 .frame(height: 160)
                 .clipped()
 
             VStack(spacing: 3) {
                 Text("My Shelf")
-                    .font(.custom("SnellRoundhand-Bold", size: 36, relativeTo: .title))
+                    .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
+                    .fontWeight(.medium)
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .accessibilityAddTraits(.isHeader)
 
@@ -293,12 +400,13 @@ struct BookShelfView: View {
             ForEach(Array(shelfRows.enumerated()), id: \.offset) { index, row in
                 BookShelfRow(
                     shelfIndex: index,
+                    shelfTitle: shelfLayout.title(for: index),
                     entries: row,
                     coverSize: coverSize,
                     spacing: coverSpacing,
                     shelfWidth: shelfWidth,
                     leadingContentInset: index == 0 ? 30 : 16,
-                    hiddenBookID: isShelfCoverHidden ? selectedBook?.id : nil,
+                    hiddenBookID: arrangeDrag != nil ? arrangingBook?.id : (isShelfCoverHidden ? selectedBook?.id : nil),
                     liftDistance: arrangeLiftDistance,
                     arrangingBookID: arrangingBook?.id,
                     arrangeLiftOffset: arrangeLiftOffset,
@@ -306,8 +414,12 @@ struct BookShelfView: View {
                     onCancelImport: pdfImports.cancel(id:),
                     onRetryImport: pdfImports.retry(id:),
                     onDeleteImport: pdfImports.delete(id:),
+                    onImportSettled: importShelf.finishPresentation(id:),
                     onSelect: { book in presentDetail(for: book) },
-                    onLongPress: { book in beginArranging(book) })
+                    onLongPress: { book in beginArranging(book) },
+                    onRenameShelf: { beginRenamingShelf(index) },
+                    onMove: moveBookAccessibly)
+                .id(index)
             }
         }
         .padding(.horizontal, horizontalInset)
@@ -330,6 +442,23 @@ struct BookShelfView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var normalizedShelfTitle: String {
+        shelfTitleDraft.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private func beginRenamingShelf(_ shelf: Int) {
+        guard selectedBook == nil, arrangingBook == nil else { return }
+        shelfTitleDraft = shelfLayout.title(for: shelf)
+        editingShelfIndex = shelf
+    }
+
+    private func saveShelfTitle() {
+        guard let shelf = editingShelfIndex else { return }
+        let title = normalizedShelfTitle
+        editingShelfIndex = nil
+        _ = shelfLayout.renameShelf(at: shelf, to: title)
+    }
+
     // Lift, spine turn, and travel share a spring; the card expands after arrival.
     private var translateAnimation: Animation {
         .spring(response: 0.42, dampingFraction: 0.9)
@@ -341,12 +470,178 @@ struct BookShelfView: View {
 
     // MARK: - Long-press arrange
 
+    private func handleShelfLongPress(_ value: DragGesture.Value) {
+        if longPressDragID == nil {
+            guard selectedBook == nil,
+                  let book = shelfEntries.first(where: {
+                      $0.importing == nil && coverFrames[$0.id]?.contains(value.startLocation) == true
+                  })?.saved,
+                  arrangingBook == nil || (arrangingBook?.id == book.id && isArrangeMenuVisible) else { return }
+            if arrangingBook == nil { beginArranging(book) }
+            longPressDragID = book.id
+        }
+        if let book = arrangingBook, longPressDragID == book.id {
+            updateArrangeDrag(for: book, value: value)
+        }
+    }
+
+    private func updateArrangeDrag(for book: SavedGenerationSummary, value: DragGesture.Value) {
+        guard arrangingBook?.id == book.id, isArrangeMenuVisible, !isSettlingDrag else { return }
+        guard abs(value.translation.width) + abs(value.translation.height) > 6 else { return }
+        if arrangeDrag == nil {
+            guard let drag = makeArrangeDrag(for: book) else { return }
+            frozenDragRows = shelfRows
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                dragMotion.track(translation: value.translation, location: value.location)
+                arrangeDrag = drag
+            }
+            return
+        }
+        // Direct compositor translation follows the finger; no spring lag or shelf publication.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            dragMotion.track(translation: value.translation, location: value.location)
+        }
+    }
+
+    private func makeArrangeDrag(for book: SavedGenerationSummary) -> ShelfBookDrag? {
+        guard var frame = coverFrames[book.id], let coverSize = heroFrames[book.id]?.size else { return nil }
+        frame.size.width = (previewDisplayMode ?? book.shelfDisplayMode) == .spine ? book.spineWidth : coverSize.width
+        return ShelfBookDrag(
+            sourceFrame: frame, coverSize: coverSize,
+            liftedCenter: CGPoint(x: frame.midX, y: frame.midY - arrangeLiftDistance))
+    }
+
+    private func finishArrangeDrag(cancelled: Bool = false) {
+        guard let drag = arrangeDrag, let book = arrangingBook, !isSettlingDrag else { return }
+        let oldRows = shelfRows
+        let location = dragMotion.location
+        let destination = cancelled ? nil : dropShelf(at: location, coverHeight: drag.coverSize.height)
+        isSettlingDrag = true
+
+        withAnimation(
+            reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86),
+            completionCriteria: .removed
+        ) {
+            frozenDragRows = nil
+            if let destination, oldRows.indices.contains(destination) {
+                let candidates = oldRows[destination].filter { $0.id != book.id }
+                let next = candidates.first { entry in
+                    coverFrames[entry.id].map { $0.midX > location.x } ?? false
+                }?.id ?? candidates.lastIndex(where: { coverFrames[$0.id] != nil }).flatMap { index in
+                    candidates.indices.contains(index + 1) ? candidates[index + 1].id : nil
+                }
+                _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfEntries.map(\.id))
+            }
+            if let mode = previewDisplayMode,
+               !library.updateShelfDisplayMode(mode, for: book.id) { previewDisplayMode = nil }
+
+            let newRows = shelfRows
+            if let row = newRows.firstIndex(where: { $0.contains(where: { $0.id == book.id }) }) {
+                let target = landingCenter(for: book.id, row: row, oldRows: oldRows,
+                                           newEntries: newRows[row], drag: drag)
+                dragMotion.translation = CGSize(
+                    width: target.x - drag.liftedCenter.x,
+                    height: target.y - drag.liftedCenter.y)
+            }
+        } completion: {
+            guard arrangingBook?.id == book.id else { return }
+            resetArrangeDrag(keepLifted: true)
+            shelfLayout.synchronize(shelfEntries.map(\.id))
+        }
+    }
+
+    /// Compute the final slot once, so the cover and neighbors share one spring without a layout-delay timer.
+    private func landingCenter(
+        for id: UUID, row: Int, oldRows: [[ShelfEntry]], newEntries: [ShelfEntry], drag: ShelfBookDrag
+    ) -> CGPoint {
+        let oldEntries = oldRows.indices.contains(row) ? oldRows[row] : []
+        func width(_ entry: ShelfEntry) -> CGFloat {
+            guard entry.importing == nil, let saved = entry.saved, saved.shelfDisplayMode == .spine else {
+                return drag.coverSize.width
+            }
+            return saved.spineWidth
+        }
+        let spacing: CGFloat = 12
+        var originX: CGFloat = row == 0 ? 30 : 16
+        var centerY = (shelfFrames[row]?.maxY ?? drag.sourceFrame.maxY + 10) - 10 - drag.coverSize.height / 2
+        if let anchorIndex = oldEntries.firstIndex(where: { coverFrames[$0.id] != nil }),
+           let anchor = coverFrames[oldEntries[anchorIndex].id] {
+            originX = anchor.minX - oldEntries.prefix(anchorIndex).reduce(0) { $0 + width($1) + spacing }
+            centerY = anchor.midY
+        }
+        guard let index = newEntries.firstIndex(where: { $0.id == id }) else { return drag.liftedCenter }
+        let precedingWidth = newEntries.prefix(index).reduce(0) { $0 + width($1) + spacing }
+        return CGPoint(x: originX + precedingWidth + width(newEntries[index]) / 2,
+                       y: centerY - arrangeLiftDistance)
+    }
+
+    private func dropShelf(at location: CGPoint, coverHeight: CGFloat) -> Int? {
+        shelfFrames
+            .filter { _, frame in
+                location.x >= frame.minX - 16 && location.x <= frame.maxX + 16
+                    && location.y >= frame.minY - coverHeight - 40 && location.y <= frame.maxY + 32
+            }
+            .min { abs($0.value.midY - coverHeight / 2 - location.y)
+                < abs($1.value.midY - coverHeight / 2 - location.y) }?.key
+    }
+
+    private func resetArrangeDrag(keepLifted: Bool = false) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            arrangeDrag = nil
+            frozenDragRows = nil
+            isSettlingDrag = false
+            isArrangeMenuVisible = keepLifted
+            arrangeLiftOffset = keepLifted ? -arrangeLiftDistance : 0
+            previewDisplayMode = nil
+            if keepLifted, let id = arrangingBook?.id {
+                arrangingBook = library.savedGenerations.first(where: { $0.id == id })
+                if arrangingBook == nil {
+                    isArrangeMenuVisible = false
+                    arrangeLiftOffset = 0
+                }
+            } else {
+                arrangingBook = nil
+            }
+            preparedDrag = arrangingBook.flatMap { makeArrangeDrag(for: $0) }
+            dragMotion.translation = .zero
+            longPressDragID = nil
+        }
+    }
+
+    private func moveBookAccessibly(_ book: SavedGenerationSummary, direction: ShelfMoveDirection) {
+        guard arrangingBook == nil, selectedBook == nil,
+              let row = shelfRows.firstIndex(where: { $0.contains(where: { $0.id == book.id }) }),
+              let index = shelfRows[row].firstIndex(where: { $0.id == book.id }) else { return }
+        var destination = row
+        var next: UUID?
+        switch direction {
+        case .earlier:
+            guard index > 0 else { return }
+            next = shelfRows[row][index - 1].id
+        case .later:
+            guard index + 1 < shelfRows[row].count else { return }
+            next = shelfRows[row].indices.contains(index + 2) ? shelfRows[row][index + 2].id : nil
+        case .shelfAbove: destination -= 1
+        case .shelfBelow: destination += 1
+        }
+        _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfEntries.map(\.id))
+    }
+
     private func beginArranging(_ book: SavedGenerationSummary) {
         guard selectedBook == nil, !isDismissingDetail, arrangingBook == nil else { return }
         previewDisplayMode = nil
         var selection = Transaction(animation: nil)
         selection.disablesAnimations = true
-        withTransaction(selection) { arrangingBook = book }
+        withTransaction(selection) {
+            preparedDrag = makeArrangeDrag(for: book)
+            arrangingBook = book
+        }
         withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.72)) {
             arrangeLiftOffset = -arrangeLiftDistance
             isArrangeMenuVisible = true
@@ -357,7 +652,7 @@ struct BookShelfView: View {
     /// but keeps its committed layout footprint, so nothing around it moves
     /// while the menu is still open. `endArranging` is what commits.
     private func toggleRotation() {
-        guard let book = arrangingBook, isArrangeMenuVisible else { return }
+        guard let book = arrangingBook, isArrangeMenuVisible, arrangeDrag == nil else { return }
         let current = previewDisplayMode ?? book.shelfDisplayMode
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.78)) {
             previewDisplayMode = current == .cover ? .spine : .cover
@@ -368,7 +663,7 @@ struct BookShelfView: View {
     /// commits the new orientation — which changes its layout width and so
     /// reflows the rest of the row in the same animation.
     private func endArranging() {
-        guard let book = arrangingBook, isArrangeMenuVisible else { return }
+        guard let book = arrangingBook, isArrangeMenuVisible, arrangeDrag == nil else { return }
         let committedMode = previewDisplayMode
 
         withAnimation(.easeOut(duration: 0.12)) { isArrangeMenuVisible = false }
@@ -584,14 +879,75 @@ private struct ShelfBottomBlur: View {
     }
 }
 
-/// A restrained, decorative echo of the newest covers. It is deliberately
-/// blurred enough to read as colour and depth behind the Shelf title rather
-/// than as another actionable set of books.
+/// Fine black paper grain behind the top 200pt of the shelf. The texture is
+/// deterministic and fades into the page instead of ending on a hard edge.
+private struct ShelfHeaderTextureBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.045),
+                    Color.black.opacity(0.018),
+                    .clear,
+                ],
+                startPoint: .top,
+                endPoint: .bottom)
+
+            Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+                let spacing: CGFloat = 2.4
+                let columns = Int(ceil(size.width / spacing))
+                let rows = Int(ceil(size.height / spacing))
+
+                for row in 0..<rows {
+                    for column in 0..<columns {
+                        let value = noise(column: column, row: row)
+                        let diameter = 0.42 + CGFloat((value >> 16) & 0x3) * 0.16
+                        let rect = CGRect(
+                            x: CGFloat(column) * spacing + CGFloat(value & 0xff) / 255 * spacing,
+                            y: CGFloat(row) * spacing + CGFloat((value >> 8) & 0xff) / 255 * spacing,
+                            width: diameter,
+                            height: diameter)
+                        let opacity = 0.035 + Double((value >> 20) & 0x7) * 0.006
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(Color.black.opacity(opacity)))
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 200)
+        .clipped()
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.58),
+                    .init(color: .black.opacity(0.72), location: 0.74),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func noise(column: Int, row: Int) -> UInt64 {
+        var value = UInt64(0xD1B54A32D192ED03)
+            ^ UInt64(column) &* 73_856_093
+            ^ UInt64(row) &* 19_349_663
+        value ^= value >> 13
+        value &*= 1_274_126_177
+        return value ^ (value >> 16)
+    }
+}
+
+/// A restrained, decorative echo of the newest covers. It remains layered
+/// above the paper texture and behind the title, preserving the original
+/// Shelf header.
 private struct ShelfHeaderBackdrop: View {
     let books: [SavedGenerationSummary]
 
-    // Fits inside the compact decorative canvas even after the outer covers'
-    // rotation, so the blurred artwork does not clip at either edge.
     private let coverSize = CGSize(width: 64, height: 96)
     private let positions: [CGFloat] = [0.30, 0.5, 0.70]
     private let angles: [Double] = [-11, 0, 11]
@@ -634,6 +990,7 @@ private struct ShelfEntry: Identifiable {
 
 private struct BookShelfRow: View {
     let shelfIndex: Int
+    let shelfTitle: String
     let entries: [ShelfEntry]
     let coverSize: CGSize
     let spacing: CGFloat
@@ -647,16 +1004,21 @@ private struct BookShelfRow: View {
     let onCancelImport: (UUID) -> Void
     let onRetryImport: (UUID) -> Void
     let onDeleteImport: (UUID) -> Void
+    let onImportSettled: (UUID) -> Void
     let onSelect: (SavedGenerationSummary) -> Void
     let onLongPress: (SavedGenerationSummary) -> Void
+    let onRenameShelf: () -> Void
+    let onMove: (SavedGenerationSummary, ShelfMoveDirection) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView(.horizontal) {
-                HStack(alignment: .bottom, spacing: spacing) {
+                LazyHStack(alignment: .bottom, spacing: spacing) {
                     ForEach(entries) { entry in
                         entryItem(for: entry)
+                            .id(entry.id)
+                            .transition(.identity)
                     }
                 }
                 // Extra headroom above the covers equal to liftDistance —
@@ -665,7 +1027,9 @@ private struct BookShelfRow: View {
                 // visibly cut off/jittery right at the peak of the lift.
                 .padding(.top, 12 + liftDistance)
                 .padding(.bottom, 10)
+                .background(ShelfScrollLock(isLocked: arrangingBookID != nil))
             }
+            .scrollDisabled(arrangingBookID != nil)
             .scrollIndicators(.hidden)
             // The glass shelf remains inset, while only the scroll viewport
             // extends to the screen edges so covers never clip at either end.
@@ -686,6 +1050,24 @@ private struct BookShelfRow: View {
                 }
                 .allowsHitTesting(false)
         }
+        .overlay(alignment: .topTrailing) {
+            Button(action: onRenameShelf) {
+                HStack(spacing: 5) {
+                    Text(shelfTitle)
+                        .lineLimit(1)
+                    LucideIcon(.pencil, size: 12, color: BookShelfPalette.secondaryText.opacity(0.72))
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(BookShelfPalette.secondaryText)
+                .padding(.horizontal, 8)
+                .frame(minHeight: 30)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(arrangingBookID != nil)
+            .padding(.trailing, 4)
+            .accessibilityLabel("Rename \(shelfTitle) shelf")
+        }
         // Bottom-aligned, so the extra liftDistance headroom is added above
         // the covers only — the shelf/glass strip's own bottom position is
         // unaffected.
@@ -705,8 +1087,15 @@ private struct BookShelfRow: View {
                 liftDistance: 15,
                 onCancel: { onCancelImport(importing.id) },
                 onRetry: { onRetryImport(importing.id) },
-                onDelete: { onDeleteImport(importing.id) })
+                onDelete: { onDeleteImport(importing.id) },
+                onSettled: { onImportSettled(importing.id) })
             .zIndex(1)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: BookCoverFramePreferenceKey.self,
+                        value: [entry.id: proxy.frame(in: .named(bookShelfModalCoordinateSpace))])
+                }
+            }
         } else if let book = entry.saved {
             bookItem(for: book)
         }
@@ -716,17 +1105,9 @@ private struct BookShelfRow: View {
         interactiveCover(for: book)
             .zIndex(isRaised(book) ? 1 : 0)
             .background { frameReporter(for: book) }
-            .transaction { transaction in
-                transaction.animation = nil
-            }
     }
 
-    /// Deliberately *not* a `Button`: a Button's own gesture recognizer
-    /// claims the touch before any long press attached to it can resolve, so
-    /// the menu never opened. A plain view with both gestures lets SwiftUI
-    /// arbitrate them properly — quick release taps, hold opens the menu —
-    /// and `presentDetail` guards the case where a release after the long
-    /// press still fires the tap.
+    /// Show options on hold; the viewport owns the drag so lazy row reuse cannot cancel it.
     private func interactiveCover(for book: SavedGenerationSummary) -> some View {
         shelfCover(for: book)
             .contentShape(Rectangle())
@@ -735,8 +1116,12 @@ private struct BookShelfRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel("\(book.title), \(book.pageCountLabel)")
-            .accessibilityHint("Opens this book")
+            .accessibilityHint("Opens this book. Hold to show options, then drag to move it.")
             .accessibilityAction(named: "Book options") { onLongPress(book) }
+            .accessibilityAction(named: "Move earlier") { onMove(book, .earlier) }
+            .accessibilityAction(named: "Move later") { onMove(book, .later) }
+            .accessibilityAction(named: "Move to shelf above") { onMove(book, .shelfAbove) }
+            .accessibilityAction(named: "Move to shelf below") { onMove(book, .shelfBelow) }
     }
 
     private func isRaised(_ book: SavedGenerationSummary) -> Bool {
@@ -758,12 +1143,7 @@ private struct BookShelfRow: View {
         }
     }
 
-    /// The fixed layout slot with the turning book drawn into it.
-    ///
-    /// Every animation here has to be an explicit `.animation(_:value:)`:
-    /// the row applies `.transaction { animation = nil }` per book, and only
-    /// a value-scoped animation wins over that override — a plain
-    /// `withAnimation` at the call site does not reach in here.
+    /// Layout reflows only on commit; rotation remains a visual preview while lifted.
     private func slot(
         size layoutSize: CGSize, book: SavedGenerationSummary, angle: Double
     ) -> some View {
@@ -780,6 +1160,7 @@ private struct BookShelfRow: View {
                     title: book.title,
                     coverSize: coverSize,
                     spineWidth: book.spineWidth,
+                    spineArtworkURL: book.spineArtworkURL,
                     angle: angle)
                     .animation(reduceMotion ? nil : rotationAnimation, value: angle)
             }
@@ -832,7 +1213,7 @@ private struct BookShelfRow: View {
 /// from the book's own measured frame (`BookCoverFramePreferenceKey`, which
 /// the shelf already tracks for the detail-modal hero), clamped so it can't
 /// run off either screen edge for a book at the end of a row.
-private struct BookArrangeMenu: View {
+struct BookArrangeMenu: View {
     let isSpine: Bool
     let anchor: CGRect?
     let onRotate: () -> Void
@@ -1020,6 +1401,7 @@ private struct BookShelfDetailModal: View, Animatable {
                 title: book.title,
                 coverSize: metrics.coverSize,
                 spineWidth: book.spineWidth,
+                spineArtworkURL: book.spineArtworkURL,
                 angle: metrics.coverAngle)
                 .frame(
                     width: metrics.coverSize.width,
@@ -1102,22 +1484,35 @@ private struct BookShelfDetailModal: View, Animatable {
                         width: geometry.size.width,
                         height: geometry.size.height / 2)
                     .clipped()
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.72),
-                                .init(color: .clear, location: 1),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom)
-                    }
+                    .mask { modalHeaderFade }
                     .opacity(showsDetails ? 0.58 : 0)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+
+                if showsDetails {
+                    ModalCoverGrain(seed: book.title)
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height / 2)
+                        .mask { modalHeaderFade }
+                        .opacity(0.62)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private var modalHeaderFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.72),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom)
     }
 
     private func heroMetrics(in geometry: GeometryProxy) -> BookHeroMetrics {
@@ -1272,7 +1667,7 @@ private struct BookShelfDetailModal: View, Animatable {
 
             VStack(spacing: 18) {
                 Text(book.title)
-                    .font(.custom("Didot-Bold", size: 22, relativeTo: .title2))
+                    .font(.custom("Inter", size: 22, relativeTo: .title2).weight(.medium))
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -1389,7 +1784,51 @@ private struct BookShelfDetailModal: View, Animatable {
     }
 }
 
-private let bookShelfModalCoordinateSpace = "book-shelf-modal"
+private struct ModalCoverGrain: View {
+    let seed: String
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+            let spacing: CGFloat = 2.75
+            let columns = Int(ceil(size.width / spacing))
+            let rows = Int(ceil(size.height / spacing))
+
+            for row in 0..<rows {
+                for column in 0..<columns {
+                    let value = noise(column: column, row: row)
+                    let offsetX = CGFloat(value & 0xff) / 255 * spacing
+                    let offsetY = CGFloat((value >> 8) & 0xff) / 255 * spacing
+                    let diameter = 0.65 + CGFloat((value >> 16) & 0x3) * 0.22
+                    let opacity = 0.20 + Double((value >> 20) & 0x7) * 0.024
+                    let rect = CGRect(
+                        x: CGFloat(column) * spacing + offsetX,
+                        y: CGFloat(row) * spacing + offsetY,
+                        width: diameter,
+                        height: diameter)
+                    let color = value.isMultiple(of: 3) ? Color.white : Color.black
+                    context.fill(Path(ellipseIn: rect), with: .color(color.opacity(opacity)))
+                }
+            }
+        }
+    }
+
+    private var seedValue: UInt64 {
+        seed.utf8.reduce(1_469_598_103_934_665_603) {
+            ($0 ^ UInt64($1)) &* 1_099_511_628_211
+        }
+    }
+
+    private func noise(column: Int, row: Int) -> UInt64 {
+        var value = seedValue
+            ^ UInt64(column) &* 73_856_093
+            ^ UInt64(row) &* 19_349_663
+        value ^= value >> 13
+        value &*= 1_274_126_177
+        return value ^ (value >> 16)
+    }
+}
+
+let bookShelfModalCoordinateSpace = "book-shelf-modal"
 
 /// Explicit animation for the shelf row's arrangement preview.
 private let bookShelfRotationAnimation: Animation = .spring(

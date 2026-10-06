@@ -133,24 +133,34 @@ actor PDFProcessingActor {
         await progress(PDFProcessingProgress(
             phase: .finalizing, totalPages: pageCount, completedPages: pageCount,
             overallProgress: 0.99, coverAvailable: coverURL != nil))
+        let spineArtworkURL: URL?
+        if let coverURL {
+            spineArtworkURL = await makeSpineArtwork(
+                coverURL: coverURL,
+                destination: job.spineArtworkURL,
+                title: job.sourceFileName,
+                pageCount: pageCount)
+        } else {
+            spineArtworkURL = nil
+        }
+        try Task.checkCancellation()
         return PDFImportResult(
             title: job.sourceFileName,
             pagesDirectory: job.readerPagesDirectory,
             sourceURL: job.sourceURL,
             pageCount: pageCount,
-            coverURL: coverURL)
+            coverURL: coverURL,
+            spineArtworkURL: spineArtworkURL,
+            // A PDF has no table of contents this pipeline reads; chapter
+            // titles are an EPUB-only concept for now.
+            chaptersURL: nil)
     }
 
-    /// Uses PDFKit's rendered crop-box image instead of retaining a PDF page
-    /// object beyond this actor. The final JPEG is a 600×900 2:3 book-cover
-    /// image; pages with another aspect ratio are center-cropped, never
-    /// stretched, into that presentation format.
+    /// Renders bounded cover artwork without exporting PDFKit objects.
     private func makeCoverThumbnail(document: PDFDocument, job: PDFImportJob) -> URL? {
-        if FileManager.default.fileExists(atPath: job.coverURL.path) {
-            return job.coverURL
-        }
+        if FileManager.default.fileExists(atPath: job.coverURL.path) { return job.coverURL }
         guard let firstPage = document.page(at: 0) else { return nil }
-        let data: Data? = autoreleasepool {
+        let coverData: Data? = autoreleasepool {
             let coverSize = CGSize(width: 600, height: 900)
             let pageImage = firstPage.thumbnail(
                 of: CGSize(width: 1200, height: 1800), for: .cropBox)
@@ -167,12 +177,41 @@ actor PDFProcessingActor {
                     width: renderedSize.width,
                     height: renderedSize.height))
             }
-            return coverImage.jpegData(compressionQuality: 0.84)
+            guard let coverData = coverImage.jpegData(compressionQuality: 0.84) else {
+                return nil
+            }
+            return coverData
         }
-        guard let data else { return nil }
+        guard let coverData else { return nil }
         do {
-            try data.write(to: job.coverURL, options: .atomic)
+            try coverData.write(to: job.coverURL, options: .atomic)
             return job.coverURL
+        } catch {
+            return nil
+        }
+    }
+
+    private func makeSpineArtwork(
+        coverURL: URL,
+        destination: URL,
+        title: String,
+        pageCount: Int
+    ) async -> URL? {
+        if FileManager.default.fileExists(atPath: destination.path) { return destination }
+        guard let coverData = try? Data(contentsOf: coverURL) else { return nil }
+        let size = CGSize(
+            width: SavedGenerationSummary.spineWidth(forPageCount: pageCount),
+            height: SavedProjectSpineRenderer.shelfHeight)
+        guard let pngData = await SavedProjectSpineRenderer.pngData(
+            coverData: coverData,
+            title: title,
+            size: size)
+        else { return nil }
+        guard !Task.isCancelled else { return nil }
+
+        do {
+            try pngData.write(to: destination, options: .atomic)
+            return destination
         } catch {
             return nil
         }

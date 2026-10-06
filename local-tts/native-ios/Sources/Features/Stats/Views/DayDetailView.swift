@@ -3,10 +3,7 @@ import SwiftUI
 
 /// One day's detail, reached by tapping a cell in `ContributionGraphView` —
 /// which books were read, pages completed, time listened, and voice used,
-/// per book. Light-themed with `BookShelfPalette` to match `ReadingStatsView`,
-/// the light page this is presented from — unlike a pushed destination, a
-/// `.sheet` needs its own explicit `.preferredColorScheme` rather than
-/// inheriting one from the presenter's `.environment`.
+/// per book. Its explicit dark sheet scheme matches Reading Stats.
 struct DayDetailView: View {
     let detail: DayDetail
     @Environment(\.dismiss) private var dismiss
@@ -17,26 +14,26 @@ struct DayDetailView: View {
                 Section {
                     summaryRow
                 }
-                .listRowBackground(BookShelfPalette.background)
+                .listRowBackground(Color.appSecondaryBackground)
 
                 if detail.books.isEmpty {
                     Section {
                         Text("No activity this day.")
                             .font(AppTextStyle.labelDim.font)
-                            .foregroundStyle(BookShelfPalette.secondaryText)
+                            .foregroundStyle(Color.appSecondaryText)
                     }
-                    .listRowBackground(BookShelfPalette.background)
+                    .listRowBackground(Color.appSecondaryBackground)
                 } else {
                     Section("Books") {
                         ForEach(detail.books) { book in
                             bookRow(book)
                         }
                     }
-                    .listRowBackground(BookShelfPalette.background)
+                    .listRowBackground(Color.appSecondaryBackground)
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(BookShelfPalette.background)
+            .background(Color.appBackground)
             .navigationTitle(detail.day.formatted(date: .abbreviated, time: .omitted))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -45,7 +42,9 @@ struct DayDetailView: View {
                 }
             }
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
+        .tint(Color.appPrimaryText)
+        .presentationBackground(Color.appBackground)
         .presentationDetents([.medium, .large])
     }
 
@@ -54,19 +53,19 @@ struct DayDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.durationLabel(detail.totalListenedSeconds))
                     .font(AppTextStyle.cardTitle.font)
-                    .foregroundStyle(BookShelfPalette.primaryText)
+                    .foregroundStyle(Color.appPrimaryText)
                 Text("listened")
                     .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(BookShelfPalette.secondaryText)
+                    .foregroundStyle(Color.appSecondaryText)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(detail.totalPagesCompleted)")
                     .font(AppTextStyle.cardTitle.font)
-                    .foregroundStyle(BookShelfPalette.primaryText)
+                    .foregroundStyle(Color.appPrimaryText)
                 Text(detail.totalPagesCompleted == 1 ? "page" : "pages")
                     .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(BookShelfPalette.secondaryText)
+                    .foregroundStyle(Color.appSecondaryText)
             }
         }
         .padding(.vertical, 4)
@@ -74,25 +73,25 @@ struct DayDetailView: View {
 
     private func bookRow(_ book: DayDetailBookRow) -> some View {
         HStack(spacing: 12) {
-            LucideIcon(.book, color: BookShelfPalette.secondaryText)
+            LucideIcon(.book, color: Color.appSecondaryText)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(book.bookTitle)
                     .font(AppTextStyle.rowTitle.font)
-                    .foregroundStyle(BookShelfPalette.primaryText)
+                    .foregroundStyle(Color.appPrimaryText)
                 Text(book.voiceNames.joined(separator: ", "))
                     .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(BookShelfPalette.secondaryText)
+                    .foregroundStyle(Color.appSecondaryText)
                     .lineLimit(1)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Self.durationLabel(book.listenedSeconds))
                     .font(AppTextStyle.label.font)
-                    .foregroundStyle(BookShelfPalette.primaryText)
+                    .foregroundStyle(Color.appPrimaryText)
                 Text("\(book.pagesCompleted) \(book.pagesCompleted == 1 ? "page" : "pages")")
                     .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(BookShelfPalette.secondaryText)
+                    .foregroundStyle(Color.appSecondaryText)
             }
         }
         .padding(.vertical, 2)

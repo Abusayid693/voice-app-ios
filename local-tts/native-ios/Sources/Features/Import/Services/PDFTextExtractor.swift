@@ -32,7 +32,9 @@ struct PDFKitTextExtractor: PDFTextExtractor {
 
             return PDFPageContent(
                 pageIndex: index, pageWidth: visualSize.width, pageHeight: visualSize.height,
-                lines: order(lines: lines, pageWidth: visualSize.width))
+                lines: order(
+                    lines: mergingSplitLines(deduplicatingOverlaps(lines)),
+                    pageWidth: visualSize.width))
         }
     }
 
@@ -138,7 +140,14 @@ struct PDFKitTextExtractor: PDFTextExtractor {
                 // A soft hyphen only means something at a wrap, where the
                 // assembler's dehyphenation needs to see it as a hyphen.
                 value.append("-")
-            case 0x0009, 0x00A0, 0x2000...0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000:
+            // A line break *inside* one extracted line is PDFKit reporting a
+            // run it could not keep in order, not a real break — a decorative
+            // chapter title came back as "nnie\nA". Downstream a newline means
+            // a paragraph boundary (`makeReaderPage` joins paragraphs with
+            // "\n\n", and `spokenText` now closes a sentence at each one), so
+            // leaving it in turns one confused line into several.
+            case 0x0009, 0x000A, 0x000D, 0x00A0, 0x2000...0x200A, 0x2028, 0x2029,
+                 0x202F, 0x205F, 0x3000:
                 value.append(" ")
             default:
                 value.append(character)
@@ -206,6 +215,124 @@ struct PDFKitTextExtractor: PDFTextExtractor {
         case 90, 270: return CGSize(width: cropBox.height, height: cropBox.width)
         default: return CGSize(width: cropBox.width, height: cropBox.height)
         }
+    }
+
+    /// Drops selections that claim the exact same rectangle as another.
+    ///
+    /// A decorative chapter title drawn with swash capitals came back as four
+    /// selections over one identical rect, each holding a scrambled slice of
+    /// the same word — `nnie A`, `e A`, `e A`, `e A`. Identical bounds mean
+    /// PDFKit has read one run several ways, not that there are several runs,
+    /// so the longest is kept and the rest discarded. That stops one confused
+    /// line from becoming four, but leaves it scrambled: the word order is only
+    /// recoverable one level further down, from per-glyph positions this
+    /// selection-based pipeline never sees (`page.characterBounds(at:)`, which
+    /// is indexed by *glyph* — so a page's inserted newlines shift every index
+    /// after the first one).
+    private func deduplicatingOverlaps(_ lines: [PDFTextFragment]) -> [PDFTextFragment] {
+        guard lines.count > 1 else { return lines }
+        var kept: [PDFTextFragment] = []
+        for line in lines.sorted(by: { $0.text.count > $1.text.count }) {
+            let duplicate = kept.contains { other in
+                abs(other.bounds.x - line.bounds.x) < 0.5
+                    && abs(other.bounds.y - line.bounds.y) < 0.5
+                    && abs(other.bounds.width - line.bounds.width) < 0.5
+                    && abs(other.bounds.height - line.bounds.height) < 0.5
+            }
+            if !duplicate { kept.append(line) }
+        }
+        return kept
+    }
+
+    /// Rejoins pieces of one visual line that `selectionsByLine()` handed back
+    /// separately — a style change mid-line, or a short trailing word.
+    ///
+    /// This has to run *before* `order`, because a stray piece wrecks column
+    /// inference rather than merely looking untidy. On a page whose body line
+    /// ends `…numbers. Today,` + `Mike` as two selections, that lone `Mike` sits
+    /// far to the right of its own line, so `orderColumns` clusters it as a
+    /// third column of its own. `areSideBySideColumns` then rejects the *entire*
+    /// layout — it requires every cluster to hold at least a couple of lines —
+    /// and falls back to row ordering, which reads a real two-column region
+    /// (a pull-quote beside body text) straight across: quote line, body line,
+    /// quote line, body line. `PDFParagraphAssembler.combining` would have
+    /// merged the same pieces, but it only runs after ordering, by which point
+    /// the interleaving has already happened.
+    ///
+    /// The gap ceiling is deliberately far tighter than the assembler's: that
+    /// one runs once columns are already separated, while this runs before, so
+    /// it must stay well under a gutter. Measured across the pull-quote pages
+    /// this was written for, a word space runs ~0.22em while the tightest
+    /// gutter is ~0.75em of the quote's own size — which is why 0.5em, and why
+    /// the font-size test below carries most of the weight rather than the gap
+    /// alone.
+    private func mergingSplitLines(_ lines: [PDFTextFragment]) -> [PDFTextFragment] {
+        guard lines.count > 1 else { return lines }
+        var remaining = lines.sorted {
+            $0.bounds.y == $1.bounds.y ? $0.bounds.x < $1.bounds.x : $0.bounds.y < $1.bounds.y
+        }
+        var result: [PDFTextFragment] = []
+        while !remaining.isEmpty {
+            var current = remaining.removeFirst()
+            var merged = true
+            while merged {
+                merged = false
+                for index in remaining.indices where sharesRow(current, remaining[index]) {
+                    let candidate = remaining[index]
+                    // Pieces of one line share a size. A pull-quote beside body
+                    // text does not, and that is the case this must never merge:
+                    // one page sets its quote at 14pt against 12pt body with
+                    // only 10.4pt of gutter, which no gap rule alone separates
+                    // from an ordinary word space.
+                    let sizeGap = abs(current.fontSize - candidate.fontSize)
+                    guard sizeGap <= max(current.fontSize, candidate.fontSize) * 0.1
+                    else { continue }
+                    let gap = candidate.bounds.x - current.bounds.maxX
+                    let reference = max(current.fontSize, 8)
+                    // Allow a hair of overlap: adjoining glyph runs can report
+                    // bounds that touch or cross by a fraction of a point.
+                    guard gap >= -1, gap < reference * 0.5 else { continue }
+                    current = joining(current, candidate, gap: gap, reference: reference)
+                    remaining.remove(at: index)
+                    merged = true
+                    break
+                }
+            }
+            result.append(current)
+        }
+        return result
+    }
+
+    private func sharesRow(_ lhs: PDFTextFragment, _ rhs: PDFTextFragment) -> Bool {
+        let overlap = min(lhs.bounds.maxY, rhs.bounds.maxY) - max(lhs.bounds.y, rhs.bounds.y)
+        let shorter = min(lhs.bounds.height, rhs.bounds.height)
+        return shorter > 0 && overlap / shorter > 0.5
+    }
+
+    private func joining(
+        _ lhs: PDFTextFragment, _ rhs: PDFTextFragment, gap: Double, reference: Double
+    ) -> PDFTextFragment {
+        // Only genuinely abutting pieces join without a space — a closing quote
+        // and the period that follows it, say. This book's word space measures
+        // ~0.22em, so a threshold at that figure sat right on top of it and
+        // dropped real spaces ("important" + "to be" -> "importantto be");
+        // 0.08em separates a touching pair from a spaced one with room either
+        // side.
+        let separator = gap > reference * 0.08 ? " " : ""
+        let x = min(lhs.bounds.x, rhs.bounds.x)
+        let y = min(lhs.bounds.y, rhs.bounds.y)
+        let union = CGRect(
+            x: x, y: y,
+            width: max(lhs.bounds.maxX, rhs.bounds.maxX) - x,
+            height: max(lhs.bounds.maxY, rhs.bounds.maxY) - y)
+        // Typography follows whichever piece carries more of the text, so a
+        // one-word tail cannot redefine the line's size or weight.
+        let dominant = lhs.text.count >= rhs.text.count ? lhs : rhs
+        return PDFTextFragment(
+            text: lhs.text + separator + rhs.text, pageIndex: lhs.pageIndex,
+            bounds: PDFNormalizedRect(union), fontName: dominant.fontName,
+            fontSize: dominant.fontSize, weight: dominant.weight,
+            fontClass: dominant.fontClass)
     }
 
     /// PDF text operators are not a reading-order guarantee. This produces a
