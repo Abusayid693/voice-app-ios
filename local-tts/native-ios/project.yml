@@ -38,6 +38,18 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+        # Vendored libraries each keep their own README/LICENSE for
+        # attribution (see Sources/Vendor/*'s own doc comments) — excluded
+        # here because the whole-folder scan otherwise bundles them as
+        # resources, and two vendored folders both naming theirs README.md
+        # collide at the app bundle's flattened root ("Multiple commands
+        # produce .../README.md"), the first time a second vendored library
+        # was added after ThinkingOrbsKit. Docs, not resources, so excluding
+        # them changes nothing the app actually uses.
+        excludes:
+          - "**/README.md"
+          - "**/LICENSE"
+          - "**/LICENSE.md"
       # Locally-converted (laishere/kokoro-coreml) Kokoro-ANE models, staged
       # for a one-off custom-voice test — see DependencyContainer.swift.
       # `type: folder` forces Xcode to copy this as a single folder
