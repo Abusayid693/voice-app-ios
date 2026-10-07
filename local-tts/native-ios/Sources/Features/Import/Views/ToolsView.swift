@@ -66,9 +66,9 @@ struct ToolsView: View {
 }
 
 /// One tappable action row — icon avatar, title/subtitle, trailing chevron.
-/// Deliberately its own lightweight type rather than reusing `GenerationRow`
-/// (DesignSystem), which is shaped around a saved generation's cover art and
-/// play affordance, not a generic action menu.
+/// Deliberately its own lightweight type rather than borrowing the Library's
+/// saved-book row treatment, which is shaped around cover art and reading
+/// progress rather than a generic action menu.
 private struct ToolActionRow: View {
     let icon: LucideIconName
     let title: String

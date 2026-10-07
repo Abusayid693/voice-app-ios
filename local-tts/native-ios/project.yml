@@ -24,8 +24,8 @@ packages:
   LucideSwift:
     url: https://github.com/ajaxjiang96/lucide-swift
     exactVersion: 0.9.4
-  # Replacing LucideSwift in some call sites (GenerationRow,
-  # ImportHomeView, the archived Explore menu) — both packages are
+  # Replacing LucideSwift in some call sites (ImportHomeView and the
+  # archived Explore menu) — both packages are
   # present since the migration isn't complete across every icon call
   # site yet. No tagged release as of this pin; revision is
   # hugeicons-swift's own main at the time this was added.

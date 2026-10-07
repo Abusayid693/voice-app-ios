@@ -150,7 +150,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     var summary: SavedGenerationSummary {
         SavedGenerationSummary(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: createdAt, pageCount: pageCount, source: source,
+            createdAt: createdAt, pageCount: pageCount, lastReadPageIndex: lastReadPageIndex, source: source,
             shelfDisplayMode: shelfDisplayMode, shelfOrder: shelfOrder)
     }
 
@@ -196,6 +196,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     let voiceName: String
     let createdAt: Date
     let pageCount: Int
+    var lastReadPageIndex: Int = 0
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
     var shelfOrder: Int?
@@ -207,6 +208,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         voiceName: String,
         createdAt: Date,
         pageCount: Int,
+        lastReadPageIndex: Int = 0,
         source: SavedProjectSource = .unknown,
         shelfDisplayMode: ShelfDisplayMode = .cover,
         shelfOrder: Int? = nil
@@ -217,13 +219,15 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         self.voiceName = voiceName
         self.createdAt = createdAt
         self.pageCount = pageCount
+        self.lastReadPageIndex = lastReadPageIndex
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
         self.shelfOrder = shelfOrder
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, engine, voiceName, createdAt, pageCount, source, shelfDisplayMode, shelfOrder
+        case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
+        case shelfDisplayMode, shelfOrder
     }
 
     /// Existing indexes did not record an origin. Leave those entries out of
@@ -236,6 +240,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         voiceName = try container.decode(String.self, forKey: .voiceName)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         pageCount = try container.decode(Int.self, forKey: .pageCount)
+        lastReadPageIndex = try container.decodeIfPresent(Int.self, forKey: .lastReadPageIndex) ?? 0
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
@@ -261,6 +266,14 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
 
     var pageCountLabel: String {
         "\(pageCount) \(pageCount == 1 ? "page" : "pages")"
+    }
+
+    /// A resume position maps the first page to 0% and the last page to 100%.
+    /// A single-page project has no observable travel distance, so it remains
+    /// at 0% until the app gains a separate completion state.
+    var readingProgress: Double {
+        guard pageCount > 1 else { return 0 }
+        return Double(min(max(lastReadPageIndex, 0), pageCount - 1)) / Double(pageCount - 1)
     }
 
     /// Covers are optional: typed text and PDF projects made before cover

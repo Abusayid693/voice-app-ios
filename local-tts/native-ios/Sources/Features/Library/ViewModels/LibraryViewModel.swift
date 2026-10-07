@@ -142,14 +142,23 @@ final class LibraryViewModel: ObservableObject {
         return ReaderPagePreview(index: index, excerpt: excerpt, isBlank: false)
     }
 
-    /// Records successful page changes without disturbing the library's
-    /// creation-date ordering in its lightweight project index.
+    /// Records successful page changes and republishes the lightweight index
+    /// so Library's resume-position progress stays current.
     func recordLastReadPage(index: Int, for projectID: UUID) {
         guard var project = project(for: projectID), index >= 0, index < project.pageCount else { return }
         guard project.lastReadPageIndex != index else { return }
         project.lastReadPageIndex = index
         guard let data = try? JSONEncoder().encode(project) else { return }
-        try? data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+
+        do {
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let summaryIndex = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[summaryIndex] = project.summary
+                Self.persistIndex(savedGenerations)
+            }
+        } catch {
+            return
+        }
     }
 
     /// Changes the project-wide voice. Playback is always synthesized on
