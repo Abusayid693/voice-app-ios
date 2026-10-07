@@ -1,4 +1,3 @@
-import Hugeicons
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -18,7 +17,7 @@ enum AppTab: Hashable, CaseIterable {
     }
 
     // System metadata for the hidden native tab bar. The visible custom row
-    // uses the Hugeicons artwork below.
+    // uses code-native DesignSystem artwork below.
     var systemImage: String {
         switch self {
         case .shelf: return "books.vertical"
@@ -28,12 +27,12 @@ enum AppTab: Hashable, CaseIterable {
         }
     }
 
-    var icon: HugeiconsAsset {
+    var icon: TabNavigationIconKind {
         switch self {
-        case .shelf: return Hugeicons.doorOpen
-        case .stats: return Hugeicons.borderNone02
-        case .tools: return Hugeicons.appleVisionPro
-        case .library: return Hugeicons.folderLibrary
+        case .shelf: return .shelf
+        case .stats: return .stats
+        case .tools: return .tools
+        case .library: return .library
         }
     }
 
@@ -77,6 +76,7 @@ struct RootTabView: View {
     var body: some View {
         SettingsDrawerPresentation(
             viewModel: app.tts,
+            previewPlayer: app.previewPlayer,
             isPresented: $isSettingsPresented,
             isEdgeSwipeEnabled: selectedTab == .shelf
                 && readerRoute == nil
@@ -286,7 +286,7 @@ struct RootTabView: View {
 }
 
 /// Custom presentation over the retained system TabView. Each item is an
-/// equally sized icon-and-label target, with the reference's orange selection
+/// equally sized icon-and-label target, with the shared coral selection
 /// and muted blue-gray resting state. Only the selection binding navigates.
 private struct AppTabBar: View {
     @Binding var selection: AppTab
@@ -351,10 +351,7 @@ private struct AnimatedTabIcon: View {
     }
 
     var body: some View {
-        tab.icon.image()
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
+        TabNavigationIcon(kind: tab.icon, isSelected: isSelected)
             .frame(width: 26, height: 26)
             .scaleEffect(1 - 0.38 * motion)
             .rotationEffect(.degrees(flatTurn * Double(motion)))
@@ -402,7 +399,7 @@ private struct AnimatedTabIcon: View {
     private var flatTurn: Double {
         switch tab {
         case .shelf: return 0
-        case .stats: return 65
+        case .stats: return 0
         case .tools: return -18
         case .library: return -24
         }

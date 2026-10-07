@@ -1,5 +1,7 @@
+import CoreText
 import LucideSwift
 import SwiftUI
+import UIKit
 
 /// The retained Stats tab root — a GitHub-style contribution graph of
 /// listening activity, with a tappable day showing per-book detail, plus
@@ -27,11 +29,14 @@ struct ReadingStatsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                TexturedDarkBackground()
+                TexturedDarkBackground(variant: .sidebar)
                     .ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
+                        StatsSignatureTitle(isRevealed: contentRevealed)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
                         currentDayHeader
                             .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0.10))
 
@@ -52,22 +57,12 @@ struct ReadingStatsView: View {
                                 isVisible: contentRevealed, delay: gaugeRevealDelay))
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.top, 80)
+                    .padding(.bottom, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Reading Stats")
-                        .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.appPrimaryText)
-                        .accessibilityAddTraits(.isHeader)
-                        .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0))
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .preferredColorScheme(.dark)
         .task(id: refreshToken) { await viewModel.reload() }
@@ -157,6 +152,121 @@ struct ReadingStatsView: View {
                 .foregroundStyle(Color.appSecondaryText)
         }
         .padding(.top, 8)
+    }
+}
+
+/// Presentation-only outline drawing. The hidden Text reserves the final title's
+/// layout; cached Core Text contours keep font shaping out of animation frames.
+private struct StatsSignatureTitle: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title) private var fontSize: CGFloat = 36
+    let isRevealed: Bool
+
+    private static let font: UIFont = {
+        let base = UIFont(name: "EBGaramond-Italic", size: 36)
+            ?? UIFont.italicSystemFont(ofSize: 36)
+        let descriptor = base.fontDescriptor.addingAttributes([
+            .traits: [UIFontDescriptor.TraitKey.weight: UIFont.Weight.medium]
+        ])
+        return UIFont(descriptor: descriptor, size: 36)
+    }()
+
+    private static let artwork = StatsSignatureArtwork(font: font)
+
+    var body: some View {
+        Text("Reading Stats")
+            .font(Font(Self.font.withSize(fontSize)))
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .hidden()
+            .overlay {
+                StatsSignatureInk(
+                    artwork: Self.artwork,
+                    progress: reduceMotion || isRevealed ? 1 : 0)
+                    .animation(
+                        isRevealed && !reduceMotion ? .linear(duration: 1.15) : nil,
+                        value: isRevealed)
+                    .allowsHitTesting(false)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Reading Stats")
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// All coordinates are shaped once at 36pt, including kerning and italic overhang.
+private struct StatsSignatureArtwork {
+    let glyphs: [Path]
+    let bounds: CGRect
+
+    init(font: UIFont) {
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: "Reading Stats", attributes: [.font: font]))
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        let width = CTLineGetTypographicBounds(line, &ascent, &descent, nil)
+        var paths: [Path] = []
+        var bounds = CGRect(x: 0, y: 0, width: CGFloat(width), height: ascent + descent)
+
+        for run in CTLineGetGlyphRuns(line) as! [CTRun] {
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            let runFont = attributes[kCTFontAttributeName] as! CTFont
+            let count = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
+            CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
+
+            for index in 0..<count {
+                guard let outline = CTFontCreatePathForGlyph(runFont, glyphs[index], nil)
+                else { continue } // Spaces advance the layout without a drawn contour.
+                let path = Path(outline).applying(CGAffineTransform(
+                    a: 1, b: 0, c: 0, d: -1,
+                    tx: positions[index].x, ty: ascent - positions[index].y))
+                paths.append(path)
+                bounds = bounds.union(path.boundingRect)
+            }
+        }
+        self.glyphs = paths
+        self.bounds = bounds
+    }
+}
+
+/// Only this small Canvas interpolates every frame; the Stats grid is unaffected.
+private struct StatsSignatureInk: View, Animatable {
+    let artwork: StatsSignatureArtwork
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var body: some View {
+        Canvas { context, size in
+            let bounds = artwork.bounds
+            guard bounds.width > 0, bounds.height > 0 else { return }
+            let scale = min(size.width / bounds.width, size.height / bounds.height)
+            let transform = CGAffineTransform(
+                a: scale, b: 0, c: 0, d: scale,
+                tx: (size.width - bounds.width * scale) / 2 - bounds.minX * scale,
+                ty: (size.height - bounds.height * scale) / 2 - bounds.minY * scale)
+
+            for (index, glyph) in artwork.glyphs.enumerated() {
+                let start = Double(index) / Double(max(1, artwork.glyphs.count - 1)) * 0.68
+                let drawn = min(1, max(0, (progress - start) / 0.32))
+                guard drawn > 0 else { continue }
+                let fillPhase = min(1, max(0, (drawn - 0.65) / 0.35))
+                let fill = fillPhase * fillPhase * (3 - 2 * fillPhase)
+                let path = glyph.applying(transform)
+
+                context.stroke(
+                    path.trimmedPath(from: 0, to: CGFloat(drawn)),
+                    with: .color(Color.appPrimaryText.opacity(1 - fill)),
+                    style: StrokeStyle(lineWidth: 0.75 * scale, lineCap: .round, lineJoin: .round))
+                context.fill(path, with: .color(Color.appPrimaryText.opacity(fill)))
+            }
+        }
     }
 }
 

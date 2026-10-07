@@ -73,36 +73,29 @@ struct ImportHomeView: View {
 
     private var addBooksButton: some View {
         Button(action: onAddBooks) {
-            Image(systemName: "plus")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Color.tabInactive(for: .light))
+            Text("+")
+                .font(.custom("EBGaramond-Italic", size: 32, relativeTo: .title))
+                .fontWeight(.medium)
+                .foregroundStyle(Color.white)
+                // EB Garamond's ascender metrics leave the visible plus low
+                // inside a square frame; compensate optically without moving
+                // the button's hit target or glass surface.
+                .offset(y: -3)
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
         }
         .buttonStyle(.pressOpacity)
-        .modifier(ShelfAddBooksGlass())
+        .modifier(ShelfAddBooksSurface())
         .disabled(isBookDetailPresented)
         .accessibilityLabel("Add Books")
         .accessibilityHint("Choose a PDF or EPUB to add to your shelf")
     }
 }
 
-private struct ShelfAddBooksGlass: ViewModifier {
-    @ViewBuilder
+private struct ShelfAddBooksSurface: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(.clear.interactive(), in: Circle())
-                .shadow(color: Color.tabInactive(for: .light).opacity(0.28), radius: 7, y: 2)
-        } else {
-            content
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay {
-                    Circle().strokeBorder(Color.black.opacity(0.10), lineWidth: 0.75)
-                }
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-                .shadow(color: Color.tabInactive(for: .light).opacity(0.28), radius: 7, y: 2)
-        }
+        content
+            .background(Color.tabSelected, in: Circle())
     }
 }
 

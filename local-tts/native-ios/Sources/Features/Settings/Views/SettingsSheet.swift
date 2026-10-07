@@ -6,8 +6,10 @@ import UIKit
 /// Settings navigation hosted by Home's leading drawer.
 struct SettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
+    let previewPlayer: VoicePreviewPlayer
     var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @State private var isVoiceLibraryPresented = false
 
     var body: some View {
         NavigationStack {
@@ -18,15 +20,14 @@ struct SettingsSheet: View {
                         closeButton
                     }
 
-                    Text("Make it yours.")
+                    Text("Make it yours")
                         .font(.custom("EBGaramond-Italic", size: 52, relativeTo: .largeTitle))
                         .foregroundStyle(Color.appPrimaryText)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                         .padding(.top, 4)
-
-                    voiceGallery
-                        .padding(.top, 34)
 
                     VStack(spacing: 12) {
                         NavigationLink {
@@ -57,6 +58,13 @@ struct SettingsSheet: View {
                     .buttonStyle(.plain)
                     .padding(.top, 34)
 
+                    Button { isVoiceLibraryPresented = true } label: {
+                        voiceGallery
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 30)
+                    .accessibilityHint("Opens Voice Library")
+
                     OpenSourceCard()
                         .padding(.top, 32)
                 }
@@ -68,6 +76,13 @@ struct SettingsSheet: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.colorScheme, .dark)
+        .sheet(isPresented: $isVoiceLibraryPresented) {
+            VoiceSettingsSheet(
+                viewModel: viewModel,
+                packs: viewModel.packs,
+                previewPlayer: previewPlayer,
+                onVoiceSelected: { viewModel.setDefaultKokoroVoice($0) })
+        }
     }
 
     private var voiceGallery: some View {
@@ -202,6 +217,7 @@ private struct SettingsGlassCircle: ViewModifier {
 /// of it costs a SwiftUI re-render per frame.
 struct SettingsDrawerPresentation<Content: View>: UIViewControllerRepresentable {
     let viewModel: TTSViewModel
+    let previewPlayer: VoicePreviewPlayer
     @Binding var isPresented: Bool
     let isEdgeSwipeEnabled: Bool
     let content: Content
@@ -213,7 +229,10 @@ struct SettingsDrawerPresentation<Content: View>: UIViewControllerRepresentable 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIViewController(context: Context) -> SettingsDrawerController<Content> {
-        SettingsDrawerController(viewModel: viewModel, content: content)
+        SettingsDrawerController(
+            viewModel: viewModel,
+            previewPlayer: previewPlayer,
+            content: content)
     }
 
     func updateUIViewController(_ controller: SettingsDrawerController<Content>, context: Context) {
@@ -242,6 +261,7 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     var onPresentationChanged: ((Bool) -> Void)?
 
     private let viewModel: TTSViewModel
+    private let previewPlayer: VoicePreviewPlayer
     private let mainController: UIHostingController<Content>
     /// Carries the scale and the blur. Deliberately **not** the live Home.
     ///
@@ -281,8 +301,9 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     private var panelWidth: CGFloat { max(view.bounds.width, 1) }
     private var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 
-    init(viewModel: TTSViewModel, content: Content) {
+    init(viewModel: TTSViewModel, previewPlayer: VoicePreviewPlayer, content: Content) {
         self.viewModel = viewModel
+        self.previewPlayer = previewPlayer
         mainController = UIHostingController(rootView: content)
         super.init(nibName: nil, bundle: nil)
     }
@@ -388,6 +409,7 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     private func mountSettings() {
         let controller = UIHostingController(rootView: SettingsSheet(
             viewModel: viewModel,
+            previewPlayer: previewPlayer,
             onClose: { [weak self] in self?.close() }))
         controller.overrideUserInterfaceStyle = .dark
         controller.view.backgroundColor = .clear
@@ -641,5 +663,8 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
 
 #Preview {
     let dependencies = DependencyContainer()
-    SettingsSheet(viewModel: TTSViewModel(dependencies: dependencies), onClose: nil)
+    SettingsSheet(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        previewPlayer: VoicePreviewPlayer(),
+        onClose: nil)
 }

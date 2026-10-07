@@ -52,7 +52,7 @@ struct VoiceSettingsSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground {
-            TexturedDarkBackground()
+            TexturedDarkBackground(variant: .sidebar)
         }
         .preferredColorScheme(.dark)
         .sheet(item: $previewTile) { tile in

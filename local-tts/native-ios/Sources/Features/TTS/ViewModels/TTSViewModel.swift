@@ -4,6 +4,9 @@ import Foundation
 
 @MainActor
 final class TTSViewModel: ObservableObject {
+    private static let defaultVoicePreferenceKey = "tts.defaultKokoroVoice"
+    private static let fallbackVoice = "af_heart"
+
     // Voice rosters live in `VoiceCatalog` alongside each voice's
     // avatar/tagline/description/preview line — these stay as plain code
     // lists for the call sites that only need names (pickers, counts, the
@@ -19,10 +22,10 @@ final class TTSViewModel: ObservableObject {
     // dropped because it's what saved projects persist and what the reader
     // resolves a voice against.
     @Published var engine: Engine = .kokoroAne
-    @Published var kokoroVoice = "af_heart"
+    @Published var kokoroVoice: String
     // Which Kokoro variant to use — one `KokoroAneManager` per variant (the
     // SDK's chain/vocab differ per variant).
-    @Published var kokoroVariant: KokoroVariant = .english
+    @Published var kokoroVariant: KokoroVariant
     @Published var status = "Idle"
     @Published var isBusy = false
 
@@ -38,6 +41,13 @@ final class TTSViewModel: ObservableObject {
     let kokoroServices: [KokoroVariant: KokoroEngineService]
 
     init(dependencies: DependencyContainer) {
+        let storedVoice = UserDefaults.standard.string(forKey: Self.defaultVoicePreferenceKey)
+        let resolvedVoice = storedVoice.flatMap { voice in
+            VoiceCatalog.variant(forCode: voice) == nil ? nil : voice
+        } ?? Self.fallbackVoice
+        kokoroVoice = resolvedVoice
+        kokoroVariant = VoiceCatalog.variant(forCode: resolvedVoice) ?? .english
+
         kokoroServices = Dictionary(
             uniqueKeysWithValues: KokoroVariant.allCases.map { variant in
                 let manager: KokoroAneManager
@@ -58,6 +68,15 @@ final class TTSViewModel: ObservableObject {
         packs = VoicePackStore(
             kokoroModelDirectory: dependencies.kokoroModelDirectory,
             isKokoroPackBundled: dependencies.isKokoroPackBundled)
+    }
+
+    /// Settings owns the app-wide default. Reader voice changes still update
+    /// their project without silently replacing this persisted preference.
+    func setDefaultKokoroVoice(_ voice: String) {
+        guard let variant = VoiceCatalog.variant(forCode: voice) else { return }
+        kokoroVariant = variant
+        kokoroVoice = voice
+        UserDefaults.standard.set(voice, forKey: Self.defaultVoicePreferenceKey)
     }
 
     // MARK: - Import screen: Setup sheet actions

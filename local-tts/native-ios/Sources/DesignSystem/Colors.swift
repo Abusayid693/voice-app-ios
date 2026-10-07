@@ -17,9 +17,9 @@ extension Color {
     /// Warm-neutral paper surface for the dedicated Book Shelf reading mode.
     static let whitePaper = Color(hex: 0xF6F6F6)
 
-    // Flat icon-and-label tab navigation, matching the reference's orange
-    // selection and soft blue-gray inactive items on paper/charcoal surfaces.
-    static let tabSelected = Color(hex: 0xFF5A24)
+    // Flat icon-and-label tab navigation with a coral selection and soft
+    // blue-gray inactive items on paper/charcoal surfaces.
+    static let tabSelected = Color(hex: 0xFF5A5F)
     static let tabInactiveLight = Color(hex: 0x78889F)
     static let tabInactiveDark = Color(hex: 0xA2AEC0)
 
@@ -117,8 +117,8 @@ enum BookShelfPalette {
     static let secondaryText = Color(hex: 0x686761)
 }
 
-/// Shared dark surface used by full-height presentation chrome. Settings
-/// uses a stronger white glow and bottom-weighted grain for its sidebar.
+/// Shared dark surface used by full-height presentation chrome. Settings,
+/// Stats, and Voice Library share one white sidebar lighting/grain treatment.
 struct TexturedDarkBackground: View {
     enum Variant {
         case neutral
@@ -140,9 +140,12 @@ struct TexturedDarkBackground: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing)
 
-            if variant == .sidebar {
+            switch variant {
+            case .sidebar:
                 SidebarTextureLayer(textureColor: .white, coreColor: .black)
-            } else {
+
+            case .neutral:
+
                 RadialGradient(
                     colors: [Color.white.opacity(0.22), .clear],
                     center: UnitPoint(x: 0.08, y: 0.86),
@@ -161,7 +164,10 @@ struct TexturedDarkBackground: View {
                     startRadius: 10,
                     endRadius: 310)
 
-                StaticFilmGrain(spacing: 2.25, intensity: 1, bottomBoost: 0)
+                StaticFilmGrain(
+                    spacing: 2.25,
+                    intensity: 1,
+                    bottomBoost: 0)
                     .blendMode(.softLight)
                     .opacity(0.94)
             }
