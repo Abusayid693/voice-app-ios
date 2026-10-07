@@ -22,9 +22,11 @@ struct ChapterPlayerOptionsSheet: View {
         case font
     }
 
+    private var chromeTheme: ReaderChromeTheme { theme.chromeTheme }
+
     var body: some View {
         InteractiveGlassBottomSheet(
-            theme: theme,
+            theme: chromeTheme,
             detents: [.medium],
             showsDragIndicator: false,
             closeAccessibilityLabel: "Close reader options",
@@ -151,16 +153,16 @@ struct ChapterPlayerOptionsSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(theme.optionsAccent)
+                    .foregroundStyle(chromeTheme.accent)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(AppTextStyle.rowTitle.font)
-                        .foregroundStyle(theme.primaryText)
+                        .foregroundStyle(chromeTheme.primaryText)
                     Text(subtitle)
                         .font(AppTextStyle.label.font)
-                        .foregroundStyle(theme.secondaryText)
+                        .foregroundStyle(chromeTheme.secondaryText)
                         .lineLimit(1)
                 }
 
@@ -168,11 +170,11 @@ struct ChapterPlayerOptionsSheet: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(theme.secondaryText)
+                    .foregroundStyle(chromeTheme.secondaryText)
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16).fill(theme.controlBackground))
+            .background(RoundedRectangle(cornerRadius: 16).fill(chromeTheme.controlBackground))
             .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
@@ -183,15 +185,15 @@ struct ChapterPlayerOptionsSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(AppTextStyle.rowTitle.font)
-                    .foregroundStyle(theme.primaryText)
+                    .foregroundStyle(chromeTheme.primaryText)
                 Text(subtitle)
                     .font(AppTextStyle.label.font)
-                    .foregroundStyle(theme.secondaryText)
+                    .foregroundStyle(chromeTheme.secondaryText)
             }
         }
-        .tint(theme.controlAccent)
+        .tint(chromeTheme.accent)
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(theme.controlBackground))
+        .background(RoundedRectangle(cornerRadius: 16).fill(chromeTheme.controlBackground))
     }
 
     private func pickerCard<Content: View>(
@@ -201,11 +203,11 @@ struct ChapterPlayerOptionsSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(AppTextStyle.rowTitle.font)
-                .foregroundStyle(theme.primaryText)
+                .foregroundStyle(chromeTheme.primaryText)
             content()
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(theme.controlBackground))
+        .background(RoundedRectangle(cornerRadius: 16).fill(chromeTheme.controlBackground))
     }
 
     private func themePreview(_ option: ReaderTheme) -> some View {
@@ -267,24 +269,24 @@ struct ChapterPlayerOptionsSheet: View {
                 Text("along")
             }
             .font(option.font(family: fontFamily))
-            .foregroundStyle(theme.primaryText)
+            .foregroundStyle(chromeTheme.primaryText)
             .frame(maxWidth: .infinity)
             .frame(height: 76)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(theme.background)
+                    .fill(chromeTheme.background)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(
-                        fontSize == option ? theme.optionsAccent : theme.primaryText.opacity(0.12),
+                        fontSize == option ? chromeTheme.accent : chromeTheme.border,
                         lineWidth: 2)
             }
             .overlay(alignment: .topTrailing) {
                 if fontSize == option {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(theme.highlightedText, theme.optionsAccent)
+                        .foregroundStyle(chromeTheme.contrastingText, chromeTheme.accent)
                         .padding(7)
                 }
             }
@@ -305,10 +307,10 @@ struct ChapterPlayerOptionsSheet: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(option.title)
                         .font(AppTextStyle.label.font)
-                        .foregroundStyle(theme.secondaryText)
+                        .foregroundStyle(chromeTheme.secondaryText)
                     Text("The story continues…")
                         .font(option.font(size: 19))
-                        .foregroundStyle(theme.primaryText)
+                        .foregroundStyle(chromeTheme.primaryText)
                         .lineLimit(1)
                 }
 
@@ -317,19 +319,19 @@ struct ChapterPlayerOptionsSheet: View {
                 if fontFamily == option {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(theme.highlightedText, theme.optionsAccent)
+                        .foregroundStyle(chromeTheme.contrastingText, chromeTheme.accent)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(theme.background)
+                    .fill(chromeTheme.background)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(
-                        fontFamily == option ? theme.optionsAccent : theme.primaryText.opacity(0.12),
+                        fontFamily == option ? chromeTheme.accent : chromeTheme.border,
                         lineWidth: 2)
             }
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -361,6 +363,6 @@ struct ChapterPlayerOptionsSheet: View {
                 continuousPlaybackEnabled: .constant(true),
                 fontSize: .constant(.medium),
                 fontFamily: .constant(.sfProText),
-                theme: .constant(.carbon))
+                theme: .constant(.graphite))
         }
 }

@@ -15,18 +15,17 @@ final class ReadingStatsViewModel: ObservableObject {
     /// but this shape is kept as the fetch/aggregation boundary since it's
     /// still a correct, order-preserving source: the view flattens it back
     /// into a single chronological list. `nil` cells are padding before
-    /// Jan 1 or after Dec 31 of the current year, keeping every row a full
-    /// 7 days; the view drops those when it flattens.
+    /// the start or after the end of the rolling nine-month window, keeping
+    /// every row a full 7 days; the view drops those when it flattens.
     ///
-    /// Seeded synchronously with a full year of zero-activity placeholder
-    /// days — same technique as Book Shelf's weekly teaser
-    /// (`ImportHomeView.emptyRecentDays`) — so the dot grid has its real,
+    /// Seeded synchronously with nine months of zero-activity placeholder
+    /// days so the dot grid has its real,
     /// final row count on the very first frame. Without this, `weeks`
     /// started `[]`, `ReadingStatsView` showed its much shorter empty-state
     /// message until the async `reload()` below resolved, and everything
     /// below the graph (the goal gauge) visibly jumped down when the real
     /// grid popped in.
-    @Published private(set) var weeks: [[DayActivity?]] = ReadingStatsViewModel.emptyYearWeeks()
+    @Published private(set) var weeks: [[DayActivity?]] = ReadingStatsViewModel.emptyNineMonthWeeks()
     @Published private(set) var isLoading = false
     @Published private(set) var selectedDayDetail: DayDetail?
     /// Seconds listened today — drives the half-circle goal gauge. Read
@@ -36,34 +35,22 @@ final class ReadingStatsViewModel: ObservableObject {
 
     private let store: ReadingStatsStore
     private let calendar: Calendar
-    /// `weeks` is never actually empty now (seeded above), so it can't
-    /// double as the "have we loaded yet" flag `loadIfNeeded` needs.
-    private var hasLoaded = false
-
     init(store: ReadingStatsStore, calendar: Calendar = .current) {
         self.store = store
         self.calendar = calendar
     }
 
-    func loadIfNeeded() async {
-        guard !hasLoaded else { return }
-        hasLoaded = true
-        await reload()
-    }
-
-    /// Every day of the current calendar year, January 1 through December
-    /// 31 — not a rolling window. Days later in the year than today have no
-    /// sessions yet, so they fall out naturally as empty (level 0) dots,
-    /// same convention as Book Shelf's own current-week teaser
-    /// (`ImportHomeView.recentActivityDots`).
+    /// Every day in the rolling nine-month window ending today. The range is
+    /// calendar-based rather than a fixed day count, so month lengths and
+    /// daylight-saving transitions remain correct.
     func reload() async {
         isLoading = true
         defer { isLoading = false }
-        guard let yearEndExclusive = Self.yearRange(calendar: calendar)?.endExclusive else { return }
-        let days = Self.daysInCurrentYear(calendar: calendar)
-        guard let yearStart = days.first else { return }
+        guard let range = Self.nineMonthRange(calendar: calendar) else { return }
+        let days = Self.daysInNineMonthWindow(calendar: calendar)
+        guard !days.isEmpty else { return }
 
-        let sessions = await store.sessions(from: yearStart, to: yearEndExclusive)
+        let sessions = await store.sessions(from: range.start, to: range.endExclusive)
 
         var listenedByDay: [Date: Double] = [:]
         var completedByDay: [Date: Int] = [:]
@@ -86,27 +73,29 @@ final class ReadingStatsViewModel: ObservableObject {
     }
 
     /// Placeholder shape for `weeks`' synchronous seed — every day of the
-    /// current year at zero activity, so the real `reload()` swaps in new
+    /// rolling nine-month window at zero activity, so `reload()` swaps in new
     /// values for the exact same set of cells rather than changing the
     /// grid's row count.
-    private static func emptyYearWeeks(calendar: Calendar = .current) -> [[DayActivity?]] {
-        let activity = daysInCurrentYear(calendar: calendar).map { day in
+    private static func emptyNineMonthWeeks(calendar: Calendar = .current) -> [[DayActivity?]] {
+        let activity = daysInNineMonthWindow(calendar: calendar).map { day in
             DayActivity(day: day, listenedSeconds: 0, pagesCompleted: 0)
         }
         return groupIntoWeeks(activity, calendar: calendar)
     }
 
-    private static func yearRange(calendar: Calendar) -> (start: Date, endExclusive: Date)? {
-        let year = calendar.component(.year, from: Date())
+    private static func nineMonthRange(
+        calendar: Calendar, now: Date = Date()
+    ) -> (start: Date, endExclusive: Date)? {
+        let today = calendar.startOfDay(for: now)
         guard
-            let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
-            let endExclusive = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1))
+            let start = calendar.date(byAdding: .month, value: -9, to: today),
+            let endExclusive = calendar.date(byAdding: .day, value: 1, to: today)
         else { return nil }
         return (start, endExclusive)
     }
 
-    private static func daysInCurrentYear(calendar: Calendar) -> [Date] {
-        guard let range = yearRange(calendar: calendar) else { return [] }
+    private static func daysInNineMonthWindow(calendar: Calendar) -> [Date] {
+        guard let range = nineMonthRange(calendar: calendar) else { return [] }
         var days: [Date] = []
         var cursor = range.start
         while cursor < range.endExclusive {

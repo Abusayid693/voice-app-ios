@@ -6,8 +6,10 @@ import UIKit
 /// Settings navigation hosted by Home's leading drawer.
 struct SettingsSheet: View {
     @ObservedObject var viewModel: TTSViewModel
+    let previewPlayer: VoicePreviewPlayer
     var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @State private var isVoiceLibraryPresented = false
 
     var body: some View {
         NavigationStack {
@@ -18,15 +20,14 @@ struct SettingsSheet: View {
                         closeButton
                     }
 
-                    Text("Make it yours.")
+                    Text("Make it yours")
                         .font(.custom("EBGaramond-Italic", size: 52, relativeTo: .largeTitle))
                         .foregroundStyle(Color.appPrimaryText)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                         .padding(.top, 4)
-
-                    field(label: "Your voice", value: VoiceDisplayName.forCode(viewModel.kokoroVoice))
-                        .padding(.top, 34)
 
                     VStack(spacing: 12) {
                         NavigationLink {
@@ -57,6 +58,13 @@ struct SettingsSheet: View {
                     .buttonStyle(.plain)
                     .padding(.top, 34)
 
+                    Button { isVoiceLibraryPresented = true } label: {
+                        voiceGallery
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 30)
+                    .accessibilityHint("Opens Voice Library")
+
                     OpenSourceCard()
                         .padding(.top, 32)
                 }
@@ -68,21 +76,86 @@ struct SettingsSheet: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .environment(\.colorScheme, .dark)
+        .sheet(isPresented: $isVoiceLibraryPresented) {
+            VoiceSettingsSheet(
+                viewModel: viewModel,
+                packs: viewModel.packs,
+                previewPlayer: previewPlayer,
+                onVoiceSelected: { viewModel.setDefaultKokoroVoice($0) })
+        }
     }
 
-    /// An uppercase caption over its value — the reference layout's way of
-    /// labelling a standing fact rather than offering a control.
-    private func field(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
+    private var voiceGallery: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("YOUR VOICE")
                 .font(.system(size: 13, weight: .medium))
                 .tracking(1.1)
                 .foregroundStyle(Color.appSecondaryText)
-            Text(value)
-                .font(.system(size: 26, weight: .regular))
+
+            HStack(spacing: -24) {
+                ForEach(Array(galleryVoices.enumerated()), id: \.element.id) { index, voice in
+                    let distance = abs(index - 3)
+
+                    Image(VoiceCoverArt.assetName(for: voice.code))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: gallerySize(for: distance), height: gallerySize(for: distance))
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    Color.appPrimaryText.opacity(distance == 0 ? 0.88 : 0.16),
+                                    lineWidth: distance == 0 ? 2 : 0.75)
+                        }
+                        .shadow(
+                            color: .black.opacity(distance == 0 ? 0.34 : 0.20),
+                            radius: distance == 0 ? 14 : 7,
+                            y: 4)
+                        .opacity(galleryOpacity(for: distance))
+                        .zIndex(Double(4 - distance))
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 94, alignment: .center)
+
+            Text(VoiceDisplayName.forCode(viewModel.kokoroVoice))
+                .font(.system(size: 21, weight: .medium))
                 .foregroundStyle(Color.appPrimaryText)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Your voice, \(VoiceDisplayName.forCode(viewModel.kokoroVoice))")
+    }
+
+    private var galleryVoices: [Voice] {
+        let voices = VoiceCatalog.allVoices
+        guard !voices.isEmpty else { return [] }
+        let selectedIndex = voices.firstIndex { $0.code == viewModel.kokoroVoice } ?? 0
+
+        return (-3...3).map { offset in
+            let index = (selectedIndex + offset + voices.count) % voices.count
+            return voices[index]
+        }
+    }
+
+    private func gallerySize(for distance: Int) -> CGFloat {
+        switch distance {
+        case 0: return 92
+        case 1: return 76
+        case 2: return 62
+        default: return 50
+        }
+    }
+
+    private func galleryOpacity(for distance: Int) -> Double {
+        switch distance {
+        case 0: return 1
+        case 1: return 0.90
+        case 2: return 0.74
+        default: return 0.58
+        }
     }
 
     /// Capsule rows with the icon trailing, so the titles form one clean left
@@ -144,6 +217,7 @@ private struct SettingsGlassCircle: ViewModifier {
 /// of it costs a SwiftUI re-render per frame.
 struct SettingsDrawerPresentation<Content: View>: UIViewControllerRepresentable {
     let viewModel: TTSViewModel
+    let previewPlayer: VoicePreviewPlayer
     @Binding var isPresented: Bool
     let isEdgeSwipeEnabled: Bool
     let content: Content
@@ -155,7 +229,10 @@ struct SettingsDrawerPresentation<Content: View>: UIViewControllerRepresentable 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIViewController(context: Context) -> SettingsDrawerController<Content> {
-        SettingsDrawerController(viewModel: viewModel, content: content)
+        SettingsDrawerController(
+            viewModel: viewModel,
+            previewPlayer: previewPlayer,
+            content: content)
     }
 
     func updateUIViewController(_ controller: SettingsDrawerController<Content>, context: Context) {
@@ -184,6 +261,7 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     var onPresentationChanged: ((Bool) -> Void)?
 
     private let viewModel: TTSViewModel
+    private let previewPlayer: VoicePreviewPlayer
     private let mainController: UIHostingController<Content>
     /// Carries the scale and the blur. Deliberately **not** the live Home.
     ///
@@ -223,8 +301,9 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     private var panelWidth: CGFloat { max(view.bounds.width, 1) }
     private var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 
-    init(viewModel: TTSViewModel, content: Content) {
+    init(viewModel: TTSViewModel, previewPlayer: VoicePreviewPlayer, content: Content) {
         self.viewModel = viewModel
+        self.previewPlayer = previewPlayer
         mainController = UIHostingController(rootView: content)
         super.init(nibName: nil, bundle: nil)
     }
@@ -330,6 +409,7 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
     private func mountSettings() {
         let controller = UIHostingController(rootView: SettingsSheet(
             viewModel: viewModel,
+            previewPlayer: previewPlayer,
             onClose: { [weak self] in self?.close() }))
         controller.overrideUserInterfaceStyle = .dark
         controller.view.backgroundColor = .clear
@@ -583,5 +663,8 @@ final class SettingsDrawerController<Content: View>: UIViewController, UIGesture
 
 #Preview {
     let dependencies = DependencyContainer()
-    SettingsSheet(viewModel: TTSViewModel(dependencies: dependencies), onClose: nil)
+    SettingsSheet(
+        viewModel: TTSViewModel(dependencies: dependencies),
+        previewPlayer: VoicePreviewPlayer(),
+        onClose: nil)
 }

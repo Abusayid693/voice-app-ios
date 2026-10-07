@@ -6,6 +6,7 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
     case small
     case medium
     case large
+    case extraLarge
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
         case .small: return "Small"
         case .medium: return "Medium"
         case .large: return "Large"
+        case .extraLarge: return "Extra Large"
         }
     }
 
@@ -22,6 +24,7 @@ enum ReaderFontSize: String, CaseIterable, Identifiable {
         case .small: return 15
         case .medium: return 17
         case .large: return 21
+        case .extraLarge: return 25
         }
     }
 

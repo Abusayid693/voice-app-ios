@@ -4,7 +4,7 @@ import SwiftUI
 /// Playback Speed. Callers own only their body content; this view owns the
 /// interactive surface, presentation behavior, and floating blurred header.
 struct InteractiveGlassBottomSheet<Content: View>: View {
-    let theme: ReaderTheme
+    let theme: ReaderChromeTheme
     let detents: Set<PresentationDetent>
     let showsDragIndicator: Bool
     let closeAccessibilityLabel: String
@@ -20,7 +20,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     private let blurHeight: CGFloat = 60
 
     init(
-        theme: ReaderTheme,
+        theme: ReaderChromeTheme,
         detents: Set<PresentationDetent>,
         showsDragIndicator: Bool = true,
         closeAccessibilityLabel: String = "Close",
@@ -45,7 +45,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
             header
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(InteractiveGlassSheetSurface(theme: theme, headerHeight: blurHeight))
+        .modifier(InteractiveGlassSheetSurface(theme: theme))
         .presentationDetents(detents)
         .presentationDragIndicator(showsDragIndicator ? .visible : .hidden)
         .presentationContentInteraction(.scrolls)
@@ -90,13 +90,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     /// see `InteractiveGlassSheetSurface` — so it reads as glass over
     /// whatever scrolled beneath, not a tinted color block.
     private var progressiveBlur: some View {
-        VariableBlurView(maxBlurRadius: 12, direction: .blurredTopClearBottom)
-            // Unlike the `Rectangle` this replaced, a `UIViewRepresentable`
-            // doesn't default to greedily filling its proposed space, so
-            // this is explicit rather than assumed.
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        ProgressiveHeaderBlur()
     }
 
     private func headerButton(
@@ -107,7 +101,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(theme.optionsAccent)
+                .foregroundStyle(theme.accent)
                 .frame(width: 36, height: 36)
                 .contentShape(Circle())
         }
@@ -115,6 +109,16 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
         .modifier(InteractiveGlassHeaderButton())
         .frame(width: 44, height: 44)
         .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+/// True top-to-bottom variable blur shared by sheet and reader headers.
+struct ProgressiveHeaderBlur: View {
+    var body: some View {
+        VariableBlurView(maxBlurRadius: 12, direction: .blurredTopClearBottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -131,40 +135,29 @@ private struct InteractiveGlassHeaderButton: ViewModifier {
     }
 }
 
-/// Full-sheet glass on iOS 26, static rather than touch-reactive. The
-/// surface remains rectangular and edge-to-edge; older systems use an
-/// opaque reader-theme background.
-///
-/// The fill is clear for exactly `headerHeight` at the top, not the full
-/// rect: the header's own `VariableBlurView` sits in that band with nothing
-/// else layered behind it, so at rest (nothing scrolled up yet) it reveals
-/// this modifier's own glass tint on iOS 26, rather than every reader sheet
-/// showing a flat `theme.background` block under its header regardless of
-/// what the sheet otherwise is doing — the exact failure mode a progressive
-/// blur is supposed to avoid.
+/// Full-sheet static glass on iOS 26 and an opaque fallback below it. Both
+/// paths keep the two-mode texture edge-to-edge behind scrolling content.
 private struct InteractiveGlassSheetSurface: ViewModifier {
-    let theme: ReaderTheme
-    let headerHeight: CGFloat
-
-    private var fill: some View {
-        VStack(spacing: 0) {
-            Color.clear.frame(height: headerHeight)
-            theme.background
-        }
-    }
+    let theme: ReaderChromeTheme
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .background(fill.opacity(0.82).ignoresSafeArea())
+                .background {
+                    ReaderChromeSheetBackground(theme: theme)
+                        .ignoresSafeArea()
+                }
                 .glassEffect(
                     .regular.tint(theme.background),
                     in: Rectangle())
                 .presentationBackground(.clear)
         } else {
             content
-                .background(fill.ignoresSafeArea())
+                .background {
+                    ReaderChromeSheetBackground(theme: theme)
+                        .ignoresSafeArea()
+                }
                 .presentationBackground(theme.background)
         }
     }

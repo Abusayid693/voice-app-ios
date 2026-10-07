@@ -2,12 +2,6 @@ import LucideSwift
 import SwiftUI
 import UIKit
 
-enum BookShelfPalette {
-    static let background = Color.whitePaper
-    static let primaryText = Color(hex: 0x171715)
-    static let secondaryText = Color(hex: 0x686761)
-}
-
 /// Progressive blur under Home's floating header controls: one
 /// `.ultraThinMaterial` band whose gradient mask starts fading immediately,
 /// so the softening is strongest behind the icons and gone well before the
@@ -166,20 +160,10 @@ struct BookShelfView: View {
                             .top,
                             geometry.safeAreaInsets.top + Self.headerControlsInset
                         )
-                        // Enough trailing inset for the LAST shelf to scroll
-                        // clear of ShelfBottomBlur's heavily opaque lower
-                        // half (the gradient only gets dense past its own
-                        // midpoint — see ShelfBottomBlur). A flat 24pt left
-                        // no further room to scroll to at all, so the last
-                        // shelf sat stuck in the white-out with nowhere to
-                        // go; matching the blur's *full* height fixed that
-                        // but overshot into a stretch of empty scroll past
-                        // where the shelf was already clear, which is its
-                        // own complaint. Half the band's height (still scaled
-                        // by the reserved bottom chrome, so it grows when the
-                        // mini player is showing) is enough room to escape
-                        // the dense part without the extra blank tail.
-                        .padding(.bottom, 24 + (120 + geometry.safeAreaInsets.bottom) / 2)
+                        // Native tab chrome and the optional global player
+                        // arrive through RootTabView's safe-area inset. Only
+                        // retain the Shelf's normal content breathing room.
+                        .padding(.bottom, 24)
                         .background(ShelfScrollLock(isLocked: arrangingBook != nil || selectedBook != nil))
                     }
                 }
@@ -193,25 +177,12 @@ struct BookShelfView: View {
                 .accessibilityHidden(selectedBook != nil)
 
                 if selectedBook == nil {
-                    // Matches ShelfBottomBlur's own `.ignoresSafeArea(edges:
-                    // .bottom)` just below. Without this, ShelfGlassLayer's
-                    // `.clipped()` bound stops at the bottom safe-area line
-                    // rather than the true screen edge, hard-cutting the
-                    // last shelf's glass panel exactly where the blur (and
-                    // the scrolled book covers, which keep rendering past
-                    // that line) still extend further down — the panel's
-                    // flat material reads as an abrupt edge there where a
-                    // textured book cover does not.
+                    // Extend shelf glass to the physical edge so the root tab
+                    // backdrop can blur live shelf content without exposing a
+                    // hard safe-area cut.
                     ShelfGlassLayer(frames: shelfFrames)
                         .ignoresSafeArea(edges: .bottom)
                 }
-
-                ShelfBottomBlur()
-                    .frame(height: 120 + geometry.safeAreaInsets.bottom)
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .offset(y: geometry.safeAreaInsets.bottom)
-                    .ignoresSafeArea(edges: .bottom)
 
                 // Tap-anywhere-else dismissal for the arrange menu. Clear
                 // rather than dimmed — the book stays the focus, and the
@@ -841,44 +812,6 @@ struct BookShelfView: View {
     }
 }
 
-/// Softens shelf content beneath the floating bottom controls without a solid
-/// footer — the bottom counterpart to `ShelfTopBlur`, same technique: one
-/// masked `.ultraThinMaterial` band, not several stacked ones. Stacking
-/// several masked-Material layers to fake a ramping blur *radius* was tried
-/// here first and didn't read as blur at all — a masked `Material` mostly
-/// contributes translucent tint once it isn't the one thing sitting directly
-/// on live content, so four of them plus the paper wash on top just looked
-/// like a flat gradient. One real blur band, same as the top edge.
-///
-/// The paper wash on top is still needed, though: unlike the top edge (which
-/// only has to fade into the shelf), the bar's dark capsules need a light
-/// ground to sit on, and blur alone still lets cover artwork read through at
-/// the very bottom.
-private struct ShelfBottomBlur: View {
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask(
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.5), .black],
-                        startPoint: .top,
-                        endPoint: .bottom))
-
-            LinearGradient(
-                stops: [
-                    .init(color: .white.opacity(0), location: 0),
-                    .init(color: .white.opacity(0.55), location: 0.55),
-                    .init(color: .white, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 /// Fine black paper grain behind the top 200pt of the shelf. The texture is
 /// deterministic and fades into the page instead of ending on a hard edge.
 private struct ShelfHeaderTextureBackdrop: View {
@@ -1052,11 +985,8 @@ private struct BookShelfRow: View {
         }
         .overlay(alignment: .topTrailing) {
             Button(action: onRenameShelf) {
-                HStack(spacing: 5) {
-                    Text(shelfTitle)
-                        .lineLimit(1)
-                    LucideIcon(.pencil, size: 12, color: BookShelfPalette.secondaryText.opacity(0.72))
-                }
+                Text(shelfTitle)
+                    .lineLimit(1)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(BookShelfPalette.secondaryText)
                 .padding(.horizontal, 8)

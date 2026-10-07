@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The Apple-Music-style floating bar for music mode — cover thumbnail,
-/// book title, "Page N of M", and a play/pause button, stacked above
-/// `CustomTabBar` in My Shelf's bottom safe-area inset.
+/// book title, "Page N of M", and a play/pause button. `RootTabView` keeps
+/// one instance immediately above the custom tab row across every root tab.
 struct MiniPlayerBar: View {
     @ObservedObject var player: BookAudioPlayer
     let onExpand: () -> Void

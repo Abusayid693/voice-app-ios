@@ -33,9 +33,7 @@ struct VoiceSettingsSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-
+        ZStack(alignment: .top) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 28) {
                     shortcutsSection
@@ -43,16 +41,19 @@ struct VoiceSettingsSheet: View {
                     catalogue
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 18)
+                .padding(.top, 82)
                 .padding(.bottom, 32)
             }
             .scrollIndicators(.hidden)
+
+            header
         }
-        .background(Color.appBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .presentationDetents([.medium, .large])
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.clear)
+        .presentationBackground {
+            TexturedDarkBackground(variant: .sidebar)
+        }
         .preferredColorScheme(.dark)
         .sheet(item: $previewTile) { tile in
             VoicePreviewSheet(
@@ -67,23 +68,29 @@ struct VoiceSettingsSheet: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Voice Library")
-                .appText(.labelStrong)
+        ZStack {
+            ProgressiveHeaderBlur()
 
-            Spacer()
+            HStack {
+                Text("Voice Library")
+                    .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.appPrimaryText)
+                    .accessibilityAddTraits(.isHeader)
 
-            Button { dismiss() } label: {
-                LucideIcon(.x, size: 20, color: .appPrimaryText)
-                    .frame(width: 40, height: 40)
-                    .background(Color.appSecondaryBackground.opacity(0.8), in: Circle())
+                Spacer()
+
+                Button { dismiss() } label: {
+                    LucideIcon(.x, size: 20, color: .appPrimaryText)
+                        .frame(width: 40, height: 40)
+                        .background(Color.appSecondaryBackground.opacity(0.8), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close Voice Library")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close Voice Library")
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.ultraThinMaterial)
+        .frame(height: 70)
     }
 
     private var shortcutsSection: some View {
@@ -114,7 +121,7 @@ struct VoiceSettingsSheet: View {
 
                 ScrollView(.horizontal) {
                     LazyHGrid(
-                        rows: [GridItem(.fixed(134)), GridItem(.fixed(134))], spacing: 12
+                        rows: [GridItem(.fixed(150)), GridItem(.fixed(150))], spacing: 12
                     ) {
                         ForEach(availableTiles) { tile in
                             VoiceLibraryCard(
@@ -126,7 +133,7 @@ struct VoiceSettingsSheet: View {
                     .padding(.horizontal, 20)
                 }
                 .padding(.horizontal, -20)
-                .frame(height: 280)
+                .frame(height: 312)
                 .scrollIndicators(.hidden)
             }
         }
@@ -253,13 +260,15 @@ private struct VoiceLibraryCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 9) {
+            VStack(spacing: 7) {
                 VoiceLibraryAvatar(tile: tile, size: 62, isSelected: isSelected)
                 Text(tile.displayName).appText(.rowTitle).lineLimit(1)
                 Text(tile.descriptionText).appText(.labelDim).lineLimit(1)
             }
-            .frame(width: 126, height: 134)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
+            .frame(width: 138, height: 150, alignment: .top)
             .background(cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)

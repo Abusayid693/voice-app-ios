@@ -17,6 +17,16 @@ extension Color {
     /// Warm-neutral paper surface for the dedicated Book Shelf reading mode.
     static let whitePaper = Color(hex: 0xF6F6F6)
 
+    // Flat icon-and-label tab navigation with a coral selection and soft
+    // blue-gray inactive items on paper/charcoal surfaces.
+    static let tabSelected = Color(hex: 0xFF5A5F)
+    static let tabInactiveLight = Color(hex: 0x78889F)
+    static let tabInactiveDark = Color(hex: 0xA2AEC0)
+
+    static func tabInactive(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .light ? tabInactiveLight : tabInactiveDark
+    }
+
     // Filled CTA — light background, near-black label.
     static let primaryButtonBackground = Color(hex: 0xEEEEEE)
     static let primaryButtonText = Color(hex: 0x111111)
@@ -54,13 +64,12 @@ extension Color {
     // paper and leaves the type itself untouched — see `ReaderPDFPageView`.
     static let pdfPageHighlight = Color(hex: 0xFFE0A0)
 
-    // ReadingStatsView's contribution graph (and Book Shelf's own small
-    // teaser dots — see ImportHomeView.recentActivityDots) — a 5-step
-    // intensity ramp (0 = no activity that day) as increasing ink opacity
+    // ReadingStatsView's contribution graph uses a 5-step intensity ramp
+    // (0 = no activity that day) as increasing ink opacity
     // over `BookShelfPalette`'s light background, rather than a hue ramp —
     // reads as dots lighting up, not a GitHub-style color-coded heatmap.
-    // Shelf teasers keep this ink ramp; the dark stats graph uses the same
-    // opacity levels with appPrimaryText via statsIntensity below.
+    // The dark stats graph uses these opacity levels with appPrimaryText via
+    // statsIntensity below.
     static let statsIntensity0 = BookShelfPalette.primaryText.opacity(0.08)
     static let statsIntensity1 = BookShelfPalette.primaryText.opacity(0.32)
     static let statsIntensity2 = BookShelfPalette.primaryText.opacity(0.55)
@@ -100,8 +109,16 @@ extension Color {
     }
 }
 
-/// Shared dark surface used by full-height presentation chrome. Settings
-/// uses a stronger white glow and bottom-weighted grain for its sidebar.
+/// Shared light palette for My Shelf and reader chrome shown over light
+/// reading themes.
+enum BookShelfPalette {
+    static let background = Color.whitePaper
+    static let primaryText = Color(hex: 0x171715)
+    static let secondaryText = Color(hex: 0x686761)
+}
+
+/// Shared dark surface used by full-height presentation chrome. Settings,
+/// Stats, and Voice Library share one white sidebar lighting/grain treatment.
 struct TexturedDarkBackground: View {
     enum Variant {
         case neutral
@@ -123,17 +140,20 @@ struct TexturedDarkBackground: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing)
 
-            if variant == .sidebar {
-                sidebarLight
-            } else {
+            switch variant {
+            case .sidebar:
+                SidebarTextureLayer(textureColor: .white, coreColor: .black)
+
+            case .neutral:
+
                 RadialGradient(
-                    colors: [bottomLight, .clear],
+                    colors: [Color.white.opacity(0.22), .clear],
                     center: UnitPoint(x: 0.08, y: 0.86),
                     startRadius: 0,
                     endRadius: 430)
 
                 RadialGradient(
-                    colors: [topLight, .clear],
+                    colors: [Color.white.opacity(0.12), .clear],
                     center: UnitPoint(x: 0.92, y: 0.08),
                     startRadius: 0,
                     endRadius: 340)
@@ -143,73 +163,73 @@ struct TexturedDarkBackground: View {
                     center: UnitPoint(x: 0.30, y: 0.48),
                     startRadius: 10,
                     endRadius: 310)
-            }
 
-            StaticFilmGrain(
-                spacing: variant == .sidebar ? 2 : 2.25,
-                intensity: variant == .sidebar ? 1.08 : 1,
-                bottomBoost: variant == .sidebar ? 0.55 : 0)
-                .blendMode(.softLight)
-                .opacity(variant == .sidebar ? 1 : 0.94)
+                StaticFilmGrain(
+                    spacing: 2.25,
+                    intensity: 1,
+                    bottomBoost: 0)
+                    .blendMode(.softLight)
+                    .opacity(0.94)
+            }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    /// The sidebar's lighting, built as "a dark core with light wrapping its
-    /// lower-trailing edge" rather than "glows with a vignette on top".
-    ///
-    /// The band of light is the *boundary* of the dark shape, so the shape is
-    /// what has to be right. An `EllipticalGradient` gives it the panel's own
-    /// tall aspect — a `RadialGradient` can only ever darken a circle, which on
-    /// a narrow panel leaves light pooling at the top and bottom instead of
-    /// sweeping around one continuous edge.
-    @ViewBuilder
-    private var sidebarLight: some View {
-        // Sweeps the bottom edge.
+}
+
+/// Settings' texture layer. Reader sheets reuse this view and swap only its
+/// foreground/core colors, so geometry and grain cannot diverge.
+private struct SidebarTextureLayer: View {
+    let textureColor: Color
+    let coreColor: Color
+
+    var body: some View {
+        SidebarSurfaceLighting(edgeColor: textureColor, coreColor: coreColor)
+
+        StaticFilmGrain(
+            spacing: 2,
+            intensity: 1.08,
+            bottomBoost: 0.55,
+            color: textureColor)
+            .blendMode(.softLight)
+    }
+}
+
+/// One lighting shape shared by Settings and both reader-sheet palettes.
+/// Swapping its two colors mirrors the composition without changing geometry.
+private struct SidebarSurfaceLighting: View {
+    let edgeColor: Color
+    let coreColor: Color
+
+    var body: some View {
         RadialGradient(
-            colors: [Color.white.opacity(0.42), .clear],
+            colors: [edgeColor.opacity(0.42), .clear],
             center: UnitPoint(x: 0.50, y: 0.97),
             startRadius: 0,
             endRadius: 470)
 
-        // Carries that sweep up the trailing edge, just off-panel so only its
-        // inner falloff shows.
         RadialGradient(
-            colors: [Color.white.opacity(0.26), .clear],
+            colors: [edgeColor.opacity(0.26), .clear],
             center: UnitPoint(x: 1.04, y: 0.60),
             startRadius: 0,
             endRadius: 360)
 
         RadialGradient(
-            colors: [topLight, .clear],
+            colors: [edgeColor.opacity(0.10), .clear],
             center: UnitPoint(x: 0.92, y: 0.08),
             startRadius: 0,
             endRadius: 340)
 
         EllipticalGradient(
             colors: [
-                Color.black.opacity(0.88),
-                Color.black.opacity(0.74),
+                coreColor.opacity(0.88),
+                coreColor.opacity(0.74),
                 .clear,
             ],
             center: UnitPoint(x: 0.36, y: 0.44),
             startRadiusFraction: 0,
             endRadiusFraction: 0.66)
-    }
-
-    private var topLight: Color {
-        switch variant {
-        case .neutral: return Color.white.opacity(0.12)
-        case .sidebar: return Color.white.opacity(0.10)
-        }
-    }
-
-    private var bottomLight: Color {
-        switch variant {
-        case .neutral: return Color.white.opacity(0.22)
-        case .sidebar: return Color.white.opacity(0.38)
-        }
     }
 }
 
@@ -217,6 +237,19 @@ private struct StaticFilmGrain: View {
     let spacing: CGFloat
     let intensity: Double
     let bottomBoost: Double
+    var color: Color?
+
+    init(
+        spacing: CGFloat,
+        intensity: Double,
+        bottomBoost: Double,
+        color: Color? = nil
+    ) {
+        self.spacing = spacing
+        self.intensity = intensity
+        self.bottomBoost = bottomBoost
+        self.color = color
+    }
 
     var body: some View {
         Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
@@ -239,8 +272,9 @@ private struct StaticFilmGrain: View {
                         y: CGFloat(row) * spacing + offsetY,
                         width: diameter,
                         height: diameter)
-                    let color = value.isMultiple(of: 3) ? Color.white : Color.black
-                    context.fill(Path(ellipseIn: rect), with: .color(color.opacity(opacity)))
+                    let dotColor = color
+                        ?? (value.isMultiple(of: 3) ? Color.white : Color.black)
+                    context.fill(Path(ellipseIn: rect), with: .color(dotColor.opacity(opacity)))
                 }
             }
         }
@@ -256,152 +290,211 @@ private struct StaticFilmGrain: View {
     }
 }
 
-/// Persistable color themes for long-form reading surfaces. Each theme owns
-/// the complete reader palette so highlights and floating controls remain
-/// legible when moving between dark and light designs.
-enum ReaderTheme: String, CaseIterable, Identifiable {
+/// The reader page keeps its full theme palette; sheets and playback chrome
+/// intentionally collapse those themes into these two presentation modes.
+enum ReaderChromeTheme: Equatable {
+    case light
     case dark
-    case carbon
-    case claude
-    case chatGPT
-    case midnight
-    case sage
-    case warmPaper
-    case sepia
-    case linen
 
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .dark: return "Dark"
-        case .carbon: return "Carbon"
-        case .claude: return "Claude"
-        case .chatGPT: return "ChatGPT"
-        case .midnight: return "Midnight"
-        case .sage: return "Sage"
-        case .warmPaper: return "Warm Paper"
-        case .sepia: return "Sepia"
-        case .linen: return "Linen"
-        }
+    init(readerTheme: ReaderTheme) {
+        self = readerTheme.colorScheme == .dark ? .dark : .light
     }
 
     var colorScheme: ColorScheme {
         switch self {
-        case .dark, .carbon, .midnight: return .dark
-        case .claude, .chatGPT, .sage, .warmPaper, .sepia, .linen: return .light
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 
     var background: Color {
         switch self {
-        case .dark: return .black
-        case .carbon: return .appBackground
-        case .claude: return Color(hex: 0xF0EEE6)
-        case .chatGPT: return .white
-        case .midnight: return Color(hex: 0x101525)
-        case .sage: return Color(hex: 0xEEF2E8)
-        case .warmPaper: return Color(hex: 0xF7F1E3)
-        case .sepia: return Color(hex: 0xF2E2C4)
-        case .linen: return Color(hex: 0xF8F4EC)
+        case .light: return BookShelfPalette.background
+        case .dark: return .appBackground
         }
     }
 
     var primaryText: Color {
         switch self {
-        case .dark: return .white
-        case .carbon: return .appPrimaryText
-        case .claude: return Color(hex: 0x141413)
-        case .chatGPT: return Color(hex: 0x0D0D0D)
-        case .midnight: return Color(hex: 0xEEF0FF)
-        case .sage: return Color(hex: 0x253128)
-        case .warmPaper: return Color(hex: 0x2D2923)
-        case .sepia: return Color(hex: 0x30271D)
-        case .linen: return Color(hex: 0x26231F)
+        case .light: return BookShelfPalette.primaryText
+        case .dark: return .appPrimaryText
         }
     }
 
     var secondaryText: Color {
         switch self {
-        case .dark: return .white.opacity(0.72)
-        case .carbon: return .appMetaText
-        case .claude: return Color(hex: 0x6B6A65)
-        case .chatGPT: return Color(hex: 0x5D5D5D)
-        case .midnight: return Color(hex: 0x9CA6C8)
-        case .sage: return Color(hex: 0x687468)
-        case .warmPaper: return Color(hex: 0x655E54)
-        case .sepia: return Color(hex: 0x695744)
-        case .linen: return Color(hex: 0x625D54)
+        case .light: return BookShelfPalette.secondaryText
+        case .dark: return .appSecondaryText
         }
     }
 
     var controlBackground: Color {
         switch self {
-        case .dark: return .white.opacity(0.10)
-        case .carbon: return .appSecondaryBackground.opacity(0.92)
-        case .claude: return Color(hex: 0xE8E6DC).opacity(0.94)
-        case .chatGPT: return Color(hex: 0xF4F4F4).opacity(0.94)
-        case .midnight: return Color(hex: 0x1C2440).opacity(0.94)
-        case .sage: return Color(hex: 0xDDE5D5).opacity(0.94)
-        case .warmPaper: return Color(hex: 0xE8DECA).opacity(0.94)
-        case .sepia: return Color(hex: 0xE2CBA4).opacity(0.94)
-        case .linen: return Color(hex: 0xEAE3D8).opacity(0.94)
+        case .light: return BookShelfPalette.primaryText.opacity(0.08)
+        case .dark: return .appSecondaryBackground.opacity(0.92)
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .light: return BookShelfPalette.primaryText
+        case .dark: return .appPrimaryText
+        }
+    }
+
+    var contrastingText: Color {
+        switch self {
+        case .light: return BookShelfPalette.background
+        case .dark: return .appBackground
+        }
+    }
+
+    var border: Color { primaryText.opacity(0.10) }
+    var shadow: Color { .black.opacity(self == .light ? 0.18 : 0.30) }
+}
+
+/// Edge-to-edge textured background for reader sheets. The compact player
+/// uses the same colors without this grain layer.
+struct ReaderChromeSheetBackground: View {
+    let theme: ReaderChromeTheme
+
+    @ViewBuilder
+    var body: some View {
+        switch theme {
+        case .light:
+            lightSurface
+        case .dark:
+            TexturedDarkBackground(variant: .sidebar)
+        }
+    }
+
+    private var lightSurface: some View {
+        ZStack {
+            BookShelfPalette.background
+
+            LinearGradient(
+                colors: [BookShelfPalette.background, Color(hex: 0xFAFAFA), .white],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing)
+
+            SidebarTextureLayer(textureColor: .black, coreColor: .white)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Persistable color themes for long-form reading content. Floating controls
+/// and reader sheets derive their two-mode palette through `chromeTheme`.
+enum ReaderTheme: String, CaseIterable, Identifiable {
+    case white
+    case paper
+    case graphite
+    case black
+    case softGray
+
+    var id: String { rawValue }
+
+    var chromeTheme: ReaderChromeTheme {
+        ReaderChromeTheme(readerTheme: self)
+    }
+
+    var title: String {
+        switch self {
+        case .white: return "White"
+        case .paper: return "Paper"
+        case .graphite: return "Graphite"
+        case .black: return "Black"
+        case .softGray: return "Soft Gray"
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .graphite, .black: return .dark
+        case .white, .paper, .softGray: return .light
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .white: return Color(hex: 0xFFFFFF)
+        case .paper: return Color(hex: 0xF1E2C9)
+        case .graphite: return Color(hex: 0x2C2C2E)
+        case .black: return Color(hex: 0x000000)
+        case .softGray: return Color(hex: 0xE1E0E0)
+        }
+    }
+
+    var primaryText: Color {
+        switch self {
+        case .white: return Color(hex: 0x000000)
+        case .paper: return Color(hex: 0x2C241F)
+        case .graphite: return Color(hex: 0xE1E0E0)
+        case .black: return Color(hex: 0xFFFFFF)
+        case .softGray: return Color(hex: 0x242526)
+        }
+    }
+
+    var secondaryText: Color {
+        switch self {
+        case .white: return Color(hex: 0x5F6368)
+        case .paper: return Color(hex: 0x6E5E52)
+        case .graphite: return Color(hex: 0xAAA8A8)
+        case .black: return Color(hex: 0xB8B8B8)
+        case .softGray: return Color(hex: 0x66686B)
+        }
+    }
+
+    var controlBackground: Color {
+        switch self {
+        case .white: return Color(hex: 0xF2F2F2).opacity(0.94)
+        case .paper: return Color(hex: 0xE3CFAD).opacity(0.94)
+        case .graphite: return Color(hex: 0x3A3A3C).opacity(0.94)
+        case .black: return Color(hex: 0x1C1C1E).opacity(0.94)
+        case .softGray: return Color(hex: 0xD1D0D0).opacity(0.94)
         }
     }
 
     var controlAccent: Color {
         switch self {
-        case .dark, .carbon: return .green
-        case .claude, .chatGPT, .midnight, .sage, .warmPaper, .sepia, .linen:
-            return wordHighlightBackground
+        case .white: return Color(hex: 0x000000)
+        case .paper: return Color(hex: 0x6B4934)
+        case .graphite: return Color(hex: 0xE1E0E0)
+        case .black: return Color(hex: 0xFFFFFF)
+        case .softGray: return Color(hex: 0x242526)
         }
     }
 
-    /// Selection outlines and icons inside the reader options sheet. Dark
-    /// and Carbon deliberately use white here while their native toggles
-    /// keep the familiar green `controlAccent` tint.
-    var optionsAccent: Color {
-        switch self {
-        case .dark, .carbon: return .white
-        case .claude, .chatGPT, .midnight, .sage, .warmPaper, .sepia, .linen:
-            return controlAccent
-        }
-    }
+    var optionsAccent: Color { controlAccent }
 
     var chunkHighlightBackground: Color {
         switch self {
-        case .dark: return Color(hex: 0x182B3D)
-        case .carbon: return .chunkHighlightBackground
-        case .claude: return Color(hex: 0xF3DDD3)
-        case .chatGPT: return Color(hex: 0xE5F2FF)
-        case .midnight: return Color(hex: 0x242A4C)
-        case .sage: return Color(hex: 0xD8E4CF)
-        case .warmPaper: return Color(hex: 0xE8D8B8)
-        case .sepia: return Color(hex: 0xE5CAA0)
-        case .linen: return Color(hex: 0xE5DDD0)
+        case .white: return Color(hex: 0xEEF1F4)
+        case .paper: return Color(hex: 0xE4CEA9)
+        case .graphite: return Color(hex: 0x3B444A)
+        case .black: return Color(hex: 0x17212A)
+        case .softGray: return Color(hex: 0xCDD6D1)
         }
     }
 
     var wordHighlightBackground: Color {
         switch self {
-        case .dark: return Color(hex: 0x28669E)
-        case .carbon: return .wordHighlightBackground
-        case .claude: return Color(hex: 0xD97757)
-        case .chatGPT: return Color(hex: 0x0285FF)
-        case .midnight: return Color(hex: 0x6858C9)
-        case .sage: return Color(hex: 0x55705A)
-        case .warmPaper: return Color(hex: 0x7B4F32)
-        case .sepia: return Color(hex: 0x814E28)
-        case .linen: return Color(hex: 0x62574B)
+        case .white: return Color(hex: 0xF2C94C)
+        case .paper: return Color(hex: 0xC8894B)
+        case .graphite: return Color(hex: 0x8FB5C8)
+        case .black: return Color(hex: 0xE0B95B)
+        case .softGray: return Color(hex: 0x91B39F)
         }
     }
 
     var highlightedText: Color {
         switch self {
-        case .dark, .carbon, .chatGPT, .midnight, .sage, .linen: return .white
-        case .claude: return Color(hex: 0x141413)
-        case .warmPaper: return Color(hex: 0xFFFAF0)
-        case .sepia: return Color(hex: 0xFFF6E5)
+        case .white: return Color(hex: 0x000000)
+        case .paper: return Color(hex: 0x211813)
+        case .graphite: return Color(hex: 0x111315)
+        case .black: return Color(hex: 0x000000)
+        case .softGray: return Color(hex: 0x152019)
         }
     }
 }

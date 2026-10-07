@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// Orb-style fallback cover art — used wherever a voice has no real image,
-/// e.g. VoicesTabView's grid/VoicePreviewSheet cards for voices whose pack
-/// isn't downloaded yet. One deterministic-by-name lookup shared across all
-/// of them, same pattern as `VoiceCoverArt.assetName(for:)`
+/// e.g. VoicePreviewSheet cards for voices whose pack isn't downloaded yet.
+/// One deterministic-by-name lookup shared across all of them, same pattern
+/// as `VoiceCoverArt.assetName(for:)`
 /// (`DesignSystem/VoiceCoverArt.swift`): the same seed always yields the
 /// same orb, so it doesn't flicker to a different one on every redraw.
 enum OrbCoverArt {
