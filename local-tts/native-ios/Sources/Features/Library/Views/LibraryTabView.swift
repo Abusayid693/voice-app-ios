@@ -1,16 +1,11 @@
 import LucideSwift
 import SwiftUI
 
-/// Library, pushed onto Home's stack from the Explore menu (the type name is
-/// historical — it was a peer tab before). Tapping a project resumes its
-/// saved reader page.
+/// Library tab root. Tapping a project delegates to the app-wide reader route
+/// so the complete tab surface is replaced while reading.
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
-    // Only handed onward to ChapterPlayerView (which observes them itself),
-    // never read here — so they arrive in one non-observable container
-    // rather than as three separate parameters. See AppEnvironment.
-    let app: AppEnvironment
-    @State private var openProject: SavedGeneration?
+    let onOpenProject: (SavedGeneration) -> Void
     @State private var sortNewestFirst = true
 
     private var sortedGenerations: [SavedGenerationSummary] {
@@ -55,14 +50,6 @@ struct LibraryTabView: View {
                 }
             }
         }
-        .navigationDestination(item: $openProject) { project in
-            ChapterPlayerView(
-                project: project, library: viewModel,
-                player: app.player,
-                viewModel: app.tts,
-                previewPlayer: app.previewPlayer,
-                readingStats: app.readingStats)
-        }
     }
 
     private var emptyState: some View {
@@ -91,14 +78,15 @@ struct LibraryTabView: View {
     }
 
     private func open(_ generation: SavedGenerationSummary) {
-        openProject = viewModel.project(for: generation.id)
+        guard let project = viewModel.project(for: generation.id) else { return }
+        onOpenProject(project)
     }
 }
 
 #Preview {
     let app = AppEnvironment.preview()
     return NavigationStack {
-        LibraryTabView(viewModel: app.library, app: app)
+        LibraryTabView(viewModel: app.library, onOpenProject: { _ in })
     }
     .preferredColorScheme(.dark)
 }

@@ -1,10 +1,9 @@
 import LucideSwift
 import SwiftUI
 
-/// Half-height sheet reached by tapping a voice in VoicesTabView's grid (or
-/// a row in the reader's Voice Library) — presented as a horizontally
-/// scrolling carousel of *whole sheet cards*, one per voice, with the
-/// neighbouring voices' cards peeking in at both edges.
+/// Preview sheet reached from Voice Library. It supports either one voice or
+/// a horizontally scrolling carousel of whole-sheet cards, preserving the
+/// generic preview interaction independently of any product-level Voices tab.
 ///
 /// The system sheet itself is made invisible (`.presentationBackground(.clear)`)
 /// and every card is drawn by us instead. That's deliberate: a system sheet

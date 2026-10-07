@@ -8,9 +8,8 @@ import Combine
 /// Deliberately its own observable object rather than more state on
 /// `TTSViewModel`: the metering loop below updates `level`/`progress` ~15
 /// times a second, and while that lived on the shared view model every
-/// view observing it — including VoicesTabView's whole voice grid —
-/// re-rendered at that rate for the duration of every preview. Now only
-/// the two views that actually show preview state observe it.
+/// view observing it re-rendered at that rate for the duration of every
+/// preview. Now only views that actually show preview state observe it.
 @MainActor
 final class VoicePreviewPlayer: ObservableObject {
     /// Which voice is currently playing, if any — drives play/pause icons.

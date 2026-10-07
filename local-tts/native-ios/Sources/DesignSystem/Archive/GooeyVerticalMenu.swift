@@ -1,5 +1,7 @@
 import SwiftUI
 
+// Archived for possible reuse; not part of the current app navigation.
+
 struct GooeyVerticalMenuConfiguration {
     var buttonSize: CGFloat = 60
     var actionButtonSize: CGFloat = 40

@@ -1,22 +1,27 @@
 import LucideSwift
 import SwiftUI
 
-/// Presented from Book Shelf's weekly activity dots (`ImportHomeView.
-/// recentActivityDots`) — a GitHub-style contribution graph of listening
-/// activity, with a tappable day showing per-book detail, plus today's own
-/// date header and a half-circle goal gauge. Uses the app's dark palette.
+/// The retained Stats tab root — a GitHub-style contribution graph of
+/// listening activity, with a tappable day showing per-book detail, plus
+/// today's own date header and a half-circle goal gauge.
 /// See `ReadingStatsViewModel` for how the graph is derived (SwiftData has
 /// no raw `GROUP BY`, so the day-bucketing happens here in Swift over rows
 /// already filtered by the background actor).
 struct ReadingStatsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var viewModel: ReadingStatsViewModel
+    @State private var contentRevealed = false
+    let refreshToken: Int
+    let isActive: Bool
 
     /// Today's listening goal, in minutes — a fixed target for now; there's
     /// no per-user goal setting yet.
     private let dailyGoalMinutes = 30
 
-    init(readingStats: ReadingStatsStore) {
+    init(readingStats: ReadingStatsStore, refreshToken: Int = 0, isActive: Bool = true) {
         _viewModel = StateObject(wrappedValue: ReadingStatsViewModel(store: readingStats))
+        self.refreshToken = refreshToken
+        self.isActive = isActive
     }
 
     var body: some View {
@@ -28,17 +33,23 @@ struct ReadingStatsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
                         currentDayHeader
+                            .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0.10))
 
                         if viewModel.weeks.isEmpty {
                             emptyState
+                                .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0.20))
                         } else {
-                            ContributionGraphView(weeks: viewModel.weeks) { day in
+                            ContributionGraphView(
+                                weeks: viewModel.weeks, isRevealed: contentRevealed
+                            ) { day in
                                 Task { await viewModel.selectDay(day) }
                             }
                         }
 
                         dailyGoalGauge
                             .frame(maxWidth: .infinity)
+                            .modifier(StatsEntranceReveal(
+                                isVisible: contentRevealed, delay: gaugeRevealDelay))
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
@@ -54,11 +65,24 @@ struct ReadingStatsView: View {
                         .fontWeight(.medium)
                         .foregroundStyle(Color.appPrimaryText)
                         .accessibilityAddTraits(.isHeader)
+                        .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0))
                 }
             }
         }
         .preferredColorScheme(.dark)
-        .task { await viewModel.loadIfNeeded() }
+        .task(id: refreshToken) { await viewModel.reload() }
+        .task(id: EntranceTrigger(isActive: isActive, refreshToken: refreshToken, reduceMotion: reduceMotion)) {
+            resetEntrance()
+            guard isActive else { return }
+            if !reduceMotion {
+                // Commit the hidden starting pose before animating the retained tab.
+                do { try await Task.sleep(for: .milliseconds(100)) }
+                catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            contentRevealed = true
+        }
+        .onDisappear { resetEntrance() }
         .sheet(
             item: Binding(
                 get: { viewModel.selectedDayDetail },
@@ -66,6 +90,24 @@ struct ReadingStatsView: View {
         ) { detail in
             DayDetailView(detail: detail)
         }
+    }
+
+    private struct EntranceTrigger: Equatable {
+        let isActive: Bool
+        let refreshToken: Int
+        let reduceMotion: Bool
+    }
+
+    private var gaugeRevealDelay: Double {
+        let dayCount = viewModel.weeks.flatMap { $0 }.compactMap { $0 }.count
+        let lastRow = max(0, (dayCount - 1) / ContributionGraphView.columnsPerRow)
+        return StatsEntranceReveal.rowDelay(lastRow) + 0.20
+    }
+
+    private func resetEntrance() {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { contentRevealed = false }
     }
 
     private static let currentDayFormatter: DateFormatter = {
@@ -115,6 +157,30 @@ struct ReadingStatsView: View {
                 .foregroundStyle(Color.appSecondaryText)
         }
         .padding(.top, 8)
+    }
+}
+
+/// Opacity and translation leave the final layout in place throughout the reveal.
+struct StatsEntranceReveal: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isVisible: Bool
+    let delay: Double
+
+    private let animationSpeedMultiplier = 1.2
+
+    static func rowDelay(_ row: Int) -> Double { 0.20 + Double(row) * 0.022 }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(reduceMotion || isVisible ? 1 : 0)
+            .offset(y: reduceMotion || isVisible ? 0 : 10)
+            .animation(
+                isVisible && !reduceMotion
+                    ? .easeOut(duration: 0.38 / animationSpeedMultiplier)
+                        .delay(delay / animationSpeedMultiplier) : nil,
+                value: isVisible)
+            .allowsHitTesting(reduceMotion || isVisible)
+            .accessibilityHidden(!reduceMotion && !isVisible)
     }
 }
 

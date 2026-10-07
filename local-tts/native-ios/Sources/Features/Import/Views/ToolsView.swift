@@ -1,17 +1,16 @@
 import LucideSwift
 import SwiftUI
 
-/// The Explore menu's Tools route, pushed onto Home's stack — a list of
-/// quick actions for starting a new reader project. Replaces the former
-/// `PlaceholderTabView` "coming soon" stand-in.
+/// The Tools tab root — a list of quick actions for starting a new reader
+/// project. Reader presentation remains owned by `RootTabView`.
 struct ToolsView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
     let app: AppEnvironment
     let onAddBooks: () -> Void
+    let onOpenProject: (SavedGeneration) -> Void
 
     @State private var isWriteTextPresented = false
     @State private var isPlaybackLabPresented = false
-    @State private var openProject: SavedGeneration?
 
     var body: some View {
         List {
@@ -54,27 +53,14 @@ struct ToolsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.appBackground.ignoresSafeArea())
         .navigationTitle("Tools")
-        // Same reasoning as VoicesTabView/LibraryTabView — the nav bar is
-        // UIKit-bridged chrome that doesn't read the `.environment` override
-        // ImportHomeView applies at the push site, only `.preferredColorScheme`/
-        // `.toolbarColorScheme`.
         .toolbarColorScheme(.dark, for: .navigationBar)
         .navigationDestination(isPresented: $isPlaybackLabPresented) {
             StreamingPlaybackLabView(viewModel: app.tts)
         }
         .navigationDestination(isPresented: $isWriteTextPresented) {
             WriteTextView(library: libraryViewModel, viewModel: app.tts) { project in
-                openProject = project
+                onOpenProject(project)
             }
-        }
-        .navigationDestination(item: $openProject) { project in
-            ChapterPlayerView(
-                project: project,
-                library: libraryViewModel,
-                player: app.player,
-                viewModel: app.tts,
-                previewPlayer: app.previewPlayer,
-                readingStats: app.readingStats)
         }
     }
 }
@@ -121,7 +107,11 @@ private struct ToolActionRow: View {
 #Preview {
     let app = AppEnvironment.preview()
     NavigationStack {
-        ToolsView(libraryViewModel: app.library, app: app, onAddBooks: {})
+        ToolsView(
+            libraryViewModel: app.library,
+            app: app,
+            onAddBooks: {},
+            onOpenProject: { _ in })
     }
     .preferredColorScheme(.dark)
 }

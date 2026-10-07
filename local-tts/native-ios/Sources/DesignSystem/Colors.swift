@@ -17,6 +17,16 @@ extension Color {
     /// Warm-neutral paper surface for the dedicated Book Shelf reading mode.
     static let whitePaper = Color(hex: 0xF6F6F6)
 
+    // Flat icon-and-label tab navigation, matching the reference's orange
+    // selection and soft blue-gray inactive items on paper/charcoal surfaces.
+    static let tabSelected = Color(hex: 0xFF5A24)
+    static let tabInactiveLight = Color(hex: 0x78889F)
+    static let tabInactiveDark = Color(hex: 0xA2AEC0)
+
+    static func tabInactive(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .light ? tabInactiveLight : tabInactiveDark
+    }
+
     // Filled CTA — light background, near-black label.
     static let primaryButtonBackground = Color(hex: 0xEEEEEE)
     static let primaryButtonText = Color(hex: 0x111111)
@@ -54,13 +64,12 @@ extension Color {
     // paper and leaves the type itself untouched — see `ReaderPDFPageView`.
     static let pdfPageHighlight = Color(hex: 0xFFE0A0)
 
-    // ReadingStatsView's contribution graph (and Book Shelf's own small
-    // teaser dots — see ImportHomeView.recentActivityDots) — a 5-step
-    // intensity ramp (0 = no activity that day) as increasing ink opacity
+    // ReadingStatsView's contribution graph uses a 5-step intensity ramp
+    // (0 = no activity that day) as increasing ink opacity
     // over `BookShelfPalette`'s light background, rather than a hue ramp —
     // reads as dots lighting up, not a GitHub-style color-coded heatmap.
-    // Shelf teasers keep this ink ramp; the dark stats graph uses the same
-    // opacity levels with appPrimaryText via statsIntensity below.
+    // The dark stats graph uses these opacity levels with appPrimaryText via
+    // statsIntensity below.
     static let statsIntensity0 = BookShelfPalette.primaryText.opacity(0.08)
     static let statsIntensity1 = BookShelfPalette.primaryText.opacity(0.32)
     static let statsIntensity2 = BookShelfPalette.primaryText.opacity(0.55)

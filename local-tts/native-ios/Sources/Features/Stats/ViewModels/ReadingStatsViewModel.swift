@@ -19,8 +19,7 @@ final class ReadingStatsViewModel: ObservableObject {
     /// 7 days; the view drops those when it flattens.
     ///
     /// Seeded synchronously with a full year of zero-activity placeholder
-    /// days — same technique as Book Shelf's weekly teaser
-    /// (`ImportHomeView.emptyRecentDays`) — so the dot grid has its real,
+    /// days so the dot grid has its real,
     /// final row count on the very first frame. Without this, `weeks`
     /// started `[]`, `ReadingStatsView` showed its much shorter empty-state
     /// message until the async `reload()` below resolved, and everything
@@ -36,26 +35,16 @@ final class ReadingStatsViewModel: ObservableObject {
 
     private let store: ReadingStatsStore
     private let calendar: Calendar
-    /// `weeks` is never actually empty now (seeded above), so it can't
-    /// double as the "have we loaded yet" flag `loadIfNeeded` needs.
-    private var hasLoaded = false
-
     init(store: ReadingStatsStore, calendar: Calendar = .current) {
         self.store = store
         self.calendar = calendar
-    }
-
-    func loadIfNeeded() async {
-        guard !hasLoaded else { return }
-        hasLoaded = true
-        await reload()
     }
 
     /// Every day of the current calendar year, January 1 through December
     /// 31 — not a rolling window. Days later in the year than today have no
     /// sessions yet, so they fall out naturally as empty (level 0) dots,
     /// same convention as Book Shelf's own current-week teaser
-    /// (`ImportHomeView.recentActivityDots`).
+    /// whenever the retained Stats tab becomes active.
     func reload() async {
         isLoading = true
         defer { isLoading = false }
