@@ -1,18 +1,13 @@
-import AVFoundation
 import FluidAudio
 import Foundation
 
 /// Owns Kokoro chapter synthesis: resolving which variant's manager a
 /// voice belongs to, warming it up, and running the actual `synthesize()`
-/// calls — one chunk at a time. Two entry points share one FIFO, differing
-/// only in how they hand audio back: `synthesizeChunkSamples` returns raw
-/// `[Float]` samples plus word timings, which is what `BookAudioPlayer`
-/// (the app's one player) needs to fill an `AVAudioPCMBuffer` and highlight
-/// words from the same result; `synthesizeChunkDetailed` returns WAV and
-/// survives for `StreamingPlaybackLab`, its only remaining caller. Both
-/// derive timings the same way for English voices. Nothing here is
-/// persisted to disk (there is no "Generate" feature — removed, see
-/// CHANGELOG).
+/// calls — one chunk at a time. `synthesizeChunkSamples` returns raw `[Float]`
+/// samples plus word timings, which is what `BookAudioPlayer` (the app's one
+/// player) needs to fill an `AVAudioPCMBuffer` and highlight words from the
+/// same result. Nothing here is persisted to disk (there is no "Generate"
+/// feature — removed, see CHANGELOG).
 ///
 /// `KokoroAneManager` is itself an actor, so concurrent `synthesize()`
 /// calls are memory-safe on their own, but `runSerially` still gives
@@ -29,25 +24,10 @@ final class ChapterSynthesisService {
         self.kokoroServices = kokoroServices
     }
 
-    /// Synthesizes one chunk to WAV with word-level timing data. Only
-    /// `StreamingPlaybackLab` still uses this — the app's own player takes
-    /// `synthesizeChunkSamples` below, which skips the encode.
-    func synthesizeChunkDetailed(
-        chunkText: String, voice: String
-    ) async throws -> (data: Data, wordTimings: [WordTiming], duration: TimeInterval) {
-        try await runSerially {
-            let service = try self.service(forVoice: voice)
-            try await service.ensureReady(voice: voice)
-            return try await Self.synthesizeOneChunk(chunkText: chunkText, voice: voice, service: service)
-        }
-    }
-
     /// Synthesizes one chunk as raw samples plus word timings — the app's
     /// one playback path (`BookAudioPlayer`), which feeds an
     /// `AVAudioPCMBuffer` directly and highlights words from the same
-    /// result. Same FIFO, same `ensureReady`, same text normalization as
-    /// `synthesizeChunkDetailed`; what differs is the *audio* representation.
-    /// English voices stop at `synthesizeDetailed`'s own pre-encode
+    /// result. English voices stop at `synthesizeDetailed`'s own pre-encode
     /// `.samples`, skipping the `AudioWAV` encode and the caller's matching
     /// decode — a pure round-trip for a node that wants floats anyway.
     /// Non-English voices still go through plain `synthesize` (WAV), since
@@ -123,30 +103,6 @@ final class ChapterSynthesisService {
         return ".!?:;…".contains(last)
     }
 
-    /// The shared per-chunk synthesis logic `synthesizeChunkDetailed` funnels
-    /// through. English voices get exact
-    /// word-level timings (see `WordTimingDeriver`) via `synthesizeDetailed`
-    /// instead of the plain `synthesize`, since only that call exposes the
-    /// real per-token duration data used to render the audio. Non-English
-    /// voices skip this — the alignment relies on the English normalizer/
-    /// phonemizer path — and get an empty `wordTimings`, same fallback
-    /// chunk-level highlighting already uses.
-    private static func synthesizeOneChunk(
-        chunkText: String, voice: String, service: KokoroEngineService
-    ) async throws -> (data: Data, wordTimings: [WordTiming], duration: TimeInterval) {
-        let spoken = spokenText(chunkText)
-        guard VoiceCatalog.variant(forCode: voice) == .english else {
-            let data = try await service.synthesize(text: spoken, voice: voice)
-            let duration = (try? AVAudioPlayer(data: data))?.duration ?? 0
-            return (data, [], duration)
-        }
-        let result = try await service.synthesizeDetailed(text: spoken, voice: voice)
-        let data = try AudioWAV.data(
-            from: result.samples, sampleRate: Double(result.sampleRate), normalize: false)
-        let wordTimings = await deriveWordTimings(chunkText: chunkText, result: result, service: service)
-        return (data, wordTimings, result.durationSeconds)
-    }
-
     /// Runs the one remaining call `WordTimingDeriver` needs — a memoized
     /// `phonemes(for:)` per unique normalized word — and hands the result
     /// to the pure deriver. A vocab/space-token load failure degrades this
@@ -179,10 +135,7 @@ final class ChapterSynthesisService {
     /// returns) back into `[Float]` samples — only the non-English fallback
     /// in `synthesizeChunkSamples` needs this; English stays on
     /// `synthesizeDetailed`'s samples and never touches WAV at all. Walks
-    /// the RIFF chunk list rather than assuming a fixed 44-byte header, same
-    /// approach as `StreamingPlaybackLab.pcmBuffer(fromWAV:)` (which parses
-    /// the same shape of WAV into an `AVAudioPCMBuffer` instead — a
-    /// player-layer concern this service doesn't own).
+    /// the RIFF chunk list rather than assuming a fixed 44-byte header.
     private static func samples(
         fromWAV wav: Data
     ) throws -> (samples: [Float], sampleRate: Int, duration: TimeInterval) {

@@ -1,6 +1,6 @@
 # 10. Chapters, replacing the Kokoro multi-track playlist
 
-**Status:** Partially superseded (2026-09-27) — the persisted "Generate" path this ADR describes (`generateAndSave`, `ChapterGenerationStore`, `ChapterAudioStore`/`PageAudioStore`, `ChapterAudioManifest`, `WavConcatenator`) was removed outright. Streaming (`ChapterSynthesisService.synthesizeChunkDetailed`, `ChapterAudioPlayer.stream`) is now the only playback path — nothing is ever written to disk. See CHANGELOG. Everything below about the streaming half — the FIFO `runSerially` queue, per-chunk word timings, the chapters-not-a-flat-playlist model — still holds; only the "Generate and save a real file" half is gone.
+**Status:** Superseded in stages (2026-09-27 through 2026-09-28) — the persisted "Generate" path described here was removed first, then ADR 0013 replaced `ChapterAudioPlayer` with the single gapless `BookAudioPlayer`. Streaming now enters through `ChapterSynthesisService.synthesizeChunkSamples`; nothing is written to disk. The history below remains useful context for the move away from the old multi-track playlist, but its player types and Generate flow are no longer current.
 **Date:** 2026-09-19
 
 ## Context

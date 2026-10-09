@@ -42,7 +42,7 @@ final class VoicePreviewPlayer: ObservableObject {
         guard let url = Self.clipURL(voiceName: voiceName, engine: engine) else { return }
 
         do {
-            // Matches BookAudioPlayer/StreamingPlaybackLab's own category —
+            // Matches BookAudioPlayer's own category —
             // a bare `.playback` here used to silently downgrade whatever
             // fuller category either of those had already set for the rest
             // of the launch (AVAudioSession is one shared, global session;

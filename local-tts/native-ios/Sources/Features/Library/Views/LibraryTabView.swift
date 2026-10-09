@@ -262,36 +262,40 @@ private struct LibraryBookRow: View {
                 size: CGSize(width: 50, height: 74),
                 cornerRadius: 5)
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 10) {
-                    GeometryReader { proxy in
-                        Capsule()
-                            .fill(Color.appPrimaryText.opacity(0.16))
-                            .overlay(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.appPrimaryText)
-                                    .frame(width: proxy.size.width * generation.readingProgress)
-                            }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 3)
-
-                    Text("\(percent)%")
-                        .font(AppTextStyle.label.font)
-                        .monospacedDigit()
-                        .foregroundStyle(Color.appSecondaryText)
-                }
-
+            VStack(alignment: .leading, spacing: 0) {
                 Text(generation.title)
                     .font(AppTextStyle.rowTitle.font)
                     .foregroundStyle(Color.appPrimaryText)
                     .lineLimit(1)
 
-                Text("\(generation.source.libraryFormatLabel) · \(generation.pageCountLabel)")
-                    .font(AppTextStyle.label.font)
-                    .foregroundStyle(Color.appSecondaryText)
-                    .lineLimit(1)
+                Spacer(minLength: 8)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(generation.source.libraryFormatLabel) · \(generation.pageCountLabel)")
+                        .font(AppTextStyle.label.font)
+                        .foregroundStyle(Color.appSecondaryText)
+                        .lineLimit(1)
+
+                    HStack(spacing: 7) {
+                        GeometryReader { proxy in
+                            Capsule()
+                                .fill(Color.appPrimaryText.opacity(0.16))
+                                .overlay(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.appPrimaryText)
+                                        .frame(width: proxy.size.width * generation.readingProgress)
+                                }
+                        }
+                        .frame(width: 100, height: 3)
+
+                        Text("\(percent)%")
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.appSecondaryText)
+                    }
+                }
             }
+            .frame(height: 74)
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())

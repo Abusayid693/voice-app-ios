@@ -11,8 +11,8 @@ import UIKit
 /// `docs/adr/0012-two-playback-engines.md` accepted; see
 /// `docs/adr/0013-unified-player.md`.
 ///
-/// The engine came from `StreamingPlaybackLab` (`Features/Chapters/
-/// Services/StreamingPlaybackLab.swift`): one `AVAudioPlayerNode` with
+/// The engine came from the app's retired background-playback prototype:
+/// one `AVAudioPlayerNode` with
 /// buffers scheduled onto it, gapless, plus a silence keep-alive so a slow
 /// synthesis stretch can't leave the node silent long enough for iOS to
 /// suspend the app (once suspended, synthesis stops too, and it never
@@ -1201,8 +1201,9 @@ final class BookAudioPlayer: ObservableObject {
 
     /// Known ways background audio dies quietly — without these an
     /// interruption or a route change leaves the node stopped with no
-    /// indication why. Ported from `StreamingPlaybackLab`, plus route-change
-    /// handling and honouring `.shouldResume` (both gaps the lab left open,
+    /// indication why. Retained from the original background-playback
+    /// prototype, plus route-change handling and honouring `.shouldResume`
+    /// (both gaps the prototype left open,
     /// acceptable in a scratch harness, not here).
     private func observeSystemEvents() {
         removeObservers()

@@ -128,6 +128,13 @@ struct RootTabView: View {
                                         project: project,
                                         initialPageIndex: nil,
                                         initialSurfaceMode: nil))
+                            },
+                            onImportDownloadedBook: { url, format in
+                                await app.pdfImports.importBook(
+                                    from: url,
+                                    format: format,
+                                    engine: .kokoroAne,
+                                    voiceName: app.tts.kokoroVoice)
                             })
                             .navigationDestination(item: readerBinding(for: .tools)) {
                                 readerDestination($0)
