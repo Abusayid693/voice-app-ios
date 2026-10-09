@@ -1,5 +1,10 @@
 import SwiftUI
 
+enum InteractiveGlassSheetBackgroundStyle {
+    case textured
+    case clearGlass
+}
+
 /// Edge-to-edge reader sheet chrome shared by Reader Options, Pages, and
 /// Playback Speed. Callers own only their body content; this view owns the
 /// interactive surface, presentation behavior, and floating blurred header.
@@ -7,6 +12,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
     let theme: ReaderChromeTheme
     let detents: Set<PresentationDetent>
     let showsDragIndicator: Bool
+    let backgroundStyle: InteractiveGlassSheetBackgroundStyle
     let closeAccessibilityLabel: String
     let contentTopInset: CGFloat
     let onClose: () -> Void
@@ -23,6 +29,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
         theme: ReaderChromeTheme,
         detents: Set<PresentationDetent>,
         showsDragIndicator: Bool = true,
+        backgroundStyle: InteractiveGlassSheetBackgroundStyle = .textured,
         closeAccessibilityLabel: String = "Close",
         contentTopInset: CGFloat = 60,
         onClose: @escaping () -> Void,
@@ -32,6 +39,7 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
         self.theme = theme
         self.detents = detents
         self.showsDragIndicator = showsDragIndicator
+        self.backgroundStyle = backgroundStyle
         self.closeAccessibilityLabel = closeAccessibilityLabel
         self.contentTopInset = contentTopInset
         self.onClose = onClose
@@ -45,7 +53,9 @@ struct InteractiveGlassBottomSheet<Content: View>: View {
             header
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(InteractiveGlassSheetSurface(theme: theme))
+        .modifier(InteractiveGlassSheetSurface(
+            theme: theme,
+            backgroundStyle: backgroundStyle))
         .presentationDetents(detents)
         .presentationDragIndicator(showsDragIndicator ? .visible : .hidden)
         .presentationContentInteraction(.scrolls)
@@ -139,26 +149,50 @@ private struct InteractiveGlassHeaderButton: ViewModifier {
 /// paths keep the two-mode texture edge-to-edge behind scrolling content.
 private struct InteractiveGlassSheetSurface: ViewModifier {
     let theme: ReaderChromeTheme
+    let backgroundStyle: InteractiveGlassSheetBackgroundStyle
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content
-                .background {
-                    ReaderChromeSheetBackground(theme: theme)
-                        .ignoresSafeArea()
-                }
-                .glassEffect(
-                    .regular.tint(theme.background),
-                    in: Rectangle())
-                .presentationBackground(.clear)
+            switch backgroundStyle {
+            case .textured:
+                content
+                    .background {
+                        ReaderChromeSheetBackground(theme: theme)
+                            .ignoresSafeArea()
+                    }
+                    .glassEffect(
+                        .regular.tint(theme.background),
+                        in: Rectangle())
+                    .presentationBackground(.clear)
+            case .clearGlass:
+                content
+                    .background {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .glassEffect(.clear, in: Rectangle())
+                            .ignoresSafeArea()
+                    }
+                    .presentationBackground(.clear)
+            }
         } else {
-            content
-                .background {
-                    ReaderChromeSheetBackground(theme: theme)
-                        .ignoresSafeArea()
-                }
-                .presentationBackground(theme.background)
+            switch backgroundStyle {
+            case .textured:
+                content
+                    .background {
+                        ReaderChromeSheetBackground(theme: theme)
+                            .ignoresSafeArea()
+                    }
+                    .presentationBackground(theme.background)
+            case .clearGlass:
+                content
+                    .background {
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .ignoresSafeArea()
+                    }
+                    .presentationBackground(.clear)
+            }
         }
     }
 }

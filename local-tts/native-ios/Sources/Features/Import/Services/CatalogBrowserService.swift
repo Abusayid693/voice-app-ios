@@ -19,9 +19,13 @@ final class CatalogBrowserService: NSObject {
     private var activeDownload: WKDownload?
     private var progressObservation: NSKeyValueObservation?
     private var activeDirectory: URL?
+    private var activeFileURL: URL?
     private var pendingFormat: BookImportFormat?
+    private var acceptsDownloads = true
+    private let source: CatalogSource
 
-    override init() {
+    init(source: CatalogSource) {
+        self.source = source
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -59,8 +63,11 @@ final class CatalogBrowserService: NSObject {
         clearActiveDownload(removingFiles: true)
     }
 
+    func setAcceptsDownloads(_ acceptsDownloads: Bool) {
+        self.acceptsDownloads = acceptsDownloads
+    }
+
     func browserDidDisappear() {
-        webView.stopLoading()
         cancelDownload()
     }
 
@@ -72,8 +79,20 @@ final class CatalogBrowserService: NSObject {
         onNavigationChanged?(webView.canGoBack, webView.canGoForward, webView.url)
     }
 
+    private func handleNavigationFailure(_ error: Error) {
+        onLoadingChanged?(false)
+        updateNavigationState()
+
+        let error = error as NSError
+        let wasCancelled = error.domain == NSURLErrorDomain
+            && error.code == NSURLErrorCancelled
+        let becameDownload = error.domain == "WebKitErrorDomain" && error.code == 102
+        guard !wasCancelled, !becameDownload else { return }
+        onMessage?(error.localizedDescription)
+    }
+
     private func attach(_ download: WKDownload) {
-        guard activeDownload == nil else {
+        guard acceptsDownloads, activeDownload == nil else {
             download.cancel()
             onMessage?("Finish or cancel the current download first.")
             return
@@ -99,6 +118,7 @@ final class CatalogBrowserService: NSObject {
             try? FileManager.default.removeItem(at: activeDirectory)
         }
         activeDirectory = nil
+        activeFileURL = nil
     }
 
     private func format(
@@ -131,11 +151,36 @@ final class CatalogBrowserService: NSObject {
             .filter { !$0.isEmpty }
             .joined(separator: "-")
         if filename.isEmpty { filename = "Downloaded Book" }
+        if filename == "." || filename == ".." { filename = "Downloaded Book" }
         if !filename.lowercased().hasSuffix(".\(format.sourceFileExtension)") {
             filename += ".\(format.sourceFileExtension)"
         }
         activeDirectory = directory
-        return directory.appendingPathComponent(filename)
+        let fileURL = directory.appendingPathComponent(filename)
+        activeFileURL = fileURL
+        return fileURL
+    }
+
+    private func opensOutsideCatalog(_ url: URL) -> Bool {
+        guard !source.isCustom else { return false }
+
+        let sourceHost = normalizedHost(source.url.host)
+        let destinationHost = normalizedHost(url.host)
+        guard !sourceHost.isEmpty, !destinationHost.isEmpty else { return false }
+
+        let belongsToSource = destinationHost == sourceHost
+            || destinationHost.hasSuffix(".\(sourceHost)")
+        if !belongsToSource { return true }
+
+        guard source.id == "standard-ebooks" else { return false }
+        let path = url.path.lowercased()
+        return ["/donate", "/patrons", "/membership", "/checkout"]
+            .contains(where: path.contains)
+    }
+
+    private func normalizedHost(_ host: String?) -> String {
+        guard let host = host?.lowercased() else { return "" }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 }
 
@@ -168,7 +213,13 @@ extension CatalogBrowserService: WKNavigationDelegate {
             return
         }
 
-        if activeDownload != nil,
+        if scheme == "https", opensOutsideCatalog(url) {
+            UIApplication.shared.open(url)
+            decisionHandler(.cancel)
+            return
+        }
+
+        if (!acceptsDownloads || activeDownload != nil),
            (navigationAction.shouldPerformDownload
                 || format(for: url, mimeType: nil, suggestedFilename: nil) != nil)
         {
@@ -177,10 +228,8 @@ extension CatalogBrowserService: WKNavigationDelegate {
             return
         }
 
-        if navigationAction.shouldPerformDownload,
-           let detected = format(for: url, mimeType: nil, suggestedFilename: nil)
-        {
-            pendingFormat = detected
+        if navigationAction.shouldPerformDownload {
+            pendingFormat = format(for: url, mimeType: nil, suggestedFilename: nil)
             decisionHandler(.download)
             return
         }
@@ -206,12 +255,18 @@ extension CatalogBrowserService: WKNavigationDelegate {
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
         let response = navigationResponse.response
+        if response.url?.scheme?.lowercased() == "http" {
+            onMessage?("This catalog response is not secure. Only HTTPS downloads are supported.")
+            decisionHandler(.cancel)
+            return
+        }
+
         if let detected = format(
             for: response.url,
             mimeType: response.mimeType,
             suggestedFilename: response.suggestedFilename)
         {
-            guard activeDownload == nil else {
+            guard acceptsDownloads, activeDownload == nil else {
                 onMessage?("Finish or cancel the current download first.")
                 decisionHandler(.cancel)
                 return
@@ -256,9 +311,7 @@ extension CatalogBrowserService: WKNavigationDelegate {
         didFail navigation: WKNavigation?,
         withError error: Error
     ) {
-        onLoadingChanged?(false)
-        updateNavigationState()
-        onMessage?(error.localizedDescription)
+        handleNavigationFailure(error)
     }
 
     func webView(
@@ -266,9 +319,7 @@ extension CatalogBrowserService: WKNavigationDelegate {
         didFailProvisionalNavigation navigation: WKNavigation?,
         withError error: Error
     ) {
-        onLoadingChanged?(false)
-        updateNavigationState()
-        onMessage?(error.localizedDescription)
+        handleNavigationFailure(error)
     }
 }
 
@@ -279,6 +330,11 @@ extension CatalogBrowserService: WKDownloadDelegate {
         suggestedFilename: String,
         completionHandler: @escaping (URL?) -> Void
     ) {
+        guard download === activeDownload else {
+            completionHandler(nil)
+            return
+        }
+
         guard let detected = pendingFormat ?? format(
             for: response.url,
             mimeType: response.mimeType,
@@ -303,11 +359,8 @@ extension CatalogBrowserService: WKDownloadDelegate {
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        guard let directory = activeDirectory,
-              let fileURL = try? FileManager.default.contentsOfDirectory(
-                at: directory,
-                includingPropertiesForKeys: nil)
-                .first,
+        guard download === activeDownload else { return }
+        guard let fileURL = activeFileURL,
               let detected = pendingFormat
         else {
             onDownloadFailed?("The downloaded file could not be found.")
@@ -324,6 +377,7 @@ extension CatalogBrowserService: WKDownloadDelegate {
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        guard download === activeDownload else { return }
         if (error as NSError).code != NSURLErrorCancelled {
             onDownloadFailed?(error.localizedDescription)
         }

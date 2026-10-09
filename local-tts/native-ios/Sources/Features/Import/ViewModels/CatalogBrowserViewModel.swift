@@ -37,7 +37,7 @@ final class CatalogBrowserViewModel: ObservableObject {
     ) {
         self.source = source
         self.onImport = onImport
-        service = CatalogBrowserService()
+        service = CatalogBrowserService(source: source)
         connectService()
     }
 
@@ -64,6 +64,9 @@ final class CatalogBrowserViewModel: ObservableObject {
 
     func browserDidDisappear() {
         service.browserDidDisappear()
+        if case .downloading = downloadStatus {
+            downloadStatus = .idle
+        }
     }
 
     private func connectService() {
@@ -93,11 +96,12 @@ final class CatalogBrowserViewModel: ObservableObject {
 
     private func handoff(_ book: CatalogDownloadedBook) {
         downloadStatus = .importing(filename: book.displayName)
-        // Once WebKit has produced the file, retain this handoff even if the
-        // user leaves the browser; PDFImportManager copies it before return.
+        service.setAcceptsDownloads(false)
+        // Keep the importer handoff alive after the browser disappears.
         Task {
             await onImport(book.fileURL, book.format)
             service.removeTemporaryFile(for: book)
+            service.setAcceptsDownloads(true)
             downloadStatus = .success("Added \(book.displayName) to My Shelf")
         }
     }

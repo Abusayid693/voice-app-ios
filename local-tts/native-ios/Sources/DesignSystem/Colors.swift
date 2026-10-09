@@ -178,6 +178,26 @@ struct TexturedDarkBackground: View {
 
 }
 
+/// The Settings sidebar texture mirrored for light editorial surfaces. It uses
+/// the same lighting shapes, grain coordinates, density, and bottom weighting;
+/// only the paper/core and texture colors are inverted.
+struct TexturedLightBackground: View {
+    var body: some View {
+        ZStack {
+            BookShelfPalette.background
+
+            LinearGradient(
+                colors: [BookShelfPalette.background, Color(hex: 0xFAFAFA), .white],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing)
+
+            SidebarTextureLayer(textureColor: .black, coreColor: .white)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Settings' texture layer. Reader sheets reuse this view and swap only its
 /// foreground/core colors, so geometry and grain cannot diverge.
 private struct SidebarTextureLayer: View {
@@ -369,18 +389,7 @@ struct ReaderChromeSheetBackground: View {
     }
 
     private var lightSurface: some View {
-        ZStack {
-            BookShelfPalette.background
-
-            LinearGradient(
-                colors: [BookShelfPalette.background, Color(hex: 0xFAFAFA), .white],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing)
-
-            SidebarTextureLayer(textureColor: .black, coreColor: .white)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        TexturedLightBackground()
     }
 }
 

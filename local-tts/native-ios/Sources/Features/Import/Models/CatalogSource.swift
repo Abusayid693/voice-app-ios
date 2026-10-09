@@ -12,17 +12,7 @@ struct CatalogSource: Codable, Hashable, Identifiable {
     let kind: Kind
 
     var isCustom: Bool { kind == .custom }
-
-    var subtitle: String {
-        switch id {
-        case "project-gutenberg":
-            return "Free public-domain books from Project Gutenberg"
-        case "standard-ebooks":
-            return "Carefully produced public-domain editions"
-        default:
-            return url.host() ?? url.absoluteString
-        }
-    }
+    var sourceLabel: String { isCustom ? "Custom website" : "Third-party catalog" }
 
     static let builtIns: [CatalogSource] = [
         CatalogSource(

@@ -10,6 +10,8 @@ struct SettingsSheet: View {
     var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var isVoiceLibraryPresented = false
+    @State private var isStoragePresented = false
+    @State private var isAboutPresented = false
 
     var body: some View {
         NavigationStack {
@@ -42,15 +44,13 @@ struct SettingsSheet: View {
                         } label: {
                             row(title: "Voice Packs", icon: .packageIcon)
                         }
-                        NavigationLink {
-                            StorageView(viewModel: viewModel, packs: viewModel.packs)
-                                .toolbar(.visible, for: .navigationBar)
+                        Button {
+                            isStoragePresented = true
                         } label: {
                             row(title: "Storage", icon: .hardDrive)
                         }
-                        NavigationLink {
-                            AboutView()
-                                .toolbar(.visible, for: .navigationBar)
+                        Button {
+                            isAboutPresented = true
                         } label: {
                             row(title: "About", icon: .info)
                         }
@@ -82,6 +82,12 @@ struct SettingsSheet: View {
                 packs: viewModel.packs,
                 previewPlayer: previewPlayer,
                 onVoiceSelected: { viewModel.setDefaultKokoroVoice($0) })
+        }
+        .sheet(isPresented: $isStoragePresented) {
+            StorageView(packs: viewModel.packs)
+        }
+        .fullScreenCover(isPresented: $isAboutPresented) {
+            AboutView()
         }
     }
 
