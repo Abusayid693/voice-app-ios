@@ -5,13 +5,24 @@ import SwiftUI
 /// wrapping downward same as reading text. No scroll view of its own: it's
 /// meant to sit inside `ReadingStatsView`'s existing vertical `ScrollView`.
 /// Deliberately built from per-cell `Button`s rather than drawn with
-/// `Canvas`: each cell needs its own tap target to open that day's detail,
-/// not just a color.
+/// `Canvas`: each cell needs its own tap target.
+///
+/// A tap **selects** that day (`onSelectDay`) rather than opening its detail
+/// directly — `ReadingStatsView`'s summary card is what opens the detail
+/// sheet, for whichever day is currently selected. This mirrors the day orb
+/// carousel above it: both are ways to move the one selection, not two
+/// separate entry points into detail.
 struct ContributionGraphView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let weeks: [[DayActivity?]]
+    let days: [DayActivity]
+    var selectedDay: Date?
     var isRevealed: Bool = true
+    /// Where this view's own row-staggered entrance starts counting from —
+    /// lets a caller with content above the graph (the carousel, caption,
+    /// and summary card in `ReadingStatsView`) push the cascade to start
+    /// after those have already revealed, instead of colliding with them.
+    var rowDelayBase: Double = 0.20
     let onSelectDay: (Date) -> Void
 
     private let cellSize: CGFloat = 11.2
@@ -21,14 +32,6 @@ struct ContributionGraphView: View {
     // originally tuned to.
     private let cellSpacing: CGFloat = 7
     static let columnsPerRow = 18
-
-    /// `weeks` groups by weekday column for a 7-wide layout this view no
-    /// longer uses, but it's already oldest-first within and across weeks —
-    /// flatten it and drop the `nil` padding that alignment needed, and the
-    /// chronological order falls out for free.
-    private var days: [DayActivity] {
-        weeks.flatMap { $0 }.compactMap { $0 }
-    }
 
     var body: some View {
         LazyVGrid(
@@ -44,12 +47,20 @@ struct ContributionGraphView: View {
     }
 
     private func cell(for activity: DayActivity, rowIndex: Int) -> some View {
-        Button {
+        let isSelected = selectedDay.map { Calendar.current.isDate($0, inSameDayAs: activity.day) } ?? false
+        return Button {
             onSelectDay(activity.day)
         } label: {
             Circle()
                 .fill(Color.statsIntensity(level: activity.intensityLevel, colorScheme: colorScheme))
                 .frame(width: cellSize, height: cellSize)
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .strokeBorder(Color.appPrimaryText, lineWidth: 1.5)
+                            .frame(width: cellSize + 5, height: cellSize + 5)
+                    }
+                }
                 // Wider tap target than the dot itself, without changing
                 // row height — a taller frame here was the row spacing
                 // bug: it pushed rows apart further than columns, since
@@ -61,8 +72,9 @@ struct ContributionGraphView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel(for: activity))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: activity.intensityLevel)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: isSelected)
         .modifier(StatsEntranceReveal(
-            isVisible: isRevealed, delay: StatsEntranceReveal.rowDelay(rowIndex)))
+            isVisible: isRevealed, delay: StatsEntranceReveal.rowDelay(rowIndex, base: rowDelayBase)))
     }
 
     private func accessibilityLabel(for activity: DayActivity) -> String {
@@ -78,14 +90,14 @@ struct ContributionGraphView: View {
 #Preview {
     let calendar = Calendar.current
     let today = calendar.startOfDay(for: Date())
-    let days: [DayActivity?] = (0..<64).map { offset in
+    let days: [DayActivity] = (0..<64).map { offset in
         let day = calendar.date(byAdding: .day, value: -offset, to: today)!
         return DayActivity(
             day: day, listenedSeconds: Double([0, 120, 600, 1200, 2400].randomElement()!),
-            pagesCompleted: Int.random(in: 0...4))
+            pagesCompleted: Int.random(in: 0...4),
+            goalSeconds: Double(DailyGoalSchedule.defaultGoalMinutes) * 60)
     }.reversed()
-    let weeks = stride(from: 0, to: days.count, by: 7).map { Array(days[$0..<$0 + 7]) }
-    return ContributionGraphView(weeks: weeks) { _ in }
+    return ContributionGraphView(days: days, selectedDay: today) { _ in }
         .padding()
         .background(Color.appBackground)
         .environment(\.colorScheme, .dark)
