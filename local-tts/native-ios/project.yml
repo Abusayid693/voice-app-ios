@@ -2,7 +2,7 @@ name: KokoroAneTest
 options:
   deploymentTarget:
     iOS: "18.0"
-  bundleIdPrefix: com.rehanchoudhury.kokoroanetest
+  bundleIdPrefix: com.rehanchoudhury.kokoroanetest2
 packages:
   # Pinned past the latest tagged release (v0.15.7, 2026-09-10) to a
   # specific main commit — FluidInference/FluidAudio#915 (merged
@@ -126,11 +126,11 @@ targets:
           - Inter-Variable.ttf
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest
+        PRODUCT_BUNDLE_IDENTIFIER: com.rehanchoudhury.kokoroanetest2
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: Q2F3H94YUP
+        DEVELOPMENT_TEAM: V667L4VT6C
         # No custom app icon exists — without this, xcodegen's default
         # ASSETCATALOG_COMPILER_APPICON_NAME (AppIcon) was a silent no-op
         # while Sources/Resources/Assets.xcassets didn't exist, but now
