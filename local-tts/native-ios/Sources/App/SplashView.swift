@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The app's opening wordmark: the same paper surface About uses, with
-/// "Minimalist Reader" drawn as a left-to-right ink reveal.
+/// The app's opening wordmark: the same white-on-charcoal surface Settings,
+/// Stats and Voice Library use, with "Minimalist Reader" drawn as a
+/// left-to-right ink reveal.
 ///
 /// Deliberately **not** a gate in front of `RootTabView` — the app root stays
 /// mounted underneath (see `KokoroAneTestApp`), so the shelf's own `.task`
@@ -42,13 +43,13 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            TexturedLightBackground()
+            TexturedDarkBackground(variant: .sidebar)
                 .ignoresSafeArea()
 
             SignatureText(
                 "Minimalist Reader",
                 isRevealed: isRevealed,
-                color: BookShelfPalette.primaryText,
+                color: .appPrimaryText,
                 fontSize: 38,
                 duration: inkDuration,
                 isHeading: true)
@@ -60,9 +61,9 @@ struct SplashView: View {
                 .padding(.horizontal, 28)
         }
         .opacity(opacity)
-        // Deliberately no `.preferredColorScheme(.light)`, unlike About's own
-        // use of this surface. Every colour here is a fixed value rather than
-        // a semantic one, so the splash looks identical either way — and
+        // Deliberately no `.preferredColorScheme`, unlike About's own use of
+        // its surface. Every colour here is a fixed value rather than a
+        // semantic one, so the splash looks identical either way — and
         // forcing a scheme would hand the *window* a scheme change at the
         // exact moment the splash is clearing, which is the one moment that
         // has to look seamless.

@@ -97,10 +97,10 @@ targets:
     info:
       path: Sources/Resources/Info.plist
       properties:
-        # Paper, matching SplashView's own surface, and declared as a color
-        # set with a single universal appearance so a dark-mode device gets
-        # the same value. Left empty this defaulted to the system background,
-        # which flashed black before the light splash mounted.
+        # `appBackground`, matching SplashView's own surface, declared as a
+        # color set with a single universal appearance so a light-mode device
+        # gets the same value. Left empty this defaulted to the system
+        # background, which flashed white before the dark splash mounted.
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIApplicationSceneManifest:
