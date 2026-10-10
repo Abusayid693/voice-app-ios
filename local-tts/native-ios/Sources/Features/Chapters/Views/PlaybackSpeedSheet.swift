@@ -12,18 +12,12 @@ struct PlaybackSpeedSheet: View {
     @Binding var rate: Double
     let chromeTheme: ReaderChromeTheme
 
-    @Environment(\.dismiss) private var dismiss
-
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 
     var body: some View {
-        InteractiveGlassBottomSheet(
-            theme: chromeTheme,
-            detents: [.height(340)],
-            closeAccessibilityLabel: "Close playback speed",
-            contentTopInset: 78,
-            onClose: { dismiss() }
-        ) { headerInset in
+        StandardBottomSheet(
+            title: "Playback Speed", detents: [.height(390)], theme: chromeTheme
+        ) {
             HStack(alignment: .center, spacing: 18) {
                 VStack(spacing: 18) {
                     Text(speedCharacter)
@@ -42,10 +36,6 @@ struct PlaybackSpeedSheet: View {
                     fill: chromeTheme.accent)
                     .frame(width: 54, height: 226)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, headerInset)
-            .padding(.bottom, 20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 

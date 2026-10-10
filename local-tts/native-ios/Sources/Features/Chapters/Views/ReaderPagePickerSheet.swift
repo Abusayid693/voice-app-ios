@@ -102,30 +102,18 @@ struct ReaderPagePickerSheet: View {
         let sections = chapterSections
         let allRows = rows(for: sections)
 
-        InteractiveGlassBottomSheet(
-            theme: chromeTheme,
-            detents: [.large],
-            closeAccessibilityLabel: "Close page picker",
-            onClose: { dismiss() }
-        ) { headerInset in
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(allRows) { row in
-                        switch row {
-                        case .chapterHeader(let section):
-                            chapterHeaderRow(section)
-                        case .page(let index, let indented):
-                            pageRow(index: index, indented: indented)
-                                .onAppear { loadPreview(for: index) }
-                        }
+        StandardBottomSheet(title: "Pages", detents: [.large], theme: chromeTheme) {
+            LazyVStack(spacing: 8) {
+                ForEach(allRows) { row in
+                    switch row {
+                    case .chapterHeader(let section):
+                        chapterHeaderRow(section)
+                    case .page(let index, let indented):
+                        pageRow(index: index, indented: indented)
+                            .onAppear { loadPreview(for: index) }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, headerInset)
-                .padding(.bottom, 16)
             }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
         }
         .onAppear {
             guard expandedStartPages.isEmpty else { return }
