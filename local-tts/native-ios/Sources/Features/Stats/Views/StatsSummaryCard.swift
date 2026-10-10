@@ -27,7 +27,11 @@ struct StatsSummaryCard: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 22)
-            .background(Color.appSecondaryBackground, in: RoundedRectangle(cornerRadius: 24))
+            .background {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color.appSecondaryBackground)
+                    .shadow(color: Color.tabSelected.opacity(0.22), radius: 14, y: 5)
+            }
         }
         .buttonStyle(.pressOpacity)
         .accessibilityElement(children: .combine)
@@ -55,37 +59,38 @@ struct StatsSummaryCard: View {
     private var streakColumn: some View {
         VStack(spacing: 6) {
             // Passed as an `Int` interpolated on its own rather than a
-            // preformatted string so `.numericText()` has two numbers to
-            // roll between — handed a composed `String` it falls back to a
-            // plain crossfade.
+            // preformatted string so `.numericText()` has two numbers
+            // to roll between.
             Text("\(streak)")
-                .appText(.title)
+                .font(.system(size: 40, weight: .medium, design: .serif))
+                .foregroundStyle(Color.appPrimaryText)
                 .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: streak)
             Text("DAY STREAK")
-                .appText(.meta)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.appSecondaryText)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var minutesColumn: some View {
         VStack(spacing: 6) {
-            // Two `Text`s rather than one "12/30" string: only the left half
-            // changes as you slide between days, and splitting it keeps
-            // `.numericText()` rolling that number while the goal stays put.
-            // The goal is dimmed so the achieved figure still reads as the
-            // headline rather than the pair competing.
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(minutes)")
+                    .font(.system(size: 40, weight: .medium, design: .serif))
+                    .foregroundStyle(Color.appPrimaryText)
                     .contentTransition(.numericText())
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: minutes)
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.28), value: minutes)
+
                 Text("/\(goalMinutes)")
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.appSecondaryText)
             }
-            .appText(.title)
 
             Text("MINS READ")
-                .appText(.meta)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.appSecondaryText)
         }
         .frame(maxWidth: .infinity)
     }
@@ -93,8 +98,12 @@ struct StatsSummaryCard: View {
 
 #Preview {
     VStack(spacing: 16) {
-        StatsSummaryCard(streak: 3, minutes: 12, goalMinutes: 30, action: {}, onEditGoal: {})
-        StatsSummaryCard(streak: 0, minutes: 45, goalMinutes: 45, action: {}, onEditGoal: {})
+        StatsSummaryCard(
+            streak: 3, minutes: 12, goalMinutes: 30,
+            action: {}, onEditGoal: {})
+        StatsSummaryCard(
+            streak: 0, minutes: 45, goalMinutes: 45,
+            action: {}, onEditGoal: {})
     }
     .padding(20)
     .background(Color.appBackground)

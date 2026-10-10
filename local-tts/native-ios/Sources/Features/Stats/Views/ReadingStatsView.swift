@@ -3,7 +3,7 @@ import SwiftUI
 /// The retained Stats tab root: a day orb carousel (one glowing sphere per
 /// day, brightness toward the 30-min daily goal), the selected day's date
 /// and minutes, a streak/time-read summary card that opens that day's
-/// detail, and a 3-month contribution graph below a section title.
+/// detail, and a 6-month contribution graph below a section title.
 ///
 /// The whole top half of the page describes **one selected day** —
 /// `ReadingStatsViewModel.selectedDay` — which the carousel, caption, and
@@ -13,16 +13,24 @@ import SwiftUI
 /// here in Swift over rows already filtered by the background actor).
 struct ReadingStatsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @StateObject private var viewModel: ReadingStatsViewModel
     @State private var contentRevealed = false
     @State private var isGoalSheetPresented = false
     let refreshToken: Int
     let isActive: Bool
+    let coverURL: (UUID) -> URL?
 
-    init(readingStats: ReadingStatsStore, refreshToken: Int = 0, isActive: Bool = true) {
+    init(
+        readingStats: ReadingStatsStore,
+        refreshToken: Int = 0,
+        isActive: Bool = true,
+        coverURL: @escaping (UUID) -> URL? = { _ in nil }
+    ) {
         _viewModel = StateObject(wrappedValue: ReadingStatsViewModel(store: readingStats))
         self.refreshToken = refreshToken
         self.isActive = isActive
+        self.coverURL = coverURL
     }
 
     var body: some View {
@@ -35,9 +43,6 @@ struct ReadingStatsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: AppSpacing.betweenSections) {
-                        StatsSignatureTitle(isRevealed: contentRevealed)
-                            .frame(maxWidth: .infinity, alignment: .center)
-
                         VStack(spacing: 18) {
                             DayOrbCarousel(
                                 days: viewModel.days, selectedDay: $viewModel.selectedDay,
@@ -67,10 +72,13 @@ struct ReadingStatsView: View {
 
                         monthsGraphSection
                             .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0.28))
+
+                        suggestionsFooter
+                            .modifier(StatsEntranceReveal(isVisible: contentRevealed, delay: 0.34))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 50)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 60)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .scrollIndicators(.hidden)
@@ -96,7 +104,7 @@ struct ReadingStatsView: View {
                 get: { viewModel.selectedDayDetail },
                 set: { newValue in if newValue == nil { viewModel.clearSelectedDay() } })
         ) { detail in
-            DayDetailView(detail: detail)
+            DayDetailView(detail: detail, coverURL: coverURL)
         }
         .sheet(isPresented: $isGoalSheetPresented) {
             DailyGoalSheet(
@@ -132,25 +140,33 @@ struct ReadingStatsView: View {
     }()
 
     private var selectedDayCaption: some View {
-        let minutes = Int((viewModel.selectedDayActivity?.listenedSeconds ?? 0) / 60)
         return VStack(spacing: 2) {
-            Text(Self.selectedDayFormatter.string(from: viewModel.selectedDay))
+            Text(selectedDayTitle)
                 .appText(.sectionTitle)
                 // Whole-string crossfade — the date changes to an unrelated
-                // string, so there's nothing for `.numericText()` to roll
-                // between the way there is for the minute count below.
+                // string, so there's nothing for `.numericText()` to roll.
                 .contentTransition(.opacity)
-            Text(minutes == 1 ? "1 min" : "\(minutes) min")
+            Text("Daily Stats")
                 .appText(.label)
-                .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: viewModel.selectedDay)
     }
 
+    private var selectedDayTitle: String {
+        let calendar = Calendar.autoupdatingCurrent
+        if calendar.isDateInToday(viewModel.selectedDay) {
+            return "Today"
+        }
+        if calendar.isDateInYesterday(viewModel.selectedDay) {
+            return "Yesterday"
+        }
+        return Self.selectedDayFormatter.string(from: viewModel.selectedDay)
+    }
+
     private var monthsGraphSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Last 3 months")
+            Text("Last 6 months")
                 .font(.custom("EBGaramond-Regular", size: 20, relativeTo: .title3))
                 .foregroundStyle(Color.appPrimaryText)
 
@@ -180,29 +196,45 @@ struct ReadingStatsView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
     }
-}
 
-/// Replaced the earlier `SignatureText` hand-writing ink reveal — plain
-/// text under `StatsEntranceReveal`, the same single fade-and-rise every
-/// other section of this page (the carousel, the caption, the summary
-/// card, the graph) already enters with, rather than a bespoke effect of
-/// its own.
-private struct StatsSignatureTitle: View {
-    let isRevealed: Bool
+    private var suggestionsFooter: some View {
+        // Negative spacing pulls the visible label into the button's 38pt
+        // touch frame rather than shrinking that target just to reduce the
+        // optical gap between the two lines.
+        VStack(spacing: -6) {
+            Text("Can't find what you're looking for?")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.appPrimaryText.opacity(0.86))
+                .multilineTextAlignment(.center)
 
-    private static let text = "Reading Stats"
+            Button(action: openSuggestionEmail) {
+                HStack(spacing: 10) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: 14, weight: .regular))
+                    Text("Send us suggestions")
+                        .font(.system(size: 14, weight: .regular))
+                }
+                .foregroundStyle(Color.tabInactiveDark)
+                .frame(minHeight: 38)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressOpacity)
+            .accessibilityHint("Opens your mail app")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 30)
+        .padding(.bottom, 14)
+    }
 
-    var body: some View {
-        // EB Garamond Regular (the upright counterpart to the already-
-        // bundled EBGaramond-Italic — same family/weight axis, from the
-        // same Google Fonts source) at its own default weight — matching
-        // the "Library"/"Tools" page titles' own treatment rather than the
-        // system serif this replaced.
-        Text(Self.text)
-            .font(.custom("EBGaramond-Regular", size: 38, relativeTo: .title))
-            .foregroundStyle(Color.appPrimaryText)
-            .accessibilityAddTraits(.isHeader)
-            .modifier(StatsEntranceReveal(isVisible: isRevealed, delay: 0))
+    private func openSuggestionEmail() {
+        var components = URLComponents(string: "mailto:abusayid693@gmail.com")
+        components?.queryItems = [
+            URLQueryItem(name: "subject", value: "App suggestion"),
+            URLQueryItem(name: "body", value: "Hi Rehan,\n\nI would like to suggest:\n\n"),
+        ]
+        if let url = components?.url {
+            openURL(url)
+        }
     }
 }
 

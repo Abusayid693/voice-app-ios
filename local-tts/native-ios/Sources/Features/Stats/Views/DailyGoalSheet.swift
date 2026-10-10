@@ -36,7 +36,8 @@ struct DailyGoalSheet: View {
             presetRow
 
             Text("Applies from today onward. Days you've already finished keep the goal they were set at.")
-                .appText(.label)
+                .font(AppTextStyle.label.font)
+                .foregroundStyle(Color.appTertiaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }

@@ -167,7 +167,8 @@ struct RootTabView: View {
                     ReadingStatsView(
                         readingStats: app.readingStats,
                         refreshToken: statsRefreshToken,
-                        isActive: selectedTab == .stats)
+                        isActive: selectedTab == .stats,
+                        coverURL: { library.coverURL(for: $0) })
                 }
             }
         }

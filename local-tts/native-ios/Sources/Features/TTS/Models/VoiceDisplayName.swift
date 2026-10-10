@@ -5,6 +5,6 @@ import Foundation
 /// from the catalog expose the same thing as `Voice.displayName`.
 enum VoiceDisplayName {
     static func forCode(_ code: String) -> String {
-        VoiceCode.displayName(for: code)
+        VoiceCatalog.voice(for: code)?.displayName ?? VoiceCode.displayName(for: code)
     }
 }
