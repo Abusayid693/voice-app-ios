@@ -11,11 +11,13 @@ struct DayDetailView: View {
             title: Self.dateFormatter.string(from: detail.day),
             detents: [.medium, .large]
         ) {
-            summaryCard
-
+            // An empty day has nothing for the totals card to total and no
+            // books to list — both are dropped rather than shown at zero,
+            // in favor of one empty-state surface.
             if detail.books.isEmpty {
-                emptyState
+                noActivityState
             } else {
+                summaryCard
                 booksSection
             }
         }
@@ -96,25 +98,42 @@ struct DayDetailView: View {
             in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "book.closed")
-                .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(Color.appSecondaryText)
-            Text("No reading activity")
-                .font(AppTextStyle.rowTitle.font)
-                .foregroundStyle(Color.appPrimaryText)
-            Text("Books you listen to on this day will appear here.")
-                .font(AppTextStyle.label.font)
-                .foregroundStyle(Color.appSecondaryText)
-                .multilineTextAlignment(.center)
+    /// A day with nothing read, shown with the same app-preview marquee
+    /// About opens on (`DesignSystem/ScreenshotMarquee`) at a size this
+    /// sheet can hold, rather than a generic icon — it's showing what the
+    /// app looks like in use, not that this one screen is empty. Full-bleed
+    /// like About's own use of it: no card background, so the marquee's
+    /// horizontal fade reaches the sheet's own true edge rather than stopping
+    /// 24pt short of it — the negative padding below cancels exactly the
+    /// inset `StandardBottomSheet` applies to every other piece of content.
+    private var noActivityState: some View {
+        VStack(spacing: 16) {
+            ScreenshotMarquee(
+                cardWidth: 76, cardHeight: 165, spacing: 10, cornerRadius: 13,
+                verticalPadding: 26)
+                .padding(.horizontal, -StandardBottomSheetMetrics.contentHorizontalPadding)
+
+            VStack(spacing: 8) {
+                Text("Read something to get stats")
+                    .font(AppTextStyle.rowTitle.font)
+                    .foregroundStyle(Color.appPrimaryText)
+
+                // Public-domain-era author, matching the sourcing the rest
+                // of this feature already holds itself to (Gutenberg cover
+                // art, Standard Ebooks' own mark) — nothing here needs a
+                // usage clearance.
+                (Text("“Reading is to the mind what exercise is to the body.”")
+                    .italic()
+                    + Text("\n— Joseph Addison")
+                    .foregroundStyle(Color.appTertiaryText))
+                    .font(AppTextStyle.label.font)
+                    .foregroundStyle(Color.appSecondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
-        .padding(.horizontal, 20)
-        .background(
-            Color.appSecondaryBackground,
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.vertical, 28)
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -159,6 +178,16 @@ struct DayDetailView: View {
                             listenedSeconds: 630,
                             voiceNames: ["am_adam"]),
                     ]),
+                coverURL: { _ in nil })
+        }
+}
+
+#Preview("Empty") {
+    Color.appBackground
+        .sheet(isPresented: .constant(true)) {
+            DayDetailView(
+                detail: DayDetail(
+                    day: Date(), totalListenedSeconds: 0, totalPagesCompleted: 0, books: []),
                 coverURL: { _ in nil })
         }
 }

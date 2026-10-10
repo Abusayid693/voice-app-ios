@@ -1,5 +1,21 @@
 import SwiftUI
 
+/// The content column's own horizontal inset, shared by every
+/// `StandardBottomSheet` regardless of its `Content` type. A plain
+/// non-generic holder rather than a `static` on the generic struct itself —
+/// a generic type's static member still needs a concrete type argument to
+/// reach from outside (`StandardBottomSheet<SomeView>.foo`), which would make
+/// a caller that only wants this one number spell out a `Content` it doesn't
+/// have. Exists so a caller wanting one piece of `content()` to bleed to the
+/// sheet's true edge (`DayDetailView`'s empty-state marquee, matching how
+/// About bleeds the same component to its own screen edge) can cancel exactly
+/// this much with
+/// `.padding(.horizontal, -StandardBottomSheetMetrics.contentHorizontalPadding)`
+/// rather than a duplicated literal that could drift from the real value.
+enum StandardBottomSheetMetrics {
+    static let contentHorizontalPadding: CGFloat = 24
+}
+
 /// Shared chrome for the app's plain bottom sheets — Storage, Daily Goal,
 /// Tools' catalog explainer, and the reader's own Pages/Reader
 /// Options/Playback Speed sheets. A flat, opaque fill and a centered
@@ -42,7 +58,7 @@ struct StandardBottomSheet<Content: View>: View {
                     content()
                 }
                 .frame(maxWidth: 520)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, StandardBottomSheetMetrics.contentHorizontalPadding)
                 .padding(.top, 32)
                 .padding(.bottom, 30)
                 .frame(maxWidth: .infinity)
