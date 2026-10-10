@@ -13,34 +13,43 @@ struct ChapterPlayerOptionsSheet: View {
     @Binding var fontFamily: ReaderFontFamily
     @Binding var theme: ReaderTheme
 
-    @Environment(\.dismiss) private var dismiss
     @State private var page: Page = .root
 
     private enum Page: Equatable {
         case root
         case controls
         case font
+
+        var title: String {
+            switch self {
+            case .root: "Reader Options"
+            case .controls: "Controls"
+            case .font: "Font"
+            }
+        }
     }
 
-    private var chromeTheme: ReaderChromeTheme { theme.chromeTheme }
+    // Always dark, independent of `theme` — this sheet's own chrome
+    // (rows, toggles, nav buttons) no longer tracks the active reading
+    // theme the way it used to. `theme` itself is untouched: the Theme
+    // picker below still correctly selects/previews/applies the real
+    // reading theme via that binding, and each `themePreview` card already
+    // draws from the theme *it* represents (`option.primaryText`/
+    // `option.background`), not from `chromeTheme` — so forcing this has
+    // no effect on the picker's own accuracy.
+    private var chromeTheme: ReaderChromeTheme { .dark }
 
     var body: some View {
-        InteractiveGlassBottomSheet(
-            theme: chromeTheme,
-            detents: [.medium],
-            showsDragIndicator: false,
-            closeAccessibilityLabel: "Close reader options",
-            onClose: { dismiss() },
-            onBack: backAction
-        ) { headerInset in
-            ScrollView {
-                pageContent
-                    .padding(.horizontal, 16)
-                    .padding(.top, headerInset)
-                    .padding(.bottom, 16)
-            }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
+        // `showsDragIndicator` stays at its default (visible) here, unlike
+        // this sheet's old `InteractiveGlassBottomSheet` hosting, which hid
+        // it — that was safe only because an explicit Close button was
+        // always present alongside it. `StandardBottomSheet` has no Close
+        // button at all, so hiding the indicator too would leave the root
+        // page with no visible way to dismiss.
+        StandardBottomSheet(
+            title: page.title, detents: [.medium], theme: chromeTheme, onBack: backAction
+        ) {
+            pageContent
         }
         .animation(.easeInOut(duration: 0.18), value: theme)
     }

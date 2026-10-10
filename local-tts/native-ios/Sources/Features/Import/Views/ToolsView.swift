@@ -30,42 +30,25 @@ struct ToolsView: View {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     header
 
-                    toolSection("Create & Import") {
-                        ToolActionRow(
-                            icon: .pencil,
-                            title: "Write a Text",
-                            subtitle: "Type or paste text to turn into audio"
-                        ) {
+                    toolGridSection("Create & Import", onTapHeader: showCatalogExplanation) {
+                        ToolGridCard(icon: .pencil, title: "Write a Text") {
                             isWriteTextPresented = true
                         }
 
-                        ToolActionRow(
-                            icon: .upload,
-                            title: "Upload File",
-                            subtitle: "Import a PDF or EPUB from your device",
-                            onTap: onAddBooks)
+                        ToolGridCard(icon: .upload, title: "Upload File", onTap: onAddBooks)
+
+                        ToolGridCard(icon: .link, title: "Share Link", isEnabled: false) {}
+
+                        ToolGridCard(icon: .image, title: "Upload Image", isEnabled: false) {}
                     }
 
                     catalogSection
-
-                    toolSection("Coming Soon") {
-                        ToolActionRow(
-                            icon: .link,
-                            title: "Share Link",
-                            subtitle: "Import readable content from a web link",
-                            isEnabled: false) {}
-
-                        ToolActionRow(
-                            icon: .image,
-                            title: "Upload Image",
-                            subtitle: "Turn photographed text into a readable page",
-                            isEnabled: false) {}
-                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 132)
             }
+            .scrollIndicators(.hidden)
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isWriteTextPresented) {
@@ -110,23 +93,61 @@ struct ToolsView: View {
 
     private var header: some View {
         Text("Tools")
-            .font(.custom("EBGaramond-Italic", size: 48, relativeTo: .largeTitle))
-            .fontWeight(.medium)
+            .font(.custom("EBGaramond-Regular", size: 38, relativeTo: .largeTitle))
             .foregroundStyle(Color.appPrimaryText)
             .accessibilityAddTraits(.isHeader)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func toolSection<Content: View>(
+    /// Two-column grid of `ToolGridCard`s — Write a Text, Upload File, and
+    /// the "Coming Soon" actions (Share Link, Upload Image) folded into one
+    /// section rather than two, matching a picked reference screenshot's
+    /// own category-tile layout (icon-tile-plus-label cards in a grid) over
+    /// this app's own colors — the reference's book-cover collages are
+    /// specific content browsing doesn't apply to; a Lucide icon in a
+    /// square tile fills that same slot here instead.
+    ///
+    /// `onTapHeader`, when given, makes the title row tappable with a
+    /// trailing chevron — exactly `catalogSection`'s own header button
+    /// below, copied rather than factored out only because this is the
+    /// single other call site. "Create & Import" passes
+    /// `showCatalogExplanation` for now, reusing Catalogs' own explainer
+    /// sheet/state rather than standing up a second one — a placeholder
+    /// until this section gets its own.
+    private func toolGridSection<Content: View>(
         _ title: String,
+        onTapHeader: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title)
-                .font(AppTextStyle.sectionTitle.font)
-                .foregroundStyle(Color.appPrimaryText)
+        // Both spacings here (title-to-grid, and between cards) match
+        // catalogSection's own 12pt so the two sections read as one
+        // consistent rhythm rather than two slightly different ones.
+        VStack(alignment: .leading, spacing: 12) {
+            if let onTapHeader {
+                Button(action: onTapHeader) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(AppTextStyle.sectionTitle.font)
 
-            VStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.appTertiaryText)
+                    }
+                    .foregroundStyle(Color.appPrimaryText)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressOpacity)
+                .accessibilityLabel("About \(title)")
+            } else {
+                Text(title)
+                    .font(AppTextStyle.sectionTitle.font)
+                    .foregroundStyle(Color.appPrimaryText)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())],
+                spacing: 12
+            ) {
                 content()
             }
         }
@@ -214,59 +235,56 @@ struct ToolsView: View {
     }
 }
 
-private struct ToolActionRow: View {
+/// One "Create & Import" grid cell: a square icon tile beside a 2-line
+/// label, inside an outlined (not solid-filled) rounded card — the shape
+/// the reference screenshot's own category tiles use, kept to this app's
+/// `appBackground`/`appSecondaryBackground`/`appPrimaryText` palette rather
+/// than the reference's own colors.
+private struct ToolGridCard: View {
     let icon: LucideIconName
     let title: String
-    let subtitle: String
     var isEnabled = true
     let onTap: () -> Void
 
+    // A 2-column grid leaves roughly 170-190pt per card — the tile has to
+    // stay small enough that the label still gets real width to wrap at
+    // word boundaries. The first pass used 92pt here, which left ~50pt for
+    // text and forced mid-word breaks ("Writ" / "e a…").
+    private let tileSize: CGFloat = 56
+
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 14) {
-                rowIcon
+            HStack(spacing: 10) {
+                iconTile
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(AppTextStyle.rowTitle.font)
-                        .foregroundStyle(Color.appPrimaryText)
-                    Text(subtitle)
-                        .font(AppTextStyle.label.font)
-                        .foregroundStyle(Color.appSecondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(title)
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.appPrimaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
 
-                Spacer(minLength: 8)
-
-                if isEnabled {
-                    LucideIcon(.chevronRight, size: 16, color: Color.appTertiaryText)
-                } else {
-                    Text("Soon")
-                        .font(.system(.caption2, design: .rounded, weight: .semibold))
-                        .foregroundStyle(Color.appTertiaryText)
-                        .padding(.horizontal, 9)
-                        .frame(height: 24)
-                        .background(Color.appBackground.opacity(0.8), in: Capsule())
-                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
+            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                Color.appSecondaryBackground.opacity(0.88),
-                in: RoundedRectangle(cornerRadius: 18))
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.appSecondaryBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(Color.appPrimaryText.opacity(0.12), lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.pressOpacity)
         .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.52)
+        .opacity(isEnabled ? 1 : 0.55)
     }
 
-    private var rowIcon: some View {
-        Circle()
+    private var iconTile: some View {
+        RoundedRectangle(cornerRadius: 12)
             .fill(Color.appBackground)
-            .frame(width: 42, height: 42)
-            .overlay { LucideIcon(icon, size: 18, color: Color.appPrimaryText) }
+            .frame(width: tileSize, height: tileSize)
+            .overlay { LucideIcon(icon, size: 20, color: Color.appPrimaryText) }
     }
 }
 
@@ -430,78 +448,55 @@ private struct CatalogExplainerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
-            Color.appBackground
-                .ignoresSafeArea()
+        StandardBottomSheet(
+            title: "A world of books, ready when you are",
+            detents: [.custom(CatalogExplainerDetent.self)]
+        ) {
+            CatalogExplainerVideo()
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text("A world of books, ready when you are")
-                        .font(.system(size: 34, weight: .regular, design: .serif))
-                        .foregroundStyle(Color.appPrimaryText)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .accessibilityAddTraits(.isHeader)
+            Text(
+                "Browse trusted ebook catalogs, choose a PDF or EPUB, "
+                    + "and import it directly into My Shelf for reading and listening."
+            )
+            .font(AppTextStyle.body.font)
+            .foregroundStyle(Color.appSecondaryText)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
 
-                    CatalogExplainerVideo()
+            Text("Catalogs are third-party websites. Availability and usage rights can vary by title and country.")
+                .font(AppTextStyle.label.font)
+                .foregroundStyle(Color.appTertiaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-                    Text(
-                        "Browse trusted ebook catalogs, choose a PDF or EPUB, "
-                            + "and import it directly into My Shelf for reading and listening."
-                    )
-                    .font(AppTextStyle.body.font)
-                    .foregroundStyle(Color.appSecondaryText)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Text("Catalogs are third-party websites. Availability and usage rights can vary by title and country.")
-                        .font(AppTextStyle.label.font)
-                        .foregroundStyle(Color.appTertiaryText)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(spacing: 10) {
-                        Button(primaryTitle) {
-                            onContinue()
-                            dismiss()
-                        }
-                        .font(.system(.body, design: .rounded, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.tabSelected, in: Capsule())
-                        .buttonStyle(.pressOpacity)
-
-                        Button("MAYBE LATER") {
-                            onLater()
-                            dismiss()
-                        }
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .tracking(1)
-                        .foregroundStyle(Color.appSecondaryText)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(
-                            Color.appSecondaryBackground.opacity(0.82),
-                            in: Capsule())
-                        .buttonStyle(.pressOpacity)
-                    }
+            VStack(spacing: 10) {
+                Button(primaryTitle) {
+                    onContinue()
+                    dismiss()
                 }
-                .frame(maxWidth: 520)
-                .padding(.horizontal, 24)
-                .padding(.top, 32)
-                .padding(.bottom, 30)
+                .font(.system(.body, design: .rounded, weight: .bold))
+                .tracking(1.1)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.tabSelected, in: Capsule())
+                .buttonStyle(.pressOpacity)
+
+                Button("MAYBE LATER") {
+                    onLater()
+                    dismiss()
+                }
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(Color.appSecondaryText)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    Color.appSecondaryBackground.opacity(0.82),
+                    in: Capsule())
+                .buttonStyle(.pressOpacity)
             }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
         }
-        .presentationBackground(.clear)
-        .presentationDetents([.custom(CatalogExplainerDetent.self)])
-        .presentationDragIndicator(.visible)
-        .preferredColorScheme(.dark)
     }
 
     private var primaryTitle: String {

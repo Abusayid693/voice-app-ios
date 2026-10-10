@@ -11,6 +11,10 @@ struct LibraryTabView: View {
     @AppStorage("library.sortOrder") private var sortOrderRawValue = LibrarySortOrder.recent.rawValue
     @AppStorage("library.layoutMode") private var layoutModeRawValue = LibraryLayoutMode.grouped.rawValue
     @State private var isArrangementSheetPresented = false
+    /// At most one row's actions are open at a time — setting this to a new
+    /// id implicitly closes whichever row had it before, the same way
+    /// opening one swipe-action row on a native List closes any other.
+    @State private var revealedGenerationID: UUID?
 
     private var formatFilter: LibraryFormatFilter {
         LibraryFormatFilter(rawValue: formatFilterRawValue) ?? .all
@@ -71,8 +75,7 @@ struct LibraryTabView: View {
     private var header: some View {
         HStack(alignment: .center) {
             Text("Library")
-                .font(.custom("EBGaramond-Italic", size: 48, relativeTo: .largeTitle))
-                .fontWeight(.medium)
+                .font(.custom("EBGaramond-Regular", size: 38, relativeTo: .largeTitle))
                 .foregroundStyle(Color.appPrimaryText)
                 .accessibilityAddTraits(.isHeader)
 
@@ -108,7 +111,7 @@ struct LibraryTabView: View {
                             .background(
                                 filter == formatFilter
                                     ? Color.appPrimaryText
-                                    : Color.appSecondaryBackground.opacity(0.88),
+                                    : Color.appSecondaryBackground,
                                 in: Capsule())
                     }
                     .buttonStyle(.pressOpacity)
@@ -152,6 +155,7 @@ struct LibraryTabView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
             .contentMargins(.top, 0, for: .scrollContent)
             // Keep the final book reachable above the persistent mini player
             // and custom tab chrome, even when the root inset is changing.
@@ -188,25 +192,42 @@ struct LibraryTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Tapping a row's own "•••" slides its content left to reveal
+    /// Edit/Delete underneath — replaced `.swipeActions` (a drag gesture)
+    /// since the ask was specifically a tap-driven reveal. `isRevealed`
+    /// lives on `revealedGenerationID` up in `LibraryTabView`, not locally
+    /// on the row, so opening one row's actions closes any other row's.
     private func libraryRow(for generation: SavedGenerationSummary) -> some View {
-        Button { open(generation) } label: {
-            LibraryBookRow(generation: generation)
-        }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {} label: {
-                Image(systemName: "pencil")
-            }
-            .tint(Color.tabInactiveDark)
-            .accessibilityLabel("Edit \(generation.title), coming soon")
+        let isRevealed = revealedGenerationID == generation.id
+        return ZStack(alignment: .trailing) {
+            LibraryRowActions(
+                title: generation.title,
+                onEdit: {},
+                onDelete: {
+                    viewModel.delete(generation)
+                    if revealedGenerationID == generation.id { revealedGenerationID = nil }
+                })
 
-            Button(role: .destructive) {
-                viewModel.delete(generation)
-            } label: {
-                Image(systemName: "trash")
-            }
-            .accessibilityLabel("Delete \(generation.title)")
+            LibraryBookRow(
+                generation: generation,
+                onOpen: {
+                    // A tap anywhere on a row while a *different* row is open
+                    // closes that other row first, rather than acting on
+                    // this one immediately — matches the native swipe-row
+                    // convention this replaced.
+                    if let revealedGenerationID, revealedGenerationID != generation.id {
+                        self.revealedGenerationID = nil
+                    } else {
+                        open(generation)
+                    }
+                },
+                onToggleReveal: {
+                    revealedGenerationID = isRevealed ? nil : generation.id
+                })
+                .background(Color.appBackground)
+                .offset(x: isRevealed ? -LibraryRowActions.width : 0)
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isRevealed)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 7, leading: 20, bottom: 7, trailing: 20))
@@ -249,56 +270,116 @@ struct LibraryTabView: View {
 
 private struct LibraryBookRow: View {
     let generation: SavedGenerationSummary
+    let onOpen: () -> Void
+    let onToggleReveal: () -> Void
 
     private var percent: Int {
         Int((generation.readingProgress * 100).rounded())
     }
 
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter
+    }()
+
     var body: some View {
-        HStack(spacing: 14) {
-            SavedProjectCover(
-                coverURL: generation.coverURL,
-                title: generation.title,
-                size: CGSize(width: 50, height: 74),
-                cornerRadius: 5)
+        Button(action: onOpen) {
+            HStack(spacing: 14) {
+                SavedProjectCover(
+                    coverURL: generation.coverURL,
+                    title: generation.title,
+                    size: CGSize(width: 50, height: 74),
+                    cornerRadius: 8)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(generation.title)
-                    .font(AppTextStyle.rowTitle.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                    .lineLimit(1)
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(generation.source.libraryFormatLabel) · \(generation.pageCountLabel)")
-                        .font(AppTextStyle.label.font)
-                        .foregroundStyle(Color.appSecondaryText)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(generation.title)
+                        .font(AppTextStyle.rowTitle.font)
+                        .foregroundStyle(Color.appPrimaryText)
                         .lineLimit(1)
 
-                    HStack(spacing: 7) {
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(Color.appPrimaryText.opacity(0.16))
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.appPrimaryText)
-                                        .frame(width: proxy.size.width * generation.readingProgress)
-                                }
-                        }
-                        .frame(width: 100, height: 3)
-
-                        Text("\(percent)%")
-                            .font(.system(size: 11, weight: .regular, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.appSecondaryText)
-                    }
+                    Text(
+                        "\(percent)% · \(Self.dateFormatter.string(from: generation.createdAt)) · "
+                            + generation.source.libraryFormatLabel.lowercased()
+                    )
+                    .font(AppTextStyle.label.font)
+                    .foregroundStyle(Color.appSecondaryText)
+                    .lineLimit(1)
                 }
+
+                Spacer(minLength: 8)
             }
             .frame(height: 74)
+            // Reserves room for the "•••" button overlaid below — an
+            // overlay doesn't expand this HStack's own reported width, so
+            // without this a long title could truncate right up against it
+            // instead of stopping short to leave it clear.
+            .padding(.trailing, 40)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        // A `Button` layered via `.overlay` on another `Button` is hit-tested
+        // above it — the same escape this app's Stats summary card pencil
+        // uses — rather than nesting it inside this Button's own label,
+        // where the outer Button would swallow its taps.
+        .overlay(alignment: .trailing) {
+            Button(action: onToggleReveal) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.appTertiaryText)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressOpacity)
+            .accessibilityLabel("More options for \(generation.title)")
+        }
+    }
+}
+
+/// The Edit/Delete pair a row's "•••" slides into view. Fixed width shared
+/// with the row's own slide offset in `LibraryTabView.libraryRow(for:)`, so
+/// the two stay in sync by construction rather than two separately-tuned
+/// numbers.
+private struct LibraryRowActions: View {
+    static let width: CGFloat = 136
+
+    let title: String
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            actionButton(
+                systemName: "pencil", label: "Edit",
+                background: Color.tabInactiveDark.opacity(0.35), action: onEdit)
+                .accessibilityLabel("Edit \(title), coming soon")
+
+            actionButton(
+                systemName: "trash", label: "Delete",
+                background: Color.red, action: onDelete)
+                .accessibilityLabel("Delete \(title)")
+        }
+        .frame(width: Self.width, height: 74)
         .padding(.vertical, 3)
-        .contentShape(Rectangle())
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func actionButton(
+        systemName: String, label: String, background: Color, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemName)
+                    .font(.system(size: 17, weight: .medium))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(background)
+        }
+        .buttonStyle(.plain)
     }
 }
 

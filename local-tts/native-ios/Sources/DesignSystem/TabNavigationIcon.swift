@@ -57,7 +57,7 @@ struct TabNavigationIcon: View {
     }
 
     private var outlineStyle: StrokeStyle {
-        StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+        StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round)
     }
 
     private func prepare(_ context: inout GraphicsContext, for size: CGSize) {
@@ -104,14 +104,14 @@ struct TabNavigationIcon: View {
             context.stroke(
                 Self.doorJamb,
                 with: .foreground,
-                style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
 
         case .tools:
             context.fill(Self.visionGoggles, with: .foreground)
 
         case .library:
             context.fill(Self.libraryBasket, with: .foreground)
-            let selectedHandle = StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round)
+            let selectedHandle = StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round)
             context.stroke(Self.libraryUpperHandle, with: .foreground, style: selectedHandle)
             context.stroke(Self.libraryLowerHandle, with: .foreground, style: selectedHandle)
 

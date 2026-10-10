@@ -8,10 +8,7 @@ import SwiftUI
 struct StorageView: View {
     @ObservedObject var packs: VoicePackStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dismiss) private var dismiss
     @State private var contentRevealed = false
-
-    private let theme = ReaderChromeTheme.dark
 
     private var kokoroBytes: Int64 {
         guard packs.isKokoroPackReady(.english), let directory = packs.kokoroModelDirectory else {
@@ -34,40 +31,16 @@ struct StorageView: View {
     }
 
     var body: some View {
-        InteractiveGlassBottomSheet(
-            theme: theme,
-            detents: [.height(300)],
-            backgroundStyle: .clearGlass,
-            closeAccessibilityLabel: "Close storage",
-            contentTopInset: 58,
-            onClose: { dismiss() }
-        ) { headerInset in
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Storage")
-                    .font(.custom("EBGaramond-Italic", size: 34, relativeTo: .title))
-                    .fontWeight(.medium)
-                    .foregroundStyle(theme.primaryText)
-                    .accessibilityAddTraits(.isHeader)
-                    .modifier(StorageEntranceReveal(
-                        isVisible: contentRevealed,
-                        index: 0))
-
-                VStack(spacing: 0) {
-                    row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
-                    divider
-                    row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
-                    divider
-                    row(title: "Total", bytes: totalBytes, isTotal: true)
-                }
-                .padding(.horizontal, 18)
-                .modifier(StorageEntranceReveal(
-                    isVisible: contentRevealed,
-                    index: 1))
+        StandardBottomSheet(title: "Storage", detents: [.height(300)]) {
+            VStack(spacing: 0) {
+                row(title: "Kokoro-ANE pack", bytes: kokoroBytes)
+                divider
+                row(title: "Kokoro-ANE pack (Mandarin)", bytes: kokoroMandarinBytes)
+                divider
+                row(title: "Total", bytes: totalBytes, isTotal: true)
             }
             .padding(.horizontal, 18)
-            .padding(.top, headerInset)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .modifier(StorageEntranceReveal(isVisible: contentRevealed, index: 0))
         }
         .task {
             if !reduceMotion {
@@ -88,18 +61,18 @@ struct StorageView: View {
         HStack {
             Text(title)
                 .font(.system(size: 16, weight: isTotal ? .semibold : .regular))
-                .foregroundStyle(theme.primaryText)
+                .foregroundStyle(Color.appPrimaryText)
             Spacer()
             Text(DiskStorage.formattedSize(bytes))
                 .font(.system(size: 15, weight: isTotal ? .bold : .medium, design: .rounded))
-                .foregroundStyle(isTotal ? theme.primaryText : theme.secondaryText)
+                .foregroundStyle(isTotal ? Color.appPrimaryText : Color.appSecondaryText)
         }
         .frame(minHeight: 48)
     }
 
     private var divider: some View {
         Rectangle()
-            .fill(theme.border)
+            .fill(Color.appPrimaryText.opacity(0.10))
             .frame(height: 1)
     }
 }

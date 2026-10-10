@@ -4,8 +4,8 @@ import SwiftUI
 /// supplied mockup) — not theme-adaptive, used deliberately regardless of
 /// system light/dark mode.
 extension Color {
-    static let appBackground = Color(hex: 0x0A0A0A)
-    static let appSecondaryBackground = Color(hex: 0x1A1A1A)
+    static let appBackground = Color(hex: 0x0A0B0F)
+    static let appSecondaryBackground = Color(hex: 0x14161E)
     static let appPrimaryText = Color(hex: 0xEEEEEE)
     static let appSecondaryText = Color(hex: 0x949599)
     static let appTertiaryText = Color(hex: 0x6E6E6E)
@@ -123,26 +123,87 @@ struct TexturedDarkBackground: View {
     enum Variant {
         case neutral
         case sidebar
+        /// One soft light source at the top centre, falling off to black
+        /// down the page. Its own case rather than a `.sidebar` reuse
+        /// because `SidebarSurfaceLighting` puts its dominant glow at the
+        /// *bottom* (`y: 0.97`) with a black core across the middle — read
+        /// over a full-height scrolling page like Stats that lands as a grey
+        /// wash behind the content instead of a light above it.
+        ///
+        /// `intensity` is an associated value rather than a property on the
+        /// view because it means nothing to the other two variants. Stats
+        /// drives it from the selected day's own progress, so the glow is
+        /// always the orbs' own orange — just dimmer or brighter, never a
+        /// different hue — as that day fills up.
+        case topGlow(intensity: Double)
     }
 
     var variant: Variant = .neutral
+
+    /// How far down `.topGlow`'s light reaches, from the physical top of the
+    /// screen (the caller `.ignoresSafeArea()`s, so this includes the status
+    /// bar).
+    private static let topGlowBandHeight: CGFloat = 230
+
+    /// `.topGlow` skips the shared diagonal gradient below (and, as a
+    /// result, no longer needs its own extra black-flattening layer either)
+    /// — both existed only to counteract each other. With them gone the
+    /// page's actual background *is* `appBackground`, not two opaque layers
+    /// painted over it; the composited result previously crushed to
+    /// near-black (~0x010101) well before reaching `appBackground`'s own
+    /// 0x0A0B0F, which the gradient+flatten pair never let show through.
+    private var skipsSharedGradient: Bool {
+        if case .topGlow = variant { return true }
+        return false
+    }
 
     var body: some View {
         ZStack {
             Color.appBackground
 
-            LinearGradient(
-                colors: [
-                    Color(hex: 0x252525),
-                    Color(hex: 0x151515),
-                    Color(hex: 0x080808),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing)
+            if !skipsSharedGradient {
+                LinearGradient(
+                    colors: [
+                        Color(hex: 0x252525),
+                        Color(hex: 0x151515),
+                        Color(hex: 0x080808),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing)
+            }
 
             switch variant {
             case .sidebar:
                 SidebarTextureLayer(textureColor: .white, coreColor: .black)
+
+            case .topGlow(let intensity):
+                // Always the same coral the tab bar uses for its own
+                // selected state (`Color.tabSelected`, see RootTabView's
+                // AppTabBar) — only its opacity moves with `intensity`,
+                // never a hue blend toward white, so the glow reads as the
+                // same light simply turned up or down.
+                RadialGradient(
+                    colors: [
+                        Color.tabSelected.opacity(0.34 + 0.55 * intensity),
+                        Color.tabSelected.opacity(0.16 + 0.30 * intensity),
+                        Color.tabSelected.opacity(0.05 + 0.12 * intensity),
+                        .clear,
+                    ],
+                    center: UnitPoint(x: 0.5, y: 0),
+                    startRadius: 0,
+                    endRadius: 320)
+                .frame(height: Self.topGlowBandHeight)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white, location: 0),
+                            .init(color: .white, location: 0.55),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom)
+                )
+                .frame(maxHeight: .infinity, alignment: .top)
 
             case .neutral:
 
@@ -258,17 +319,24 @@ private struct StaticFilmGrain: View {
     let intensity: Double
     let bottomBoost: Double
     var color: Color?
+    /// Multiplies each dot's diameter — `spacing` alone only changes how
+    /// densely dots are packed, not how big any one of them is, so a caller
+    /// wanting a finer/coarser grain (not just a denser/sparser one) needs
+    /// this too. Defaults to 1 so every existing caller renders unchanged.
+    var dotScale: CGFloat = 1
 
     init(
         spacing: CGFloat,
         intensity: Double,
         bottomBoost: Double,
-        color: Color? = nil
+        color: Color? = nil,
+        dotScale: CGFloat = 1
     ) {
         self.spacing = spacing
         self.intensity = intensity
         self.bottomBoost = bottomBoost
         self.color = color
+        self.dotScale = dotScale
     }
 
     var body: some View {
@@ -282,7 +350,7 @@ private struct StaticFilmGrain: View {
                     let verticalProgress = rows > 1 ? Double(row) / Double(rows - 1) : 0
                     let offsetX = CGFloat(value & 0xff) / 255 * spacing
                     let offsetY = CGFloat((value >> 8) & 0xff) / 255 * spacing
-                    let diameter = 0.55 + CGFloat((value >> 16) & 0x3) * 0.18
+                    let diameter = (0.55 + CGFloat((value >> 16) & 0x3) * 0.18) * dotScale
                     let opacity = min(
                         (0.15 + Double((value >> 20) & 0x7) * 0.018)
                             * intensity * (1 + bottomBoost * verticalProgress),
@@ -371,26 +439,6 @@ enum ReaderChromeTheme: Equatable {
 
     var border: Color { primaryText.opacity(0.10) }
     var shadow: Color { .black.opacity(self == .light ? 0.18 : 0.30) }
-}
-
-/// Edge-to-edge textured background for reader sheets. The compact player
-/// uses the same colors without this grain layer.
-struct ReaderChromeSheetBackground: View {
-    let theme: ReaderChromeTheme
-
-    @ViewBuilder
-    var body: some View {
-        switch theme {
-        case .light:
-            lightSurface
-        case .dark:
-            TexturedDarkBackground(variant: .sidebar)
-        }
-    }
-
-    private var lightSurface: some View {
-        TexturedLightBackground()
-    }
 }
 
 /// Persistable color themes for long-form reading content. Floating controls

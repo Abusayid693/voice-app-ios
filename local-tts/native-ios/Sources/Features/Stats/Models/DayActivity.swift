@@ -10,18 +10,41 @@ struct DayActivity: Identifiable, Equatable {
     /// re-reading a page the same day counts twice here, matching "how much
     /// did I do today" rather than "how many pages have I ever finished".
     let pagesCompleted: Int
+    /// The goal in effect **on this day**, resolved from
+    /// `DailyGoalSchedule` when the day is built — per-day rather than a
+    /// shared constant, so raising today's goal doesn't retroactively
+    /// un-complete last month's days. Shared by the streak (a day only
+    /// counts toward it once met), the orb's fill, and `intensityLevel`
+    /// below, so none of the three can drift apart for a given day.
+    let goalSeconds: Double
 
     var id: Date { day }
 
+    var meetsGoal: Bool { listenedSeconds >= goalSeconds }
+
+    /// 0...1 progress toward this day's goal — drives the day orb's fill.
+    var goalProgress: Double { min(listenedSeconds / goalSeconds, 1) }
+
     /// 0 = no activity, 1...4 = increasing — the contribution graph's
     /// 5-step color ramp (see `Colors.statsIntensity0...4`).
+    ///
+    /// The thresholds are **fractions of the day's own goal**, not fixed
+    /// minute counts. They have to be: with absolute cutoffs, a goal below
+    /// 15 minutes would order the cases wrong (a 12-minute day at a
+    /// 10-minute goal would match a `< 15 min` bucket before ever reaching
+    /// the goal arm, reporting "partial" for a day it had actually
+    /// completed). At the default 30-minute goal these land on exactly the
+    /// 5/15/30-minute steps this replaced, so nothing shifts for anyone who
+    /// never edits the goal. The top bucket is the goal itself, so a
+    /// full-intensity dot and a filled day orb always agree.
     var intensityLevel: Int {
-        switch listenedSeconds {
-        case ..<1: return 0
-        case ..<300: return 1  // < 5 min
-        case ..<900: return 2  // 5–15 min
-        case ..<1800: return 3  // 15–30 min
-        default: return 4  // 30+ min
+        guard listenedSeconds >= 1 else { return 0 }
+        guard goalSeconds > 0 else { return 4 }
+        switch listenedSeconds / goalSeconds {
+        case ..<(1.0 / 6.0): return 1  // < 5 min of a 30-min goal
+        case ..<0.5: return 2  // 5–15 min of a 30-min goal
+        case ..<1: return 3  // 15–30 min of a 30-min goal
+        default: return 4  // goal met
         }
     }
 }

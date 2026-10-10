@@ -440,7 +440,10 @@ struct ChapterPlayerView: View {
         .sheet(isPresented: $isPagePickerPresented) {
             ReaderPagePickerSheet(
                 project: project, library: library, currentPageIndex: currentPageIndex,
-                chromeTheme: readerTheme.chromeTheme,
+                // Always dark regardless of the active reading theme —
+                // unlike Reader Options' own theme picker, this sheet has
+                // no reason to track a light theme.
+                chromeTheme: .dark,
                 completedPageIndices: completedPageIndices,
                 chapters: chapters, onSelect: selectPage)
         }
@@ -458,7 +461,8 @@ struct ChapterPlayerView: View {
                 rate: Binding(
                     get: { player.playbackRate },
                     set: player.setPlaybackRate),
-                chromeTheme: readerTheme.chromeTheme)
+                // Always dark — see ReaderPagePickerSheet's own call site above.
+                chromeTheme: .dark)
         }
         .alert("Voice Couldn’t Be Changed", isPresented: $isVoiceChangeErrorPresented) {
             Button("OK", role: .cancel) {}

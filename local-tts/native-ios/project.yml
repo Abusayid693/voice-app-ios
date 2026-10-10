@@ -117,6 +117,7 @@ targets:
         # while Inter styles book names in the expanded detail card.
         UIAppFonts:
           - EBGaramond-Italic.ttf
+          - EBGaramond-Regular.ttf
           - Inter-Variable.ttf
     settings:
       base:
