@@ -97,7 +97,12 @@ targets:
     info:
       path: Sources/Resources/Info.plist
       properties:
-        UILaunchScreen: {}
+        # Paper, matching SplashView's own surface, and declared as a color
+        # set with a single universal appearance so a dark-mode device gets
+        # the same value. Left empty this defaulted to the system background,
+        # which flashed black before the light splash mounted.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         # Lets Kokoro playback keep running (and the process stay

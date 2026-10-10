@@ -16,6 +16,9 @@ struct KokoroAneTestApp: App {
     // two views of it (docs/adr/0013-unified-player.md).
     private let player: BookAudioPlayer
     private let readingStatsTracker: ReadingStatsTracker
+    /// Shown once per process launch. Not persisted — this is a launch
+    /// wordmark, not onboarding, so there is nothing to remember.
+    @State private var isSplashVisible = true
 
     init() {
         libraryViewModel = LibraryViewModel()
@@ -42,17 +45,33 @@ struct KokoroAneTestApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView(app: appEnvironment)
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .background {
-                        pdfImportManager.applicationDidEnterBackground()
-                        // Audio keeps playing once backgrounded and iOS can
-                        // kill a suspended app without warning — flush what's
-                        // accrued so far rather than relying solely on the
-                        // ~20s checkpoint backstop.
-                        readingStatsTracker.flushForBackgrounding()
-                    }
+            ZStack {
+                // Mounted from the first frame, behind the splash rather than
+                // after it: the shelf's own load/`.task` work then overlaps
+                // the wordmark's reveal, so the fade uncovers a warm screen.
+                RootTabView(app: appEnvironment)
+
+                if isSplashVisible {
+                    // No animation or `.transition` here on purpose:
+                    // `SplashView` fades itself out and calls back only once
+                    // it is fully transparent, so this is removing something
+                    // already invisible. See its own doc comment for why the
+                    // fade can't live on this side.
+                    SplashView { isSplashVisible = false }
+                        .zIndex(1)
                 }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .background {
+                    pdfImportManager.applicationDidEnterBackground()
+                    // Audio keeps playing once backgrounded and iOS can
+                    // kill a suspended app without warning — flush what's
+                    // accrued so far rather than relying solely on the
+                    // ~20s checkpoint backstop.
+                    readingStatsTracker.flushForBackgrounding()
+                    player.persistPositionForBackgrounding()
+                }
+            }
         }
     }
 }
