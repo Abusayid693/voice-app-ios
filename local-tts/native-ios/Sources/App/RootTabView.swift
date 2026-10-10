@@ -417,27 +417,24 @@ private struct TabBarProgressiveBackdrop: View {
     let baseColor: Color
 
     var body: some View {
-        ZStack {
-            VariableBlurView(
-                maxBlurRadius: 10,
-                direction: .blurredBottomClearTop,
-                // Keep the top fully clear before the blur begins. Negative
-                // offsets start with a nonzero radius and expose a hard seam.
-                startOffset: 0.15)
-
-            LinearGradient(
-                stops: [
-                    .init(color: baseColor.opacity(0), location: 0),
-                    .init(color: baseColor.opacity(0), location: 0.15),
-                    .init(color: baseColor.opacity(0.30), location: 0.45),
-                    .init(color: baseColor.opacity(0.80), location: 0.78),
-                    .init(color: baseColor.opacity(0.94), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        // No blur — the gradient's own stops carry the "progressive" read.
+        // Only a thin sliver at the very top is fully clear; opacity climbs
+        // sharply right after that so whatever's scrolling underneath the
+        // tab icons is mostly covered, not just lightly tinted. A ~1.5x
+        // pass on these stops read as too harsh; this is the ~1.1x tuning
+        // that followed it instead.
+        LinearGradient(
+            stops: [
+                .init(color: baseColor.opacity(0), location: 0),
+                .init(color: baseColor.opacity(0.09), location: 0.06),
+                .init(color: baseColor.opacity(0.66), location: 0.26),
+                .init(color: baseColor.opacity(0.99), location: 0.55),
+                .init(color: baseColor.opacity(1.0), location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
