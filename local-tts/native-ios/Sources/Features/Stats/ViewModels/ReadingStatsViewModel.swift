@@ -42,8 +42,8 @@ final class ReadingStatsViewModel: ObservableObject {
     }
     /// Consecutive goal-met days ending at (or just before, if today hasn't
     /// met it yet) today. Computed purely over `days`, so it's capped by
-    /// `windowMonths` — a 100-day streak inside a 3-month window reports as
-    /// at most ~90. Widening the cap means widening the fetch; not done.
+    /// `windowMonths` — a 200-day streak inside a 6-month window reports as
+    /// at most ~184. Widening the cap means widening the fetch.
     @Published private(set) var currentStreak: Int = 0
     /// Dated history of goal edits — see `DailyGoalSchedule` for why this
     /// isn't one current number. Published so the editor's own displayed
@@ -55,7 +55,7 @@ final class ReadingStatsViewModel: ObservableObject {
 
     /// How far back the carousel and graph both reach. One number drives
     /// both, per the user's own request that they cover the same period.
-    private static let windowMonths = 3
+    private static let windowMonths = 6
 
     init(store: ReadingStatsStore, calendar: Calendar = .current) {
         self.store = store

@@ -55,6 +55,7 @@ enum VoiceCatalog {
             longDescription:
                 "Poised and composed, with a polished, professional edge — clear enough for crisp narration or presentations.",
             hasAvatar: true,
+            displayNameOverride: "Avery",
             previewLine:
                 "Mountains rose beyond the valley as morning light spread slowly across the fields, waking birds after the storm."),
         Voice(
@@ -62,12 +63,14 @@ enum VoiceCatalog {
             longDescription:
                 "Dreamy and artistic, with a soft, unhurried delivery well suited to reflective or lyrical text.",
             hasAvatar: true,
+            displayNameOverride: "Elena",
             previewLine:
                 "She tuned her old guitar by the window, humming a quiet melody while rain tapped gently against the glass."),
         Voice(
             code: "af_bella", tagline: "Warm and confident",
             longDescription: "Warm and confident, with a rich, assured tone that carries a room.",
             hasAvatar: true,
+            displayNameOverride: "Claire",
             previewLine:
                 "The bakery filled with the smell of fresh bread every morning, drawing neighbors in before the sun had fully risen."),
         Voice(
@@ -75,6 +78,7 @@ enum VoiceCatalog {
             longDescription:
                 "Warm and friendly, with an easy, conversational tone — great for everyday narration and casual reads.",
             hasAvatar: true,
+            displayNameOverride: "Maya",
             previewLine:
                 "He wrote her a letter every week that summer, describing the ocean and the long walks near home."),
         Voice(
@@ -82,18 +86,21 @@ enum VoiceCatalog {
             longDescription:
                 "Friendly and professional, with a clear, approachable delivery suited to explainers and guides.",
             hasAvatar: true,
+            displayNameOverride: "Natalie",
             previewLine:
                 "The train pulled away from the station just as the last passenger found her seat for the long journey."),
         Voice(
             code: "af_kore", tagline: "Bright and youthful",
             longDescription: "Bright and youthful, with an upbeat, energetic lift to every line.",
             hasAvatar: true,
+            displayNameOverride: "Zoe",
             previewLine:
                 "A gentle breeze moved through the orchard, carrying the scent of ripe apples toward the farmhouse porch where children played."),
         Voice(
             code: "af_nicole", tagline: "Sophisticated and polished",
             longDescription: "Sophisticated and polished, with a smooth, refined cadence.",
             hasAvatar: true,
+            displayNameOverride: "Audrey",
             previewLine:
                 "The scientist adjusted her instruments carefully, watching the readings shift as the experiment moved closer to its final stage."),
         Voice(
@@ -101,112 +108,133 @@ enum VoiceCatalog {
             longDescription:
                 "Vibrant and energetic, with a lively pace that suits upbeat, fast-moving content.",
             hasAvatar: true,
+            displayNameOverride: "Riley",
             previewLine:
                 "Streetlights flickered on across the city as evening settled in, and the sound of traffic slowly began to fade away."),
         Voice(
             code: "af_river", tagline: "Free-spirited and relaxed",
             longDescription: "Free-spirited and relaxed, with an unhurried, laid-back delivery.",
             hasAvatar: true,
+            displayNameOverride: "Morgan",
             previewLine:
                 "The old fisherman rowed out before dawn, watching the mist rise off the water as the sky slowly turned pink."),
         Voice(
             code: "af_sarah", tagline: "Sweet and genuine",
             longDescription: "Sweet and genuine, with a warm, down-to-earth tone that feels personal.",
             hasAvatar: true,
+            displayNameOverride: "Hannah",
             previewLine:
                 "Every Saturday she walked to the farmers market, filling her basket with fresh vegetables, warm bread, and flowers."),
         Voice(
             code: "af_sky", tagline: "Bright and airy",
             longDescription: "Bright and airy, with a light, cheerful lilt.", hasAvatar: true,
+            displayNameOverride: "Chloe",
             previewLine:
                 "The kite climbed higher into the wind, dipping and turning above the beach while the children cheered from the sand."),
         Voice(
             code: "am_adam", tagline: "Warm and easygoing",
             longDescription: "Warm and easygoing, with a relaxed, approachable delivery.",
             hasAvatar: true,
+            displayNameOverride: "Ethan",
             previewLine:
                 "The engineer double checked every connection before powering on the machine, knowing one mistake could delay the whole project."),
         Voice(
             code: "am_echo", tagline: "Sharp and composed",
             longDescription: "Sharp and composed, with a crisp, confident edge.",
+            displayNameOverride: "Julian",
             previewLine:
                 "Thunder rolled across the canyon walls, echoing long after the lightning had already faded from the darkening evening sky."),
         Voice(
             code: "am_eric", tagline: "Friendly and warm",
             longDescription: "Friendly and warm, with a steady, welcoming tone.",
+            displayNameOverride: "Noah",
             previewLine:
                 "The chef tasted the sauce one more time, adjusting the seasoning slightly before sending the plate out to the table."),
         Voice(
             code: "am_fenrir", tagline: "Rugged, deep voice",
             longDescription: "Rugged and deep, with a strong, grounded presence.", hasAvatar: true,
+            displayNameOverride: "Caleb",
             previewLine:
                 "The hikers pushed through the dense forest, following an old trail marked only by faded paint on scattered trees."),
         Voice(
             code: "am_liam", tagline: "Youthful and relaxed",
             longDescription: "Youthful and relaxed, with a casual, easy pace.", hasAvatar: true,
+            displayNameOverride: "Owen",
             previewLine:
                 "The coach gathered the team before the final match, reminding everyone that preparation mattered more than talent alone today."),
         Voice(
             code: "am_michael", tagline: "Reliable and warm",
             longDescription: "Reliable and warm, with a dependable, trustworthy tone.",
+            displayNameOverride: "Benjamin",
             previewLine:
                 "The pilot announced a short delay due to weather, asking passengers to remain seated until the storm had passed completely."),
         Voice(
             code: "am_onyx", tagline: "Sleek and cool",
             longDescription: "Sleek and cool, with a smooth, understated confidence.",
+            displayNameOverride: "Miles",
             previewLine:
                 "The blacksmith hammered steadily at the glowing metal, shaping it slowly into the curved blade he had planned for weeks."),
         Voice(
             code: "am_puck", tagline: "Playful and mischievous",
             longDescription: "Playful and mischievous, with a light, spirited energy.",
+            displayNameOverride: "Leo",
             previewLine:
                 "The comedian paced the stage, waiting for the perfect moment to deliver the punchline he had rehearsed all week long."),
         Voice(
             code: "am_santa", tagline: "Warm and jolly",
             longDescription: "Warm and jolly, with a hearty, good-natured cheer.",
+            displayNameOverride: "Henry",
             previewLine:
                 "Snow fell quietly over the village square as lanterns were lit one by one along the narrow, winding streets."),
         Voice(
             code: "bf_alice", tagline: "Elegant and refined",
             longDescription: "Elegant and refined, with a crisp, well-mannered British delivery.",
             hasAvatar: true,
+            displayNameOverride: "Eleanor",
             previewLine:
                 "The librarian reshelved the last stack of books just as the evening bell rang and the doors slowly closed."),
         Voice(
             code: "bf_emma", tagline: "Poised and elegant",
             longDescription: "Poised and elegant, with a graceful, composed tone.",
+            displayNameOverride: "Florence",
             previewLine:
                 "The painter stepped back from the canvas, studying the colors carefully before adding one final stroke to finish it."),
         Voice(
             code: "bf_isabella", tagline: "Graceful and refined",
             longDescription: "Graceful and refined, with a smooth, cultivated cadence.",
+            displayNameOverride: "Beatrice",
             previewLine:
                 "The archaeologist brushed the dust away carefully, revealing an ancient carving that had remained hidden for centuries underground."),
         Voice(
             code: "bf_lily", tagline: "Gentle and delicate",
             longDescription: "Gentle and delicate, with a soft, soothing British lilt.",
+            displayNameOverride: "Imogen",
             previewLine:
                 "The gardener knelt beside the roses, trimming each stem carefully while humming softly to herself in the afternoon sun."),
         Voice(
             code: "bm_daniel", tagline: "Distinguished and calm",
             longDescription: "Distinguished and calm, with an even, authoritative delivery.",
             hasAvatar: true,
+            displayNameOverride: "Arthur",
             previewLine:
                 "The captain steadied the wheel as the waves grew rougher, guiding the small boat carefully back toward the harbor."),
         Voice(
             code: "bm_fable", tagline: "Warm storyteller",
             longDescription:
                 "A warm storyteller's voice, rich and expressive — built for narration.",
+            displayNameOverride: "Oliver",
             previewLine:
                 "The old storyteller sat by the fire, beginning a tale that had been passed down through many generations before him."),
         Voice(
             code: "bm_george", tagline: "Distinguished and composed",
             longDescription: "Distinguished and composed, with a steady, refined British tone.",
+            displayNameOverride: "Alistair",
             previewLine:
                 "The professor closed his notes and looked out at the class, asking if anyone still had questions before the exam."),
         Voice(
             code: "bm_lewis", tagline: "Friendly and approachable",
             longDescription: "Friendly and approachable, with a warm, easy-going British manner.",
+            displayNameOverride: "Edward",
             previewLine:
                 "The mechanic wiped his hands on a rag, satisfied that the engine finally sounded right after hours of careful work."),
         // hf_/hm_ — Hindi-named voice timbres from the same v1.0 pack every
@@ -217,19 +245,19 @@ enum VoiceCatalog {
         Voice(
             code: "hf_alpha", tagline: "Clear and composed",
             longDescription: "Clear and composed, with a steady, articulate delivery.",
-            displayNameOverride: "Anika"),
+            displayNameOverride: "Aditi"),
         Voice(
             code: "hf_beta", tagline: "Warm and measured",
             longDescription: "Warm and measured, with an even, reassuring pace.",
-            displayNameOverride: "Meera"),
+            displayNameOverride: "Kavya"),
         Voice(
             code: "hm_omega", tagline: "Deep and grounded",
             longDescription: "Deep and grounded, with a calm, authoritative tone.",
-            displayNameOverride: "Arjun"),
+            displayNameOverride: "Rohan"),
         Voice(
             code: "hm_psi", tagline: "Smooth and confident",
             longDescription: "Smooth and confident, with an easy, assured cadence.",
-            displayNameOverride: "Vikram"),
+            displayNameOverride: "Dev"),
     ]
 
     // MARK: - Kokoro-ANE (Mandarin, 10)
@@ -242,56 +270,66 @@ enum VoiceCatalog {
             code: "zf_001", tagline: "Clear and steady",
             longDescription:
                 "A clear, steady Mandarin voice — the standard default for everyday narration.",
+            displayNameOverride: "Li Hua",
             previewLine: "清晨的阳光洒进窗户,街道上渐渐热闹起来,人们开始了新一天的生活。"),
         Voice(
             code: "zm_009", tagline: "Clear and steady",
             longDescription: "A clear, steady Mandarin voice with an even, dependable delivery.",
+            displayNameOverride: "Wei",
             previewLine: "老师站在讲台前,耐心地讲解着今天的课程内容,学生们认真地做着笔记。"),
         Voice(
             code: "zf_xiaobei", tagline: "Warm and homely",
             longDescription:
                 "Warm and natural, carrying a touch of Northeastern Chinese character — easy, conversational delivery.",
             hasAvatar: true,
+            displayNameOverride: "Meilin",
             previewLine: "东北的冬天格外寒冷,雪花静静地落在屋顶上,街道显得格外安静祥和。"),
         Voice(
             code: "zf_xiaoni", tagline: "Clear and professional",
             longDescription:
                 "Clear and composed, with a Shaanxi-inflected warmth well suited to informational content.",
             hasAvatar: true,
+            displayNameOverride: "Yuxin",
             previewLine: "她坐在图书馆里,仔细地翻阅着一本古老的书籍,窗外的树叶轻轻飘落。"),
         Voice(
             code: "zf_xiaoxiao", tagline: "Warm and lively",
             longDescription:
                 "Warm and lively — a flagship Mandarin persona, expressive across a wide emotional range.",
             hasAvatar: true,
+            displayNameOverride: "Xinyi",
             previewLine: "春天来了,公园里的花朵竞相开放,孩子们在草地上快乐地奔跑嬉戏。"),
         Voice(
             code: "zf_xiaoyi", tagline: "Bright and expressive",
             longDescription:
                 "Bright and expressive, with a youthful energy that shifts easily between playful and heartfelt.",
             hasAvatar: true,
+            displayNameOverride: "Jingyi",
             previewLine: "演唱会上灯光闪烁,观众们跟着音乐节拍欢呼,气氛热烈而充满活力。"),
         Voice(
             code: "zm_yunjian", tagline: "Passionate and bold",
             longDescription:
                 "Passionate and dynamic, built for sports commentary and dramatic narration.",
             hasAvatar: true,
+            displayNameOverride: "Jian",
             previewLine: "比赛进行到最后一刻,现场观众屏住呼吸,期待着这激动人心的结果。"),
         Voice(
             code: "zm_yunxi", tagline: "Sunny and upbeat",
             longDescription: "Sunny and upbeat, with a lively conversational warmth.",
             hasAvatar: true,
+            displayNameOverride: "Hao",
             previewLine: "周末的午后,他和朋友们一起去爬山,呼吸着新鲜空气,心情格外愉快。"),
         Voice(
             code: "zm_yunxia", tagline: "Playful and youthful",
             longDescription: "Playful and youthful — a bright, cheerful young voice.",
             hasAvatar: true,
+            displayNameOverride: "Zihan",
             previewLine: "小男孩举着风筝在草地上奔跑,笑声传遍了整个公园,十分天真可爱。"),
         Voice(
             code: "zm_yunyang", tagline: "Professional and reliable",
             longDescription:
                 "Professional and reliable, with the composed authority of a news anchor.",
             hasAvatar: true,
+            displayNameOverride: "Ming",
             previewLine: "新闻播报员沉稳地念着今天的头条新闻,语气专业而值得信赖。"),
     ]
 
@@ -301,10 +339,10 @@ enum VoiceCatalog {
     // No persona data published for these, and no preview clips captured
     // yet — all nil rather than invented.
     static let kokoroJapanese: [Voice] = [
-        Voice(code: "jf_alpha"),
-        Voice(code: "jf_gongitsune"),
-        Voice(code: "jf_nezumi"),
-        Voice(code: "jf_tebukuro"),
-        Voice(code: "jm_kumo"),
+        Voice(code: "jf_alpha", displayNameOverride: "Aoi"),
+        Voice(code: "jf_gongitsune", displayNameOverride: "Yui"),
+        Voice(code: "jf_nezumi", displayNameOverride: "Sakura"),
+        Voice(code: "jf_tebukuro", displayNameOverride: "Hina"),
+        Voice(code: "jm_kumo", displayNameOverride: "Haruto"),
     ]
 }

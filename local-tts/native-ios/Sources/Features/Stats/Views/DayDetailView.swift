@@ -1,100 +1,131 @@
-import LucideSwift
 import SwiftUI
 
-/// One day's detail, reached by tapping a cell in `ContributionGraphView` —
-/// which books were read, pages completed, time listened, and voice used,
-/// per book. Its explicit dark sheet scheme matches Reading Stats.
+/// One day's listening detail. Session data keeps raw voice codes for future
+/// reporting, but this compact cover-and-metrics surface does not display them.
 struct DayDetailView: View {
     let detail: DayDetail
-    @Environment(\.dismiss) private var dismiss
+    let coverURL: (UUID) -> URL?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    summaryRow
-                }
-                .listRowBackground(Color.appSecondaryBackground)
+        StandardBottomSheet(
+            title: Self.dateFormatter.string(from: detail.day),
+            detents: [.medium, .large]
+        ) {
+            summaryCard
 
-                if detail.books.isEmpty {
-                    Section {
-                        Text("No activity this day.")
-                            .font(AppTextStyle.labelDim.font)
-                            .foregroundStyle(Color.appSecondaryText)
-                    }
-                    .listRowBackground(Color.appSecondaryBackground)
-                } else {
-                    Section("Books") {
-                        ForEach(detail.books) { book in
-                            bookRow(book)
-                        }
-                    }
-                    .listRowBackground(Color.appSecondaryBackground)
-                }
+            if detail.books.isEmpty {
+                emptyState
+            } else {
+                booksSection
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.appBackground)
-            .navigationTitle(detail.day.formatted(date: .abbreviated, time: .omitted))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+        }
+    }
+
+    private var summaryCard: some View {
+        VStack(spacing: 12) {
+            summaryRow(
+                label: "Listened",
+                value: Self.durationLabel(detail.totalListenedSeconds))
+            summaryRow(
+                label: "Pages Completed",
+                value: "\(detail.totalPagesCompleted)")
+            summaryRow(
+                label: "Books Read",
+                value: "\(detail.books.count)")
+        }
+        .padding(18)
+        .background(
+            Color.appSecondaryBackground,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func summaryRow(label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(label)
+                .font(AppTextStyle.cardTitle.font)
+                .foregroundStyle(Color.appSecondaryText)
+
+            Spacer(minLength: 12)
+
+            Text(value)
+                .font(.system(size: 16, weight: .regular, design: .serif))
+                .foregroundStyle(Color.appPrimaryText)
+        }
+    }
+
+    private var booksSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Books")
+                .font(AppTextStyle.sectionTitle.font)
+                .foregroundStyle(Color.appPrimaryText)
+                .accessibilityAddTraits(.isHeader)
+
+            LazyVStack(spacing: 12) {
+                ForEach(detail.books) { book in
+                    bookCard(book)
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .tint(Color.appPrimaryText)
-        .presentationBackground(Color.appBackground)
-        .presentationDetents([.medium, .large])
     }
 
-    private var summaryRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.durationLabel(detail.totalListenedSeconds))
-                    .font(AppTextStyle.cardTitle.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                Text("listened")
-                    .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(Color.appSecondaryText)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(detail.totalPagesCompleted)")
-                    .font(AppTextStyle.cardTitle.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                Text(detail.totalPagesCompleted == 1 ? "page" : "pages")
-                    .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(Color.appSecondaryText)
-            }
-        }
-        .padding(.vertical, 4)
-    }
+    private func bookCard(_ book: DayDetailBookRow) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            SavedProjectCover(
+                coverURL: coverURL(book.projectID),
+                title: book.bookTitle,
+                size: CGSize(width: 50, height: 74),
+                cornerRadius: 6)
 
-    private func bookRow(_ book: DayDetailBookRow) -> some View {
-        HStack(spacing: 12) {
-            LucideIcon(.book, color: Color.appSecondaryText)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(book.bookTitle)
                     .font(AppTextStyle.rowTitle.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                Text(book.voiceNames.joined(separator: ", "))
-                    .font(AppTextStyle.labelDim.font)
                     .foregroundStyle(Color.appSecondaryText)
-                    .lineLimit(1)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(Self.durationLabel(book.listenedSeconds))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(Self.metricsLabel(for: book))
                     .font(AppTextStyle.label.font)
-                    .foregroundStyle(Color.appPrimaryText)
-                Text("\(book.pagesCompleted) \(book.pagesCompleted == 1 ? "page" : "pages")")
-                    .font(AppTextStyle.labelDim.font)
-                    .foregroundStyle(Color.appSecondaryText)
+                    .foregroundStyle(Color.appTertiaryText)
             }
+            .frame(minHeight: 74, alignment: .top)
         }
-        .padding(.vertical, 2)
+        .padding(14)
+        .background(
+            Color.appSecondaryBackground,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "book.closed")
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(Color.appSecondaryText)
+            Text("No reading activity")
+                .font(AppTextStyle.rowTitle.font)
+                .foregroundStyle(Color.appPrimaryText)
+            Text("Books you listen to on this day will appear here.")
+                .font(AppTextStyle.label.font)
+                .foregroundStyle(Color.appSecondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+        .padding(.horizontal, 20)
+        .background(
+            Color.appSecondaryBackground,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMM"
+        return formatter
+    }()
+
+    private static func metricsLabel(for book: DayDetailBookRow) -> String {
+        let pages = "\(book.pagesCompleted) \(book.pagesCompleted == 1 ? "page" : "pages")"
+        return "\(durationLabel(book.listenedSeconds)) · \(pages)"
     }
 
     private static func durationLabel(_ seconds: Double) -> String {
@@ -107,18 +138,27 @@ struct DayDetailView: View {
 }
 
 #Preview {
-    Text("Host")
+    Color.appBackground
         .sheet(isPresented: .constant(true)) {
             DayDetailView(
                 detail: DayDetail(
-                    day: Date(), totalListenedSeconds: 1830, totalPagesCompleted: 3,
+                    day: Date(),
+                    totalListenedSeconds: 1_830,
+                    totalPagesCompleted: 3,
                     books: [
                         DayDetailBookRow(
-                            projectID: UUID(), bookTitle: "The Great Gatsby", pagesCompleted: 2,
-                            listenedSeconds: 1200, voiceNames: ["Bella"]),
+                            projectID: UUID(),
+                            bookTitle: "The Great Gatsby",
+                            pagesCompleted: 2,
+                            listenedSeconds: 1_200,
+                            voiceNames: ["af_heart", "bm_fable"]),
                         DayDetailBookRow(
-                            projectID: UUID(), bookTitle: "Moby Dick", pagesCompleted: 1,
-                            listenedSeconds: 630, voiceNames: ["Alba"]),
-                    ]))
+                            projectID: UUID(),
+                            bookTitle: "Moby Dick",
+                            pagesCompleted: 1,
+                            listenedSeconds: 630,
+                            voiceNames: ["am_adam"]),
+                    ]),
+                coverURL: { _ in nil })
         }
 }

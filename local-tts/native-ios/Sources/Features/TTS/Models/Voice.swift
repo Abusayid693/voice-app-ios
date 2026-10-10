@@ -19,6 +19,10 @@ struct Voice: Identifiable, Hashable, Sendable {
     /// Whether a real per-voice avatar image is bundled. The asset name is
     /// always `VoiceAvatar_<code>`, so only the flag needs storing.
     var hasAvatar: Bool = false
+    /// Overrides `VoiceCode`'s prefix-stripped code as the display name —
+    /// for voices whose raw model labels should not surface in the UI. The
+    /// engine code remains unchanged for synthesis and persistence.
+    var displayNameOverride: String?
     /// The sentence this voice's bundled preview clip says — kept so the
     /// clips stay regenerable (see docs/adr/0009-bundled-voice-preview-clips.md).
     var previewLine: String?
@@ -27,12 +31,6 @@ struct Voice: Identifiable, Hashable, Sendable {
     /// set this instead of inventing a fake prefix for a voice whose code
     /// doesn't follow that convention.
     var flagOverride: String?
-    /// Overrides `VoiceCode`'s prefix-stripped code as the display name —
-    /// for a voice whose raw code (`hf_alpha`, `hm_omega`) reads as a
-    /// placeholder rather than a real name. Set this instead of inventing
-    /// a fake code, same reasoning as `flagOverride`.
-    var displayNameOverride: String?
-
     var id: String { code }
 
     /// `af_alloy` -> `Alloy`, `bill_boerst` -> `Bill Boerst`.

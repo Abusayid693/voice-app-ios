@@ -107,6 +107,12 @@ final class LibraryViewModel: ObservableObject {
         return try? JSONDecoder().decode(SavedGeneration.self, from: data)
     }
 
+    /// Resolves optional artwork without exposing the Library store to
+    /// presentation-only consumers such as Reading Stats.
+    func coverURL(for projectID: UUID) -> URL? {
+        savedGenerations.first { $0.id == projectID }?.coverURL
+    }
+
     func page(for project: SavedGeneration, index: Int) -> ReaderPage? {
         guard index >= 0, index < project.pageCount else { return nil }
         let url = SavedGeneration.pageFileURL(projectID: project.id, index: index)
