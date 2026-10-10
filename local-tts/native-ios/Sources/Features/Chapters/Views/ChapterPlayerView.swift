@@ -298,9 +298,16 @@ struct ChapterPlayerView: View {
     // continuous-playback advance (content already swapped, nothing further
     // to do) apart from every other, user-driven page change.
     @State private var isProgrammaticPageChange = false
+    /// The chunk this page should open on and start playing from — resolved
+    /// in `init` from the project's saved position (or the mini player's live
+    /// one). Consumed once, by whichever of the opening scroll or the first
+    /// Play tap gets there first, and dropped on any page change, so it can
+    /// never re-apply after the reader has moved on.
+    @State private var pendingResumeChunk: Int?
 
     init(
         project: SavedGeneration, initialPageIndex: Int? = nil,
+        initialChunkIndex: Int? = nil,
         initialSurfaceMode: ReaderSurfaceMode? = nil,
         library: LibraryViewModel,
         player: BookAudioPlayer,
@@ -321,10 +328,42 @@ struct ChapterPlayerView: View {
         let boundedIndex = hasValidRequestedIndex ? requestedIndex : 0
         _currentPageIndex = State(initialValue: boundedIndex)
         _selectedVoiceName = State(initialValue: project.voiceName)
+        // The saved chunk belongs to the saved page, so it only applies when
+        // this open is deferring to that page. A caller naming a page
+        // explicitly (the mini player) brings its own live chunk instead.
+        let startChunk: Int
+        if initialPageIndex == nil, project.lastReadChunkCount > 0 {
+            startChunk = min(
+                max(project.lastReadChunkIndex, 0), project.lastReadChunkCount - 1)
+        } else {
+            startChunk = initialChunkIndex ?? 0
+        }
+        _pendingResumeChunk = State(initialValue: startChunk > 0 ? startChunk : nil)
     }
 
     private var pageRef: ReaderPageRef {
         ReaderPageRef(projectID: project.id, pageIndex: currentPageIndex)
+    }
+
+    /// The one page that is partway through, for the page picker's partial
+    /// ring — a sibling to `completedPageIndices` rather than part of it,
+    /// since only one page is ever mid-read (see the decision in
+    /// `SavedGeneration.lastReadChunkIndex`'s own comment).
+    ///
+    /// Prefers the player's live position over the project's saved one: this
+    /// view holds `project` by value from when it was pushed, so that saved
+    /// position goes stale the moment reading continues.
+    private var partialPageProgress: (pageIndex: Int, fraction: Double)? {
+        if let ref = player.activeRef, ref.projectID == project.id, !player.chunkTexts.isEmpty {
+            return (
+                ref.pageIndex,
+                Double(player.currentChunkIndex) / Double(player.chunkTexts.count)
+            )
+        }
+        if let resume = pendingResumeChunk, !idleChunkTexts.isEmpty {
+            return (currentPageIndex, Double(resume) / Double(idleChunkTexts.count))
+        }
+        return nil
     }
 
     private var hasReadableText: Bool {
@@ -445,6 +484,7 @@ struct ChapterPlayerView: View {
                 // no reason to track a light theme.
                 chromeTheme: .dark,
                 completedPageIndices: completedPageIndices,
+                partialProgress: partialPageProgress,
                 chapters: chapters, onSelect: selectPage)
         }
         .sheet(isPresented: $isVoiceSelectionPresented) {
@@ -506,11 +546,16 @@ struct ChapterPlayerView: View {
                 isProgrammaticPageChange = false
                 return
             }
+            // Moving off the opened page retires its saved chunk — the
+            // position the user is establishing now is this new page's top.
+            pendingResumeChunk = nil
             guard moveToPage(newValue) else {
                 currentPageIndex = oldValue
                 return
             }
-            library.recordLastReadPage(index: newValue, for: project.id)
+            library.recordReadingPosition(
+                ReadingPosition(pageIndex: newValue, chunkCount: idleChunkTexts.count),
+                for: project.id)
         }
         // The one signal that the player advanced *on its own* — a manual
         // page change always updates currentPageIndex first (selectPage/the
@@ -525,8 +570,10 @@ struct ChapterPlayerView: View {
             isProgrammaticPageChange = true
             pageNumberTransitionDirection = .forward
             currentPageIndex = newRef.pageIndex
+            // The advance left the page the saved chunk belonged to.
+            pendingResumeChunk = nil
             _ = loadPage(newRef.pageIndex)
-            // No `recordLastReadPage` here: the player writes the position
+            // No `recordReadingPosition` here: the player writes the position
             // itself on every promotion (via `positionWriter`), because it
             // advances whether or not this screen is on-screen to see it.
             // Only *user-driven* page changes are this view's to persist.
@@ -874,6 +921,22 @@ struct ChapterPlayerView: View {
         paragraphWordItems = []
         paragraphRevisions = []
         recomputeWordItems()
+        // The saved index only means anything against the chunking it was
+        // saved under. `KokoroTextChunker` is a pure function of the page's
+        // text, so this normally matches forever — but a changed chunk budget
+        // would silently point the index elsewhere in the page, and starting
+        // from the top is better than starting somewhere arbitrary. A count
+        // mismatch catches that even where the index is still in range; it's
+        // checked only on the saved page, since that's the only page the
+        // saved count describes.
+        if let resume = pendingResumeChunk {
+            let savedPageChunkingChanged =
+                index == project.lastReadPageIndex && project.lastReadChunkCount > 0
+                && idleChunkTexts.count != project.lastReadChunkCount
+            if savedPageChunkingChanged || !idleChunkTexts.indices.contains(resume) {
+                pendingResumeChunk = nil
+            }
+        }
         return true
     }
 
@@ -1206,8 +1269,16 @@ struct ChapterPlayerView: View {
                 TimelineView(.animation) { context in
                     Circle()
                         .trim(from: 0, to: 0.72)
+                        // `contrastingText`, not `accent`: this ring sits
+                        // *inside* the button's own accent-filled disc, so
+                        // stroking it in `accent` drew the colour onto itself
+                        // and the ring was invisible. The same token the play
+                        // glyph above uses, for the same reason — it's the
+                        // colour that reads against this disc. (The audio
+                        // surface's copy of this ring can use `appPrimaryText`
+                        // because its button has no disc behind it.)
                         .stroke(
-                            readerChromeTheme.accent,
+                            readerChromeTheme.contrastingText.opacity(0.9),
                             style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         // Inside the 64pt button, not around the whole pill —
                         // at 72pt (bigger than the button's own frame) nothing
@@ -1248,9 +1319,16 @@ struct ChapterPlayerView: View {
         if player.isActive(pageRef) {
             player.togglePlayPause()
         } else {
+            // The first Play on a freshly-opened page honours the saved
+            // chunk; consumed here so a later Play (after the user has
+            // scrolled or seeked elsewhere) starts from the page's top like
+            // it always did.
+            let resumeChunk = pendingResumeChunk ?? 0
+            pendingResumeChunk = nil
             player.start(
                 project: project, page: page, startIndex: currentPageIndex,
                 voice: selectedVoiceName,
+                startingAtChunk: resumeChunk,
                 pageProvider: pageProvider, positionWriter: positionWriter)
         }
     }
@@ -1264,9 +1342,9 @@ struct ChapterPlayerView: View {
         { [library, project] index in library.page(for: project, index: index) }
     }
 
-    private var positionWriter: (Int) -> Void {
-        { [library, project] index in
-            library.recordLastReadPage(index: index, for: project.id)
+    private var positionWriter: (ReadingPosition) -> Void {
+        { [library, project] position in
+            library.recordReadingPosition(position, for: project.id)
         }
     }
 
@@ -1392,12 +1470,17 @@ struct ChapterPlayerView: View {
             // following playback, and there is no prior scroll position left
             // to respect either way.
             .onAppear {
-                guard isCurrentKokoroPageActive else { return }
+                // Two restores share this: a session already playing on this
+                // page (follow the live chunk) and a cold open on the saved
+                // position (`pendingResumeChunk`, which Play will also start
+                // from). Both land the same way, so neither needs its own path.
+                let target = isCurrentKokoroPageActive
+                    ? player.currentChunkIndex : pendingResumeChunk
+                guard let target else { return }
                 // One run loop later: at onAppear the LazyVStack hasn't laid
                 // its rows out yet and scrollTo can silently no-op.
                 Task { @MainActor in
-                    guard let (groupIndex, anchor) = scrollTarget(
-                        forChunk: player.currentChunkIndex)
+                    guard let (groupIndex, anchor) = scrollTarget(forChunk: target)
                     else { return }
                     // Unanimated — animating a jump from the top of the page
                     // would be a long visible sweep, not a restore.

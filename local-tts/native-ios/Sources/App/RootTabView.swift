@@ -44,6 +44,10 @@ struct ReaderRoute: Identifiable, Hashable {
     let id = UUID()
     let project: SavedGeneration
     let initialPageIndex: Int?
+    /// Only set when `initialPageIndex` is — a route that defers to the
+    /// project's saved page defers to its saved chunk too. Today the one
+    /// caller is the mini player expanding onto the chunk that's sounding.
+    var initialChunkIndex: Int?
     let initialSurfaceMode: ReaderSurfaceMode?
 }
 
@@ -249,6 +253,7 @@ struct RootTabView: View {
         ChapterPlayerView(
             project: route.project,
             initialPageIndex: route.initialPageIndex,
+            initialChunkIndex: route.initialChunkIndex,
             initialSurfaceMode: route.initialSurfaceMode,
             library: library,
             player: player,
@@ -271,6 +276,7 @@ struct RootTabView: View {
                 ReaderRoute(
                     project: project,
                     initialPageIndex: ref.pageIndex,
+                    initialChunkIndex: player.currentChunkIndex,
                     initialSurfaceMode: .audio))
         }
     }

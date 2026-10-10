@@ -688,7 +688,16 @@ struct BookShelfView: View {
         Task {
             let completed = await readingStats.completedPageIndices(forProject: book.id)
             guard selectedBook?.id == book.id else { return }
-            selectedBookProgress = Double(completed.count) / Double(max(book.pageCount, 1))
+            // Finished pages, plus however far into the bookmarked page the
+            // reader got — so the bar moves while one long page is being read
+            // rather than only stepping when a page completes. Skipped when
+            // that page is already counted as finished, which would otherwise
+            // credit it twice.
+            var pages = Double(completed.count)
+            if !completed.contains(book.lastReadPageIndex), book.lastReadChunkCount > 0 {
+                pages += Double(book.lastReadChunkIndex) / Double(book.lastReadChunkCount)
+            }
+            selectedBookProgress = min(pages / Double(max(book.pageCount, 1)), 1)
         }
         var selectionTransaction = Transaction(animation: nil)
         selectionTransaction.disablesAnimations = true
