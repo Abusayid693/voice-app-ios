@@ -3,13 +3,6 @@ import SwiftUI
 /// Replayable, data-driven product tour. Settings is its only host today;
 /// there is deliberately no first-launch persistence or root-level routing.
 struct AppJourneyView: View {
-    private enum Direction {
-        case forward
-        case backward
-
-        var sign: CGFloat { self == .forward ? 1 : -1 }
-    }
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
 
@@ -18,9 +11,10 @@ struct AppJourneyView: View {
     private let onCompletion: (() -> Void)?
 
     @State private var currentIndex = 0
-    @State private var direction = Direction.forward
+    @State private var carouselPosition: CGFloat = 0
     @State private var isTransitioning = false
-    @State private var unlockTask: Task<Void, Never>?
+    @State private var isVisible = false
+    @AccessibilityFocusState private var isCaptionFocused: Bool
 
     init(
         steps: [AppJourneyStep] = AppJourneyStep.appJourney,
@@ -33,50 +27,92 @@ struct AppJourneyView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             TexturedDarkBackground(variant: .sidebar)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
-
-                ZStack {
-                    if let step = currentStep {
-                        AppJourneyPage(step: step)
-                            .id(step.id)
-                            .transition(pageTransition)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(
-                                "Page \(currentIndex + 1) of \(steps.count). "
-                                    + "\(step.title). \(step.description)"
-                            )
-                    } else {
-                        Text("App Journey is unavailable.")
-                            .font(.system(size: 17, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color.appSecondaryText)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+                journeyContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
 
                 footer
             }
+
+            header
         }
         .preferredColorScheme(.dark)
         .onAppear {
             currentIndex = 0
-            direction = .forward
+            carouselPosition = 0
             isTransitioning = false
+            isVisible = true
         }
         .onDisappear {
-            unlockTask?.cancel()
-            unlockTask = nil
+            isVisible = false
         }
     }
 
     private var currentStep: AppJourneyStep? {
         guard steps.indices.contains(currentIndex) else { return nil }
         return steps[currentIndex]
+    }
+
+    private var journeyContent: some View {
+        GeometryReader { geometry in
+            let phoneHeight = min(max(1, geometry.size.height - 190), 620,
+                                  geometry.size.width * 0.66 * 1266 / 585)
+            let phoneWidth = phoneHeight * 585 / 1266
+            let pose = currentStep?.phonePose ?? AppJourneyPhonePose()
+
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    JourneyPhoneFrame(
+                        steps: steps,
+                        position: carouselPosition,
+                        reduceMotion: reduceMotion)
+                    .frame(width: phoneWidth, height: phoneHeight)
+                    .scaleEffect(reduceMotion ? 1 : pose.scale)
+                    .offset(y: reduceMotion ? 0 : phoneHeight * pose.verticalOffset)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: phoneHeight + 60)
+                    .clipped()
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.95),
+                                .init(color: .clear, location: 1),
+                            ], startPoint: .top, endPoint: .bottom)
+                    }
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+
+                    ZStack(alignment: .top) {
+                        if let step = currentStep {
+                            JourneyCaption(step: step)
+                                .id(step.id)
+                                .transition(captionTransition)
+                        } else {
+                            Text("App Journey is unavailable.")
+                                .foregroundStyle(Color.appSecondaryText)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 108, alignment: .top)
+                    .padding(.top, 10)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(currentStep.map {
+                        "Page \(currentIndex + 1) of \(steps.count). \($0.title). \($0.description)"
+                    } ?? "App Journey is unavailable.")
+                    .accessibilityFocused($isCaptionFocused)
+
+                    Spacer(minLength: 12)
+                }
+                .frame(minHeight: geometry.size.height, alignment: .top)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 
     private var header: some View {
@@ -126,7 +162,7 @@ struct AppJourneyView: View {
                         .frame(width: index == currentIndex ? 20 : 6, height: 6)
                 }
             }
-            .animation(.easeOut(duration: 0.22), value: currentIndex)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: currentIndex)
             .frame(height: 10)
             .accessibilityHidden(true)
 
@@ -152,20 +188,17 @@ struct AppJourneyView: View {
         steps.isEmpty || currentIndex == steps.count - 1
     }
 
-    private var pageTransition: AnyTransition {
+    private var captionTransition: AnyTransition {
         guard !reduceMotion else { return .opacity }
-
-        let sign = direction.sign
         return .asymmetric(
             insertion: .modifier(
-                active: JourneyPageMotion(horizontalOffset: 180 * sign, rotation: -14 * sign),
-                identity: JourneyPageMotion(horizontalOffset: 0, rotation: 0)
-            ),
+                active: JourneyCaptionMotion(blur: 8, opacity: 0),
+                identity: JourneyCaptionMotion(blur: 0, opacity: 1))
+                .animation(.easeOut(duration: 0.30).delay(0.18)),
             removal: .modifier(
-                active: JourneyPageMotion(horizontalOffset: -180 * sign, rotation: 14 * sign),
-                identity: JourneyPageMotion(horizontalOffset: 0, rotation: 0)
-            )
-        )
+                active: JourneyCaptionMotion(blur: 8, opacity: 0),
+                identity: JourneyCaptionMotion(blur: 0, opacity: 1))
+                .animation(.easeOut(duration: 0.16)))
     }
 
     private func continueJourney() {
@@ -180,24 +213,19 @@ struct AppJourneyView: View {
         let nextIndex = currentIndex + delta
         guard steps.indices.contains(nextIndex), !isTransitioning else { return }
 
-        direction = delta > 0 ? .forward : .backward
         isTransitioning = true
-
-        let duration = reduceMotion ? 0.20 : 0.52
+        isCaptionFocused = false
         let animation: Animation = reduceMotion
-            ? .easeOut(duration: duration)
-            : .spring(response: duration, dampingFraction: 0.88)
+            ? .easeOut(duration: 0.20)
+            : .timingCurve(0.22, 0.80, 0.24, 1, duration: 0.64)
 
-        withAnimation(animation) {
+        withAnimation(animation, completionCriteria: .removed) {
             currentIndex = nextIndex
-        }
-
-        unlockTask?.cancel()
-        unlockTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(duration)) }
-            catch { return }
-            guard !Task.isCancelled else { return }
+            carouselPosition = CGFloat(nextIndex)
+        } completion: {
+            guard isVisible else { return }
             isTransitioning = false
+            isCaptionFocused = true
         }
     }
 
@@ -218,75 +246,128 @@ struct AppJourneyView: View {
     }
 }
 
-private struct AppJourneyPage: View {
-    let step: AppJourneyStep
-
-    private let imageAspectRatio: CGFloat = 585 / 1266
+private struct JourneyPhoneFrame: View {
+    let steps: [AppJourneyStep]
+    let position: CGFloat
+    let reduceMotion: Bool
 
     var body: some View {
         GeometryReader { geometry in
-            let targetHeight = min(geometry.size.height * 0.63, 470)
-            let cardWidth = min(targetHeight * imageAspectRatio, geometry.size.width - 72)
-            let cardHeight = cardWidth / imageAspectRatio
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let bezel = width * 0.018
+            let radius = width * 0.14
 
-            ScrollView(.vertical) {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 12)
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(.black)
 
-                    Image(step.imageName)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: cardWidth, height: cardHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.8)
+                GeometryReader { screen in
+                    ZStack {
+                        // The moving screens share one stationary clipping boundary and bezel.
+                        ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                            Image(step.imageName)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: screen.size.width, height: screen.size.height)
+                                .clipped()
+                                .modifier(JourneyScreenMotion(
+                                    distance: CGFloat(index) - position,
+                                    travel: screen.size.width,
+                                    reduceMotion: reduceMotion))
                         }
-                        .shadow(color: .black.opacity(0.42), radius: 22, y: 12)
-                        .accessibilityHidden(true)
-
-                    Text(step.title)
-                        .font(.custom("EBGaramond-Regular", size: 30, relativeTo: .title))
-                        .foregroundStyle(Color.appPrimaryText)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 28)
-                        .padding(.top, 22)
-
-                    Text(step.description)
-                        .font(.system(size: 16, weight: .regular, design: .rounded))
-                        .foregroundStyle(Color.appSecondaryText)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 520)
-                        .padding(.horizontal, 30)
-                        .padding(.top, 7)
-
-                    Spacer(minLength: 14)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: geometry.size.height)
+                .clipShape(RoundedRectangle(cornerRadius: radius - bezel, style: .continuous))
+                .padding(bezel)
+
+                Capsule()
+                    .fill(.black)
+                    .frame(width: width * 0.25, height: height * 0.025)
+                    .overlay(alignment: .trailing) {
+                        Circle()
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: width * 0.019, height: width * 0.019)
+                            .padding(.trailing, width * 0.018)
+                    }
+                    .padding(.top, height * 0.018)
             }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(0.75), .white.opacity(0.18),
+                                     .white.opacity(0.48), .white.opacity(0.20)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: max(0.8, width * 0.004))
+            }
+            .overlay(alignment: .leading) {
+                VStack(spacing: height * 0.025) {
+                    sideButton(height: height * 0.028)
+                    sideButton(height: height * 0.055)
+                    sideButton(height: height * 0.055)
+                }
+                .offset(x: -2, y: -height * 0.20)
+            }
+            .overlay(alignment: .trailing) {
+                sideButton(height: height * 0.085)
+                    .offset(x: 2, y: -height * 0.16)
+            }
+            .shadow(color: .black.opacity(0.5), radius: 16, y: 10)
         }
+    }
+
+    private func sideButton(height: CGFloat) -> some View {
+        Capsule()
+            .fill(LinearGradient(colors: [.white.opacity(0.40), .black],
+                                 startPoint: .leading, endPoint: .trailing))
+            .frame(width: 2, height: height)
     }
 }
 
-private struct JourneyPageMotion: ViewModifier {
-    let horizontalOffset: CGFloat
-    let rotation: CGFloat
+private struct JourneyCaption: View {
+    let step: AppJourneyStep
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Text(step.title)
+                .font(.custom("EBGaramond-Regular", size: 30, relativeTo: .title))
+                .foregroundStyle(Color.appPrimaryText)
+
+            Text(step.description)
+                .font(.system(.callout, design: .rounded))
+                .foregroundStyle(Color.appSecondaryText)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 520)
+        .padding(.horizontal, 30)
+    }
+}
+
+private struct JourneyScreenMotion: AnimatableModifier {
+    var distance: CGFloat
+    let travel: CGFloat
+    let reduceMotion: Bool
+
+    var animatableData: CGFloat {
+        get { distance }
+        set { distance = newValue }
+    }
 
     func body(content: Content) -> some View {
         content
-            .opacity(horizontalOffset == 0 ? 1 : 0.32)
-            .scaleEffect(horizontalOffset == 0 ? 1 : 0.94)
-            .rotation3DEffect(
-                .degrees(Double(rotation)),
-                axis: (x: 0, y: 1, z: 0),
-                perspective: 0.55
-            )
-            .offset(x: horizontalOffset)
+            .offset(x: reduceMotion ? 0 : distance * travel)
+            .opacity(reduceMotion ? Double(max(0, 1 - abs(distance))) : 1)
+    }
+}
+
+private struct JourneyCaptionMotion: ViewModifier {
+    let blur: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content.blur(radius: blur).opacity(opacity)
     }
 }
 
