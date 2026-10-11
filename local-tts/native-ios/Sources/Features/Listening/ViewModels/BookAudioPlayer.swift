@@ -154,14 +154,14 @@ final class BookAudioPlayer: ObservableObject {
 
     private var projectID: UUID?
     private var voice = ""
-    /// The player has no `LibraryViewModel` of its own — the caller (see
-    /// `ImportHomeView`'s `startListening`) supplies both. `positionWriter`
-    /// is what makes read-along and music mode share one `lastReadPageIndex`
-    /// — `ChapterPlayerView` calls the same `LibraryViewModel.
-    /// recordLastReadPage` itself; this player has to be handed the call
-    /// since it isn't a view.
+    /// The player has no `LibraryViewModel` of its own — `ChapterPlayerView`
+    /// (its only caller) supplies both closures. `positionWriter` is what
+    /// makes the reader and the audio surface share one resume position:
+    /// that view calls the same `LibraryViewModel.recordReadingPosition`
+    /// itself for user-driven page changes, while the player reports its own
+    /// position for everything that happens without the view on screen.
     private var pageProvider: ((Int) -> ReaderPage?)?
-    private var positionWriter: ((Int) -> Void)?
+    private var positionWriter: ((ReadingPosition) -> Void)?
 
     private struct RetainedChunk {
         let samples: [Float]
@@ -270,7 +270,7 @@ final class BookAudioPlayer: ObservableObject {
         project: SavedGeneration, page: ReaderPage, startIndex: Int, voice: String,
         startingAtChunk: Int = 0, wordIndex: Int? = nil,
         pageProvider: @escaping (Int) -> ReaderPage?,
-        positionWriter: @escaping (Int) -> Void
+        positionWriter: @escaping (ReadingPosition) -> Void
     ) {
         stop()
 
@@ -314,7 +314,7 @@ final class BookAudioPlayer: ObservableObject {
         project: SavedGeneration, page: ReaderPage, pageIndex: Int, voice: String,
         chunkIndex: Int, wordIndex: Int?,
         pageProvider: @escaping (Int) -> ReaderPage?,
-        positionWriter: @escaping (Int) -> Void
+        positionWriter: @escaping (ReadingPosition) -> Void
     ) {
         let ref = ReaderPageRef(projectID: project.id, pageIndex: pageIndex)
         guard activeRef == ref else {
@@ -368,6 +368,9 @@ final class BookAudioPlayer: ObservableObject {
             isUserPaused = true
             isPlaying = false
             statsTracker.pauseListening()
+            // `resolvedPosition()` ran just above, before the node stopped
+            // rendering, so `currentChunkIndex` is current here.
+            persistPosition()
         } else {
             isUserPaused = false
             // Nothing scheduled yet (paused through the initial buffer, or
@@ -412,6 +415,27 @@ final class BookAudioPlayer: ObservableObject {
         isNodeRunning = false
     }
 
+    /// Reports where playback is to whoever persists it. Called only at real
+    /// session boundaries — a page start, a pause, a seek, a page promotion,
+    /// teardown, backgrounding — never per chunk: see
+    /// `LibraryViewModel.recordReadingPosition` for why that write is too
+    /// heavy to run at chunk rate.
+    private func persistPosition() {
+        guard let ref = activeRef else { return }
+        positionWriter?(
+            ReadingPosition(
+                pageIndex: ref.pageIndex, chunkIndex: currentChunkIndex,
+                chunkCount: chunkTexts.count))
+    }
+
+    /// Companion to `ReadingStatsTracker.flushForBackgrounding` — audio keeps
+    /// playing once backgrounded and iOS can kill a suspended app without
+    /// warning, so the position is committed here rather than waiting for a
+    /// pause that may never come.
+    func persistPositionForBackgrounding() {
+        persistPosition()
+    }
+
     func stop() {
         pump?.cancel()
         pump = nil
@@ -451,6 +475,8 @@ final class BookAudioPlayer: ObservableObject {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
 
         statsTracker.endListening(pageCompleted: false)
+        // Before the teardown below nils `activeRef` and `positionWriter`.
+        persistPosition()
 
         activeRef = nil
         isPlaying = false
@@ -546,6 +572,7 @@ final class BookAudioPlayer: ObservableObject {
         currentChunkIndex = index
         elapsed = (startTime(forChunk: index) ?? 0) + offset
         refreshBookProgress()
+        persistPosition()
         if let retained = retainedChunks[index] {
             bufferingForIndex = nil
             pendingSeekOffset = nil
@@ -604,15 +631,22 @@ final class BookAudioPlayer: ObservableObject {
         lastResolvedPosition = (0, 0)
         currentChunkIndex = 0
         refreshBookProgress()
-        positionWriter?(ref.pageIndex)
         statsTracker.beginListening(
             ref: ref, bookTitle: bookTitle, voice: voice, engine: .kokoroAne)
-        guard !chunkTexts.isEmpty else { return }
+        // A blank page has no chunk to record, but which page it is still
+        // matters — the bookmark must follow onto it.
+        guard !chunkTexts.isEmpty else {
+            persistPosition()
+            return
+        }
         let clamped = chunkTexts.indices.contains(startingAtChunk) ? startingAtChunk : 0
         playingChunk = clamped
         scheduleCursor = clamped
         currentChunkIndex = clamped
         lastResolvedPosition = (clamped, 0)
+        // Deliberately *after* the clamp: persisting before it would write
+        // chunk 0 over the very position a mid-page resume just restored.
+        persistPosition()
         isBuffering = true
         bufferingForIndex = clamped
         pendingSeekWord = wordIndex
@@ -712,7 +746,9 @@ final class BookAudioPlayer: ObservableObject {
         lastResolvedPosition = (0, 0)
         currentChunkIndex = 0
         refreshBookProgress()
-        positionWriter?(promoted.ref.pageIndex)
+        // `activeRef` is already the promoted page here, and the chunk cursor
+        // was just reset to 0 — a freshly promoted page starts at its top.
+        persistPosition()
         statsTracker.beginListening(
             ref: promoted.ref, bookTitle: bookTitle, voice: voice, engine: .kokoroAne)
         log("advanced to page \(promoted.ref.pageIndex + 1) of \(pageCount)")

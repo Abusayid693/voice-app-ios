@@ -148,12 +148,28 @@ final class LibraryViewModel: ObservableObject {
         return ReaderPagePreview(index: index, excerpt: excerpt, isBlank: false)
     }
 
-    /// Records successful page changes and republishes the lightweight index
-    /// so Library's resume-position progress stays current.
-    func recordLastReadPage(index: Int, for projectID: UUID) {
-        guard var project = project(for: projectID), index >= 0, index < project.pageCount else { return }
-        guard project.lastReadPageIndex != index else { return }
-        project.lastReadPageIndex = index
+    /// Records the reader's position and republishes the lightweight index so
+    /// Library's resume-position progress stays current.
+    ///
+    /// Callers must only reach this at real session boundaries (a page
+    /// change, a pause, a seek, backgrounding) — never per chunk. It
+    /// re-decodes the project from disk, rewrites it, rewrites the whole
+    /// library index, and publishes into `savedGenerations`, which re-renders
+    /// Library; at chunk rate (~20s) that is pure churn.
+    func recordReadingPosition(_ position: ReadingPosition, for projectID: UUID) {
+        guard var project = project(for: projectID), position.pageIndex >= 0,
+            position.pageIndex < project.pageCount
+        else { return }
+        // All three values, not just the page: a chunk advance within the
+        // same page is exactly the change this method now exists to record,
+        // and comparing the page alone would discard it silently.
+        guard project.lastReadPageIndex != position.pageIndex
+            || project.lastReadChunkIndex != position.chunkIndex
+            || project.lastReadChunkCount != position.chunkCount
+        else { return }
+        project.lastReadPageIndex = position.pageIndex
+        project.lastReadChunkIndex = position.chunkIndex
+        project.lastReadChunkCount = position.chunkCount
         guard let data = try? JSONEncoder().encode(project) else { return }
 
         do {

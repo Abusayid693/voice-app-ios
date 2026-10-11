@@ -17,6 +17,11 @@ struct ReaderPagePickerSheet: View {
     /// the presenter (ChapterPlayerView) before opening this sheet, not
     /// owned or re-fetched here.
     let completedPageIndices: Set<Int>
+    /// The single page that is partway through, and how far — nil when
+    /// nothing is. Supplied by the presenter alongside `completedPageIndices`
+    /// and takes second place to it: a page that is both finished and
+    /// currently being re-read shows the completion tick, not the ring.
+    var partialProgress: (pageIndex: Int, fraction: Double)?
     /// EPUB's table of contents, resolved to page indexes — `[]` for a PDF.
     /// Only top-level (`depth == 0`) entries become a chapter row here: a
     /// book with real subsection structure would otherwise turn this list
@@ -184,9 +189,18 @@ struct ReaderPagePickerSheet: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                // Both states occupy the same 14pt slot, so a row's excerpt
+                // has the same width whether it's finished, partway, or
+                // untouched.
                 if completedPageIndices.contains(index) {
                     LucideIcon(
                         .check, size: 14,
+                        color: isCurrentPage
+                            ? chromeTheme.contrastingText : chromeTheme.secondaryText)
+                        .accessibilityHidden(true)
+                } else if let fraction = partialFraction(for: index) {
+                    PartialPageRing(
+                        fraction: fraction,
                         color: isCurrentPage
                             ? chromeTheme.contrastingText : chromeTheme.secondaryText)
                         .accessibilityHidden(true)
@@ -216,13 +230,51 @@ struct ReaderPagePickerSheet: View {
         // the sheet's full content width instead of shrinking with it.
         .padding(.leading, indented ? 20 : 0)
         .accessibilityLabel(
-            "\(preview?.excerpt ?? "Page"), page \(index + 1)"
-                + (completedPageIndices.contains(index) ? ", completed" : ""))
+            "\(preview?.excerpt ?? "Page"), page \(index + 1)" + completionLabel(for: index))
         .accessibilityAddTraits(isCurrentPage ? .isSelected : [])
+    }
+
+    private func partialFraction(for index: Int) -> Double? {
+        guard let partialProgress, partialProgress.pageIndex == index else { return nil }
+        // A fraction that rounds to nothing would draw an invisible ring and
+        // read as "0 percent", which is no more informative than no mark.
+        let clamped = min(max(partialProgress.fraction, 0), 1)
+        return clamped >= 0.01 ? clamped : nil
+    }
+
+    private func completionLabel(for index: Int) -> String {
+        if completedPageIndices.contains(index) { return ", completed" }
+        guard let fraction = partialFraction(for: index) else { return "" }
+        return ", \(Int((fraction * 100).rounded())) percent read"
     }
 
     private func loadPreview(for index: Int) {
         guard previews[index] == nil else { return }
         previews[index] = library.pagePreview(for: project, index: index)
+    }
+}
+
+/// The partway-through counterpart to the completion tick: a 14pt ring filled
+/// clockwise from 12 o'clock. Sized to match the tick's slot exactly so a row
+/// doesn't reflow when a page moves between the two states. A ring rather
+/// than a partial tick because "finished" and "in progress" should be
+/// distinguishable at a glance, not two shades of the same mark.
+private struct PartialPageRing: View {
+    let fraction: Double
+    let color: Color
+
+    private let diameter: CGFloat = 14
+    private let lineWidth: CGFloat = 2
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.28), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: diameter, height: diameter)
     }
 }

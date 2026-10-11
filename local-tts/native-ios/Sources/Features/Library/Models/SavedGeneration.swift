@@ -37,6 +37,11 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     let createdAt: Date
     let pageCount: Int
     var lastReadPageIndex: Int = 0
+    /// How far into `lastReadPageIndex` the reader got, as an index into that
+    /// page's `KokoroTextChunker` chunks — see `ReadingPosition`, including
+    /// why `lastReadChunkCount` is stored beside it rather than re-derived.
+    var lastReadChunkIndex: Int = 0
+    var lastReadChunkCount: Int = 0
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
     /// PDF shelf position reserved when import begins. Missing for projects
@@ -51,6 +56,8 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         createdAt: Date,
         pageCount: Int,
         lastReadPageIndex: Int = 0,
+        lastReadChunkIndex: Int = 0,
+        lastReadChunkCount: Int = 0,
         source: SavedProjectSource = .unknown,
         shelfDisplayMode: ShelfDisplayMode = .cover,
         shelfOrder: Int? = nil
@@ -62,6 +69,8 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         self.createdAt = createdAt
         self.pageCount = pageCount
         self.lastReadPageIndex = lastReadPageIndex
+        self.lastReadChunkIndex = lastReadChunkIndex
+        self.lastReadChunkCount = lastReadChunkCount
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
         self.shelfOrder = shelfOrder
@@ -150,7 +159,9 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     var summary: SavedGenerationSummary {
         SavedGenerationSummary(
             id: id, title: title, engine: engine, voiceName: voiceName,
-            createdAt: createdAt, pageCount: pageCount, lastReadPageIndex: lastReadPageIndex, source: source,
+            createdAt: createdAt, pageCount: pageCount, lastReadPageIndex: lastReadPageIndex,
+            lastReadChunkIndex: lastReadChunkIndex, lastReadChunkCount: lastReadChunkCount,
+            source: source,
             shelfDisplayMode: shelfDisplayMode, shelfOrder: shelfOrder)
     }
 
@@ -159,6 +170,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
 extension SavedGeneration {
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
+        case lastReadChunkIndex, lastReadChunkCount
         case shelfDisplayMode, shelfOrder
     }
 
@@ -182,6 +194,10 @@ extension SavedGeneration {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         pageCount = try container.decode(Int.self, forKey: .pageCount)
         lastReadPageIndex = try container.decodeIfPresent(Int.self, forKey: .lastReadPageIndex) ?? 0
+        lastReadChunkIndex =
+            try container.decodeIfPresent(Int.self, forKey: .lastReadChunkIndex) ?? 0
+        lastReadChunkCount =
+            try container.decodeIfPresent(Int.self, forKey: .lastReadChunkCount) ?? 0
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
@@ -197,6 +213,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     let createdAt: Date
     let pageCount: Int
     var lastReadPageIndex: Int = 0
+    var lastReadChunkIndex: Int = 0
+    var lastReadChunkCount: Int = 0
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
     var shelfOrder: Int?
@@ -209,6 +227,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         createdAt: Date,
         pageCount: Int,
         lastReadPageIndex: Int = 0,
+        lastReadChunkIndex: Int = 0,
+        lastReadChunkCount: Int = 0,
         source: SavedProjectSource = .unknown,
         shelfDisplayMode: ShelfDisplayMode = .cover,
         shelfOrder: Int? = nil
@@ -220,6 +240,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.pageCount = pageCount
         self.lastReadPageIndex = lastReadPageIndex
+        self.lastReadChunkIndex = lastReadChunkIndex
+        self.lastReadChunkCount = lastReadChunkCount
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
         self.shelfOrder = shelfOrder
@@ -227,6 +249,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
+        case lastReadChunkIndex, lastReadChunkCount
         case shelfDisplayMode, shelfOrder
     }
 
@@ -241,6 +264,10 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         pageCount = try container.decode(Int.self, forKey: .pageCount)
         lastReadPageIndex = try container.decodeIfPresent(Int.self, forKey: .lastReadPageIndex) ?? 0
+        lastReadChunkIndex =
+            try container.decodeIfPresent(Int.self, forKey: .lastReadChunkIndex) ?? 0
+        lastReadChunkCount =
+            try container.decodeIfPresent(Int.self, forKey: .lastReadChunkCount) ?? 0
         source = try container.decodeIfPresent(SavedProjectSource.self, forKey: .source) ?? .unknown
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
@@ -271,9 +298,21 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     /// A resume position maps the first page to 0% and the last page to 100%.
     /// A single-page project has no observable travel distance, so it remains
     /// at 0% until the app gains a separate completion state.
+    ///
+    /// The chunk reached within that page carries the fraction between two
+    /// page marks, so this creeps while one long page is being read instead
+    /// of only stepping at page turns. The final `min` is load-bearing: the
+    /// denominator is `pageCount - 1` so that the last page reads 100%, and a
+    /// within-page fraction *on* that page would otherwise exceed it.
     var readingProgress: Double {
         guard pageCount > 1 else { return 0 }
-        return Double(min(max(lastReadPageIndex, 0), pageCount - 1)) / Double(pageCount - 1)
+        let page = Double(min(max(lastReadPageIndex, 0), pageCount - 1))
+        let withinPage =
+            lastReadChunkCount > 0
+            ? Double(min(max(lastReadChunkIndex, 0), lastReadChunkCount))
+                / Double(lastReadChunkCount)
+            : 0
+        return min((page + withinPage) / Double(pageCount - 1), 1)
     }
 
     /// Covers are optional: typed text and PDF projects made before cover

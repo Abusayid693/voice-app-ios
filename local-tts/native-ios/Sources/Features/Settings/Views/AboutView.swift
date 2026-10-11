@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Full-screen editorial About presentation opened from Settings. The parent
 /// drawer remains mounted beneath this native cover, so dismissing returns to
@@ -24,7 +23,10 @@ struct AboutView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    AboutScreenshotMarquee()
+                    // Default sizing matches this view's original bespoke
+                    // marquee exactly — see `ScreenshotMarquee`'s own doc
+                    // comment for why it moved to DesignSystem.
+                    ScreenshotMarquee()
                         .modifier(AboutEntranceReveal(
                             isVisible: contentRevealed,
                             delay: 0))
@@ -169,163 +171,6 @@ struct AboutView: View {
         if let url = components?.url {
             openURL(url)
         }
-    }
-}
-
-private struct AboutScreenshotMarquee: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        AboutScreenshotMarqueeRepresentable(reduceMotion: reduceMotion)
-        .frame(height: AboutScreenshotMarqueeView.viewportHeight)
-        .clipped()
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black, location: 0.12),
-                    .init(color: .black, location: 0.88),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("App preview gallery")
-    }
-}
-
-private struct AboutScreenshotMarqueeRepresentable: UIViewRepresentable {
-    let reduceMotion: Bool
-
-    func makeUIView(context: Context) -> AboutScreenshotMarqueeView {
-        let view = AboutScreenshotMarqueeView()
-        view.setReduceMotion(reduceMotion)
-        return view
-    }
-
-    func updateUIView(_ uiView: AboutScreenshotMarqueeView, context: Context) {
-        uiView.setReduceMotion(reduceMotion)
-    }
-}
-
-private final class AboutScreenshotMarqueeView: UIView {
-    static let cardHeight: CGFloat = 286 * 0.9
-    static let viewportHeight: CGFloat = cardHeight + 36
-
-    private static let assets = [
-        "AboutPreviewShelf",
-        "AboutPreviewBookDetail",
-        "AboutPreviewReader",
-        "AboutPreviewNowPlaying",
-        "AboutPreviewStats",
-        "AboutPreviewLibrary",
-    ]
-    private static let cardWidth: CGFloat = 132 * 0.9
-    private static let spacing: CGFloat = 14
-    private static let cornerRadius: CGFloat = 22 * 0.9
-    private static let loopWidth = CGFloat(assets.count) * (cardWidth + spacing)
-    private static let animationKey = "about.screenshot-marquee.translation"
-
-    private let trackView = UIView()
-    private var reduceMotion = false
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .clear
-        isUserInteractionEnabled = false
-        clipsToBounds = true
-        trackView.backgroundColor = .clear
-        trackView.isUserInteractionEnabled = false
-        addSubview(trackView)
-        buildCards()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        trackView.frame = CGRect(
-            x: 0,
-            y: (bounds.height - Self.cardHeight) / 2,
-            width: Self.loopWidth * 2,
-            height: Self.cardHeight)
-        startAnimationIfNeeded()
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-        if window == nil {
-            trackView.layer.removeAnimation(forKey: Self.animationKey)
-        } else {
-            setNeedsLayout()
-            layoutIfNeeded()
-            startAnimationIfNeeded()
-        }
-    }
-
-    func setReduceMotion(_ enabled: Bool) {
-        guard reduceMotion != enabled || trackView.layer.animation(forKey: Self.animationKey) == nil else {
-            return
-        }
-        reduceMotion = enabled
-        trackView.layer.removeAnimation(forKey: Self.animationKey)
-        trackView.layer.transform = CATransform3DIdentity
-        if !enabled {
-            startAnimationIfNeeded()
-        }
-    }
-
-    private func buildCards() {
-        for sequence in 0..<2 {
-            for (index, asset) in Self.assets.enumerated() {
-                let x = CGFloat(sequence * Self.assets.count + index)
-                    * (Self.cardWidth + Self.spacing)
-                let card = UIView(frame: CGRect(
-                    x: x,
-                    y: 0,
-                    width: Self.cardWidth,
-                    height: Self.cardHeight))
-                card.isUserInteractionEnabled = false
-                card.layer.shadowColor = UIColor.black.cgColor
-                card.layer.shadowOpacity = 0.14
-                card.layer.shadowRadius = 12
-                card.layer.shadowOffset = CGSize(width: 0, height: 7)
-                card.layer.shadowPath = UIBezierPath(
-                    roundedRect: card.bounds,
-                    cornerRadius: Self.cornerRadius).cgPath
-
-                let imageView = UIImageView(frame: card.bounds)
-                imageView.image = UIImage(named: asset)
-                imageView.contentMode = .scaleAspectFill
-                imageView.clipsToBounds = true
-                imageView.layer.cornerRadius = Self.cornerRadius
-                imageView.layer.cornerCurve = .continuous
-                imageView.layer.borderColor = UIColor.black.withAlphaComponent(0.10).cgColor
-                imageView.layer.borderWidth = 0.75
-                card.addSubview(imageView)
-                trackView.addSubview(card)
-            }
-        }
-    }
-
-    private func startAnimationIfNeeded() {
-        guard window != nil,
-              !reduceMotion,
-              trackView.layer.animation(forKey: Self.animationKey) == nil
-        else { return }
-
-        let animation = CABasicAnimation(keyPath: "transform.translation.x")
-        animation.fromValue = 0
-        animation.toValue = -Self.loopWidth
-        animation.duration = 48
-        animation.repeatCount = .infinity
-        animation.timingFunction = CAMediaTimingFunction(name: .linear)
-        animation.isRemovedOnCompletion = true
-        trackView.layer.add(animation, forKey: Self.animationKey)
     }
 }
 

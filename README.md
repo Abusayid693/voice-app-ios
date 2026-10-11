@@ -2,6 +2,14 @@
 
 A native iOS app for on-device text-to-speech, built on [FluidAudio](https://github.com/FluidInference/FluidAudio)'s Swift SDK. Everything runs locally on-device — no server round-trip for synthesis.
 
+## Screenshots
+
+<p align="center">
+  <img src=".github/screenshots/app-stack.png" width="640" alt="My Shelf, Library, Read Along, Lock Screen and Reading Stats screens, fanned in a stack">
+</p>
+
+<p align="center"><sub>Lock Screen · Library · <b>My Shelf</b> · Read Along · Reading Stats</sub></p>
+
 ## What it does
 
 - **Two on-device TTS engines**: Kokoro-ANE (28 English voices, CoreML, runs on the Neural Engine) and Pocket TTS (26 voices, flow-matching + neural codec, streaming synthesis).
