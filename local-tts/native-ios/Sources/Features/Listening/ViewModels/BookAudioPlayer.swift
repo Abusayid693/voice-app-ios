@@ -436,6 +436,17 @@ final class BookAudioPlayer: ObservableObject {
         persistPosition()
     }
 
+    /// Stops playback only when it's *this* project that's playing — for a
+    /// book that becomes unavailable underneath the player: archived out of
+    /// sight, or deleted along with the very page files `pageProvider`
+    /// streams from. The guard lives here because `activeRef` does; every
+    /// call site would otherwise reimplement the same check and one of them
+    /// would eventually get it wrong and stop an unrelated book.
+    func stopIfActive(projectID: UUID) {
+        guard activeRef?.projectID == projectID else { return }
+        stop()
+    }
+
     func stop() {
         pump?.cancel()
         pump = nil

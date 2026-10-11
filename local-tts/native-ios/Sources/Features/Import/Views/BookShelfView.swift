@@ -45,6 +45,11 @@ struct BookShelfView: View {
     /// hero to fly back down first; the now-playing screen presents
     /// immediately and the modal dismisses underneath it.
     let onListen: (SavedGenerationSummary) -> Void
+    /// This project just became unplayable — here, deleted. Same closure
+    /// seam Library uses, for the same reason: the shelf announces it and
+    /// `RootTabView`'s player decides, rather than this view subscribing to
+    /// playback state it never renders.
+    let onProjectUnavailable: (UUID) -> Void
 
     @State private var selectedBook: SavedGenerationSummary?
     // Fraction of pages completed for the currently-open book's detail
@@ -99,7 +104,24 @@ struct BookShelfView: View {
 
     private var completedBooks: [SavedGenerationSummary] {
         library.savedGenerations
-            .filter { $0.source.isShelfBook }
+            .filter { $0.source.isShelfBook && !$0.isArchived }
+    }
+
+    /// `shelfEntries`' ids plus any archived shelf book's id. Only for the
+    /// calls below that *persist* through `BookShelfLayoutStore` —
+    /// `layout(for:)` prunes any id it isn't given, and `synchronize`/`move`
+    /// write that pruning to disk, so passing only `shelfEntries.map(\.id)`
+    /// there would permanently erase an archived book's slot the moment it
+    /// drops out of `completedBooks`, and unarchiving would then append it
+    /// to the end of the last shelf instead of restoring it. Rendering
+    /// (`shelfRows`) deliberately keeps using the narrower `entries.map`
+    /// instead — there, dropping the archived id's slot is exactly how the
+    /// book stops being drawn.
+    private var shelfLayoutIDs: [UUID] {
+        shelfEntries.map(\.id)
+            + library.savedGenerations
+                .filter { $0.source.isShelfBook && $0.isArchived }
+                .map(\.id)
     }
 
     private var shelfEntries: [ShelfEntry] {
@@ -268,7 +290,7 @@ struct BookShelfView: View {
             }
         }
         .background(BookShelfPalette.background.ignoresSafeArea())
-        .onChange(of: shelfEntries.map(\.id), initial: true) { _, ids in
+        .onChange(of: shelfLayoutIDs, initial: true) { _, ids in
             if arrangeDrag == nil { shelfLayout.synchronize(ids) }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -316,6 +338,9 @@ struct BookShelfView: View {
                     arrangingBook = nil
                     arrangeLiftOffset = 0
                 }
+                // Before the files go — `delete` removes the page bodies the
+                // player streams from.
+                onProjectUnavailable(book.id)
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
                     library.delete(book)
                 }
@@ -505,7 +530,7 @@ struct BookShelfView: View {
                 }?.id ?? candidates.lastIndex(where: { coverFrames[$0.id] != nil }).flatMap { index in
                     candidates.indices.contains(index + 1) ? candidates[index + 1].id : nil
                 }
-                _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfEntries.map(\.id))
+                _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfLayoutIDs)
             }
             if let mode = previewDisplayMode,
                !library.updateShelfDisplayMode(mode, for: book.id) { previewDisplayMode = nil }
@@ -521,7 +546,7 @@ struct BookShelfView: View {
         } completion: {
             guard arrangingBook?.id == book.id else { return }
             resetArrangeDrag(keepLifted: true)
-            shelfLayout.synchronize(shelfEntries.map(\.id))
+            shelfLayout.synchronize(shelfLayoutIDs)
         }
     }
 
@@ -601,7 +626,7 @@ struct BookShelfView: View {
         case .shelfAbove: destination -= 1
         case .shelfBelow: destination += 1
         }
-        _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfEntries.map(\.id))
+        _ = shelfLayout.move(book.id, to: destination, before: next, orderedIDs: shelfLayoutIDs)
     }
 
     private func beginArranging(_ book: SavedGenerationSummary) {
@@ -1877,6 +1902,7 @@ private struct GlassBookShelf: View {
             readingStats: app.readingStats,
             isDetailPresented: .constant(false),
             onOpenBook: { _ in },
-            onListen: { _ in })
+            onListen: { _ in },
+            onProjectUnavailable: { _ in })
     }
 }
