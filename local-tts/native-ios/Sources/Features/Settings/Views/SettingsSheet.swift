@@ -108,10 +108,12 @@ struct SettingsSheet: View {
                         .frame(width: gallerySize(for: distance), height: gallerySize(for: distance))
                         .clipShape(Circle())
                         .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    Color.appPrimaryText.opacity(distance == 0 ? 0.88 : 0.16),
-                                    lineWidth: distance == 0 ? 2 : 0.75)
+                            if distance != 0 {
+                                Circle()
+                                    .strokeBorder(
+                                        Color.appPrimaryText.opacity(0.16),
+                                        lineWidth: 0.75)
+                            }
                         }
                         .shadow(
                             color: .black.opacity(distance == 0 ? 0.34 : 0.20),
