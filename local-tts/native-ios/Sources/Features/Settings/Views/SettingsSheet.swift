@@ -12,6 +12,7 @@ struct SettingsSheet: View {
     @State private var isVoiceLibraryPresented = false
     @State private var isStoragePresented = false
     @State private var isAboutPresented = false
+    @State private var isAppJourneyPresented = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +55,11 @@ struct SettingsSheet: View {
                         } label: {
                             row(title: "About", icon: .info)
                         }
+                        Button {
+                            isAppJourneyPresented = true
+                        } label: {
+                            row(title: "App Journey", icon: .route)
+                        }
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 34)
@@ -88,6 +94,9 @@ struct SettingsSheet: View {
         }
         .fullScreenCover(isPresented: $isAboutPresented) {
             AboutView()
+        }
+        .fullScreenCover(isPresented: $isAppJourneyPresented) {
+            AppJourneyView()
         }
     }
 
