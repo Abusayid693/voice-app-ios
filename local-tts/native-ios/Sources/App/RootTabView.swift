@@ -158,6 +158,13 @@ struct RootTabView: View {
                                         project: project,
                                         initialPageIndex: nil,
                                         initialSurfaceMode: nil))
+                            },
+                            onListenToProject: { project in
+                                openReader(
+                                    ReaderRoute(
+                                        project: project,
+                                        initialPageIndex: nil,
+                                        initialSurfaceMode: .audio))
                             })
                             .navigationDestination(item: readerBinding(for: .library)) {
                                 readerDestination($0)

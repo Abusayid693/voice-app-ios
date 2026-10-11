@@ -2,19 +2,56 @@ import Foundation
 import SwiftUI
 
 /// Library tab root. Filtering and arrangement are local presentation state;
-/// project opening and deletion stay delegated to the shared library model.
+/// project opening, renaming, archiving and deletion stay delegated to the
+/// shared library model.
 struct LibraryTabView: View {
     @ObservedObject var viewModel: LibraryViewModel
     let onOpenProject: (SavedGeneration) -> Void
+    /// Separate from `onOpenProject` rather than widening its signature —
+    /// mirrors `ImportHomeView`'s existing `onOpenBook`/`onListen` pair, and
+    /// keeps `ReaderRoute`/`ReaderSurfaceMode` out of this feature's
+    /// vocabulary entirely.
+    let onListenToProject: (SavedGeneration) -> Void
 
     @AppStorage("library.formatFilter") private var formatFilterRawValue = LibraryFormatFilter.all.rawValue
     @AppStorage("library.sortOrder") private var sortOrderRawValue = LibrarySortOrder.recent.rawValue
     @AppStorage("library.layoutMode") private var layoutModeRawValue = LibraryLayoutMode.grouped.rawValue
-    @State private var isArrangementSheetPresented = false
-    /// At most one row's actions are open at a time — setting this to a new
-    /// id implicitly closes whichever row had it before, the same way
-    /// opening one swipe-action row on a native List closes any other.
-    @State private var revealedGenerationID: UUID?
+    @AppStorage("library.archiveScope") private var archiveScopeRawValue = LibraryArchiveScope.active.rawValue
+
+    /// Every Library presentation funnels through this one `.sheet(item:)`
+    /// rather than several `.sheet` modifiers — two on the same view, or
+    /// mutating a presented item to a different identity in the same frame,
+    /// are both classic silent-no-present failures in SwiftUI.
+    @State private var activeSheet: LibrarySheet?
+    /// What to do once `activeSheet` has actually finished dismissing —
+    /// Rename/Listen/Delete all need the actions sheet fully gone first
+    /// (pushing a reader or raising a dialog while a sheet is still
+    /// animating out puts it underneath). Consumed and nil'd in
+    /// `runPendingAction()` *before* acting, so a cancelled re-entry can't
+    /// replay it.
+    @State private var pendingAction: PendingLibraryAction?
+    @State private var deleteCandidate: SavedGenerationSummary?
+
+    private enum LibrarySheet: Identifiable {
+        case arrangement
+        case actions(SavedGenerationSummary)
+        case rename(SavedGenerationSummary)
+
+        var id: String {
+            switch self {
+            case .arrangement: return "arrangement"
+            case let .actions(generation): return "actions-\(generation.id)"
+            case let .rename(generation): return "rename-\(generation.id)"
+            }
+        }
+    }
+
+    private enum PendingLibraryAction {
+        case rename(SavedGenerationSummary)
+        case listen(SavedGenerationSummary)
+        case confirmDelete(SavedGenerationSummary)
+        case setArchived(SavedGenerationSummary, Bool)
+    }
 
     private var formatFilter: LibraryFormatFilter {
         LibraryFormatFilter(rawValue: formatFilterRawValue) ?? .all
@@ -28,9 +65,22 @@ struct LibraryTabView: View {
         LibraryLayoutMode(rawValue: layoutModeRawValue) ?? .grouped
     }
 
+    private var archiveScope: LibraryArchiveScope {
+        LibraryArchiveScope(rawValue: archiveScopeRawValue) ?? .active
+    }
+
+    private var selectedPill: LibraryFilterPill {
+        archiveScope == .archived ? .archived : .format(formatFilter)
+    }
+
     private var sortedGenerations: [SavedGenerationSummary] {
         viewModel.savedGenerations
-            .filter { formatFilter.includes($0.source) }
+            .filter { generation in
+                switch archiveScope {
+                case .archived: generation.isArchived
+                case .active: !generation.isArchived && formatFilter.includes(generation.source)
+                }
+            }
             .sorted(by: isInDisplayOrder)
     }
 
@@ -60,15 +110,91 @@ struct LibraryTabView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 header
-                formatFilters
+                filterPills
                 libraryContent
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $isArrangementSheetPresented) {
+        .sheet(item: $activeSheet, onDismiss: runPendingAction) { sheet in
+            sheetContent(for: sheet)
+        }
+        .confirmationDialog(
+            "Delete \u{201C}\(deleteCandidate?.title ?? "")\u{201D}?",
+            isPresented: Binding(
+                get: { deleteCandidate != nil },
+                set: { if !$0 { deleteCandidate = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Book", role: .destructive) {
+                guard let generation = deleteCandidate else { return }
+                deleteCandidate = nil
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+                    viewModel.delete(generation)
+                }
+            }
+            Button("Cancel", role: .cancel) { deleteCandidate = nil }
+        } message: {
+            Text("This removes its pages, any generated audio, and its cover. This can't be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private func sheetContent(for sheet: LibrarySheet) -> some View {
+        switch sheet {
+        case .arrangement:
             LibraryArrangementSheet(
                 sortOrder: sortOrderBinding,
                 layoutMode: layoutModeBinding)
+
+        case let .actions(generation):
+            LibraryBookActionsSheet(
+                generation: generation,
+                onListen: {
+                    pendingAction = .listen(generation)
+                    activeSheet = nil
+                },
+                onEdit: {
+                    pendingAction = .rename(generation)
+                    activeSheet = nil
+                },
+                onToggleArchive: {
+                    pendingAction = .setArchived(generation, !generation.isArchived)
+                    activeSheet = nil
+                },
+                onDelete: {
+                    pendingAction = .confirmDelete(generation)
+                    activeSheet = nil
+                })
+
+        case let .rename(generation):
+            LibraryRenameBookSheet(
+                generation: generation,
+                onSave: { newTitle in
+                    viewModel.updateTitle(newTitle, for: generation.id)
+                })
+        }
+    }
+
+    /// Fires from `.sheet`'s `onDismiss`, which only runs once dismissal has
+    /// actually completed — see `pendingAction`'s own doc comment for why
+    /// this indirection exists at all.
+    private func runPendingAction() {
+        guard let action = pendingAction else { return }
+        pendingAction = nil
+        switch action {
+        case let .rename(generation):
+            activeSheet = .rename(generation)
+        case let .listen(generation):
+            openProject(generation, listening: true)
+        case let .confirmDelete(generation):
+            deleteCandidate = generation
+        case let .setArchived(generation, isArchived):
+            // Archiving republishes `savedGenerations`, which drops this row
+            // out of `sortedGenerations` — doing that while the actions
+            // sheet was still up would reflow the List behind it.
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+                viewModel.updateArchived(isArchived, for: generation.id)
+            }
         }
     }
 
@@ -81,7 +207,7 @@ struct LibraryTabView: View {
 
             Spacer(minLength: 16)
 
-            Button { isArrangementSheetPresented = true } label: {
+            Button { activeSheet = .arrangement } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.appPrimaryText)
@@ -95,32 +221,46 @@ struct LibraryTabView: View {
         .padding(.top, 8)
     }
 
-    private var formatFilters: some View {
+    private var filterPills: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(LibraryFormatFilter.allCases) { filter in
+                ForEach(LibraryFilterPill.allPills) { pill in
+                    let isSelected = pill == selectedPill
                     Button {
-                        formatFilterRawValue = filter.rawValue
+                        select(pill)
                     } label: {
-                        Text(filter.title)
+                        Text(pill.title)
                             .font(.system(.subheadline, design: .rounded, weight: .medium))
-                            .foregroundStyle(
-                                filter == formatFilter ? Color.appBackground : Color.appPrimaryText)
+                            .foregroundStyle(isSelected ? Color.appBackground : Color.appPrimaryText)
                             .padding(.horizontal, 17)
                             .frame(height: 38)
                             .background(
-                                filter == formatFilter
-                                    ? Color.appPrimaryText
-                                    : Color.appSecondaryBackground,
+                                isSelected ? Color.appPrimaryText : Color.appSecondaryBackground,
                                 in: Capsule())
                     }
                     .buttonStyle(.pressOpacity)
-                    .accessibilityAddTraits(filter == formatFilter ? .isSelected : [])
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .padding(.horizontal, 20)
         }
-        .accessibilityLabel("Library format filters")
+        .accessibilityLabel("Library filters")
+    }
+
+    private func select(_ pill: LibraryFilterPill) {
+        switch pill {
+        case let .format(filter):
+            formatFilterRawValue = filter.rawValue
+            // Leaving a format filter chosen while Archived was selected
+            // would otherwise mean two stored values disagree about what's
+            // "selected" — resetting scope here keeps exactly one pill
+            // selected at a time.
+            archiveScopeRawValue = LibraryArchiveScope.active.rawValue
+        case .archived:
+            // Deliberately doesn't touch `formatFilterRawValue` — returning
+            // to a format pill later restores whatever was chosen before.
+            archiveScopeRawValue = LibraryArchiveScope.archived.rawValue
+        }
     }
 
     @ViewBuilder
@@ -180,59 +320,67 @@ struct LibraryTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Covers three distinct empty reasons, not one — archiving makes "every
+    /// book is hidden by the current filter" reachable in two new ways that
+    /// didn't exist before (`.all` can now be empty; Archived can be empty).
     private var filteredEmptyState: some View {
         VStack(spacing: 10) {
-            Text("No \(formatFilter.title) books")
+            Text(filteredEmptyTitle)
                 .font(AppTextStyle.body.font)
                 .foregroundStyle(Color.appPrimaryText)
-            Text("Try another format filter.")
+            Text(filteredEmptySubtitle)
                 .font(AppTextStyle.label.font)
                 .foregroundStyle(Color.appSecondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Tapping a row's own "•••" slides its content left to reveal
-    /// Edit/Delete underneath — replaced `.swipeActions` (a drag gesture)
-    /// since the ask was specifically a tap-driven reveal. `isRevealed`
-    /// lives on `revealedGenerationID` up in `LibraryTabView`, not locally
-    /// on the row, so opening one row's actions closes any other row's.
-    private func libraryRow(for generation: SavedGenerationSummary) -> some View {
-        let isRevealed = revealedGenerationID == generation.id
-        return ZStack(alignment: .trailing) {
-            LibraryRowActions(
-                title: generation.title,
-                onEdit: {},
-                onDelete: {
-                    viewModel.delete(generation)
-                    if revealedGenerationID == generation.id { revealedGenerationID = nil }
-                })
-
-            LibraryBookRow(
-                generation: generation,
-                onOpen: {
-                    // A tap anywhere on a row while a *different* row is open
-                    // closes that other row first, rather than acting on
-                    // this one immediately — matches the native swipe-row
-                    // convention this replaced.
-                    if let revealedGenerationID, revealedGenerationID != generation.id {
-                        self.revealedGenerationID = nil
-                    } else {
-                        open(generation)
-                    }
-                },
-                onToggleReveal: {
-                    revealedGenerationID = isRevealed ? nil : generation.id
-                })
-                .background(Color.appBackground)
-                .offset(x: isRevealed ? -LibraryRowActions.width : 0)
+    private var filteredEmptyTitle: String {
+        switch archiveScope {
+        case .archived:
+            return "No archived books"
+        case .active:
+            return formatFilter == .all ? "Everything is archived" : "No \(formatFilter.title) books"
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isRevealed)
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 7, leading: 20, bottom: 7, trailing: 20))
-        .accessibilityLabel(
-            "\(generation.title), \(Int((generation.readingProgress * 100).rounded())) percent read")
+    }
+
+    private var filteredEmptySubtitle: String {
+        switch archiveScope {
+        case .archived:
+            return "Books you archive are hidden here until you bring them back."
+        case .active:
+            return formatFilter == .all
+                ? "Open the Archived filter to bring a book back."
+                : "Try another format filter."
+        }
+    }
+
+    private func libraryRow(for generation: SavedGenerationSummary) -> some View {
+        LibraryBookRow(
+            generation: generation,
+            onOpen: { openProject(generation, listening: false) },
+            onMoreOptions: { activeSheet = .actions(generation) })
+            .listRowBackground(Color.appBackground)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 7, leading: 20, bottom: 7, trailing: 20))
+            // `allowsFullSwipe: false` is deliberate: Delete is declared
+            // first (the trailing edge renders its *last*-declared button
+            // leftmost, so first-declared lands rightmost, preserving the
+            // shipped Edit | Delete order) and Library's delete is
+            // unrecoverable — a full swipe must not be able to fire it.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) { deleteCandidate = generation } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                Button { activeSheet = .rename(generation) } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+                .tint(Color.tabInactiveDark.opacity(0.35))
+            }
+            .accessibilityLabel(
+                "\(generation.title), \(Int((generation.readingProgress * 100).rounded())) percent read")
     }
 
     private var sortOrderBinding: Binding<LibrarySortOrder> {
@@ -262,16 +410,20 @@ struct LibraryTabView: View {
         }
     }
 
-    private func open(_ generation: SavedGenerationSummary) {
+    private func openProject(_ generation: SavedGenerationSummary, listening: Bool) {
         guard let project = viewModel.project(for: generation.id) else { return }
-        onOpenProject(project)
+        if listening {
+            onListenToProject(project)
+        } else {
+            onOpenProject(project)
+        }
     }
 }
 
 private struct LibraryBookRow: View {
     let generation: SavedGenerationSummary
     let onOpen: () -> Void
-    let onToggleReveal: () -> Void
+    let onMoreOptions: () -> Void
 
     private var percent: Int {
         Int((generation.readingProgress * 100).rounded())
@@ -324,7 +476,7 @@ private struct LibraryBookRow: View {
         // uses — rather than nesting it inside this Button's own label,
         // where the outer Button would swallow its taps.
         .overlay(alignment: .trailing) {
-            Button(action: onToggleReveal) {
+            Button(action: onMoreOptions) {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.appTertiaryText)
@@ -334,52 +486,6 @@ private struct LibraryBookRow: View {
             .buttonStyle(.pressOpacity)
             .accessibilityLabel("More options for \(generation.title)")
         }
-    }
-}
-
-/// The Edit/Delete pair a row's "•••" slides into view. Fixed width shared
-/// with the row's own slide offset in `LibraryTabView.libraryRow(for:)`, so
-/// the two stay in sync by construction rather than two separately-tuned
-/// numbers.
-private struct LibraryRowActions: View {
-    static let width: CGFloat = 136
-
-    let title: String
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 2) {
-            actionButton(
-                systemName: "pencil", label: "Edit",
-                background: Color.tabInactiveDark.opacity(0.35), action: onEdit)
-                .accessibilityLabel("Edit \(title), coming soon")
-
-            actionButton(
-                systemName: "trash", label: "Delete",
-                background: Color.red, action: onDelete)
-                .accessibilityLabel("Delete \(title)")
-        }
-        .frame(width: Self.width, height: 74)
-        .padding(.vertical, 3)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func actionButton(
-        systemName: String, label: String, background: Color, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemName)
-                    .font(.system(size: 17, weight: .medium))
-                Text(label)
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(background)
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -427,7 +533,8 @@ private enum LibraryGenerationSectionKey: Hashable {
 #Preview {
     let app = AppEnvironment.preview()
     return NavigationStack {
-        LibraryTabView(viewModel: app.library, onOpenProject: { _ in })
+        LibraryTabView(
+            viewModel: app.library, onOpenProject: { _ in }, onListenToProject: { _ in })
     }
     .preferredColorScheme(.dark)
 }
