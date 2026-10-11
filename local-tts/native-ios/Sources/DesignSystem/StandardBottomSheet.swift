@@ -41,6 +41,16 @@ struct StandardBottomSheet<Content: View>: View {
     var theme: ReaderChromeTheme?
     var showsDragIndicator = true
     var onBack: (() -> Void)?
+    /// Opt-in subtle grain/lighting behind the flat fill — the same
+    /// `TexturedDarkBackground()` (`.neutral` variant) `AddCatalogSheet`
+    /// paints on its own bespoke chrome. Defaults to `false` so every
+    /// existing caller (Storage, Daily Goal, the catalog explainer, the
+    /// reader's three sheets) keeps its plain flat fill unchanged; only a
+    /// caller that explicitly asks gets the texture. Only meaningful when
+    /// `theme` is nil — the dark-only utility-sheet case this and
+    /// `AddCatalogSheet` both are; a reader sheet's *light* theme has no
+    /// textured equivalent to fall back to.
+    var isTextured = false
     @ViewBuilder let content: () -> Content
 
     private var background: Color { theme?.background ?? .appBackground }
@@ -49,8 +59,13 @@ struct StandardBottomSheet<Content: View>: View {
 
     var body: some View {
         ZStack {
-            background
-                .ignoresSafeArea()
+            if isTextured {
+                TexturedDarkBackground()
+                    .ignoresSafeArea()
+            } else {
+                background
+                    .ignoresSafeArea()
+            }
 
             ScrollView {
                 VStack(spacing: 24) {

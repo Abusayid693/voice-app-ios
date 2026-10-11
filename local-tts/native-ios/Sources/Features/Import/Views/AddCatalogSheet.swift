@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Hosted in `StandardBottomSheet` with `isTextured: true` — the same
+/// `TexturedDarkBackground()` grain this sheet originated on its own custom
+/// chrome, now shared with `LibraryBookActionsSheet`'s "Book Options" sheet.
+/// Adopting the shared chrome means adopting its conventions too: no
+/// persistent close button (drag-down dismisses, like every other
+/// `StandardBottomSheet`), and the shared literal-24pt serif title in place
+/// of this sheet's former bespoke 30pt EB Garamond Italic header.
 struct AddCatalogSheet: View {
     let onAdd: (String, String) -> Result<CatalogSource, CatalogSourceValidationError>
 
@@ -9,68 +16,30 @@ struct AddCatalogSheet: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ZStack(alignment: .top) {
-            TexturedDarkBackground()
-                .ignoresSafeArea()
+        StandardBottomSheet(
+            title: "Add Catalog", detents: [.height(370)], showsDragIndicator: false,
+            isTextured: true
+        ) {
+            field(title: "Name", placeholder: "My catalog", text: $name)
+            field(title: "Website", placeholder: "https://example.com", text: $address)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
 
-            VStack(alignment: .leading, spacing: 18) {
-                field(title: "Name", placeholder: "My catalog", text: $name)
-                field(title: "Website", placeholder: "https://example.com", text: $address)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(AppTextStyle.label.font)
-                        .foregroundStyle(Color.tabSelected)
-                }
-
-                Button("Add Catalog", action: addCatalog)
-                    .font(AppTextStyle.rowTitle.font)
-                    .foregroundStyle(Color.appBackground)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color.appPrimaryText, in: RoundedRectangle(cornerRadius: 16))
-                    .buttonStyle(.pressOpacity)
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(AppTextStyle.label.font)
+                    .foregroundStyle(Color.tabSelected)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 84)
 
-            header
-        }
-        .presentationBackground(.clear)
-        .presentationDetents([.height(390)])
-        .presentationDragIndicator(.visible)
-        .preferredColorScheme(.dark)
-    }
-
-    private var header: some View {
-        ZStack {
-            ProgressiveHeaderBlur()
-
-            HStack {
-                Text("Add Catalog")
-                    .font(.custom("EBGaramond-Italic", size: 30, relativeTo: .title2))
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.appPrimaryText)
-
-                Spacer()
-
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.appPrimaryText)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
+            Button("Add Catalog", action: addCatalog)
+                .font(AppTextStyle.rowTitle.font)
+                .foregroundStyle(Color.appBackground)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color.appPrimaryText, in: RoundedRectangle(cornerRadius: 16))
                 .buttonStyle(.pressOpacity)
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Close")
-            }
-            .padding(.horizontal, 16)
         }
-        .frame(height: 64, alignment: .top)
     }
 
     private func field(
