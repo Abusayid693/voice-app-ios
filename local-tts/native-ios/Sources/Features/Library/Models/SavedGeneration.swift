@@ -31,7 +31,9 @@ enum ShelfDisplayMode: String, Codable, Equatable, Hashable {
 /// in separate files and loaded only when that page is opened.
 struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
-    let title: String
+    /// Mutable so `LibraryViewModel.updateTitle` can rename a book in place —
+    /// every other identity field here stays `let`.
+    var title: String
     let engine: Engine
     var voiceName: String
     let createdAt: Date
@@ -47,6 +49,10 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
     /// PDF shelf position reserved when import begins. Missing for projects
     /// created before inline imports; those retain their legacy newest-first order.
     var shelfOrder: Int?
+    /// Hidden from Library's default pills and from My Shelf until
+    /// unarchived — not a delete, the project's files are untouched. See
+    /// `LibraryViewModel.updateArchived` and `BookShelfView.completedBooks`.
+    var isArchived: Bool = false
 
     init(
         id: UUID,
@@ -60,7 +66,8 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         lastReadChunkCount: Int = 0,
         source: SavedProjectSource = .unknown,
         shelfDisplayMode: ShelfDisplayMode = .cover,
-        shelfOrder: Int? = nil
+        shelfOrder: Int? = nil,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -74,6 +81,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
         self.shelfOrder = shelfOrder
+        self.isArchived = isArchived
     }
 
 
@@ -162,7 +170,7 @@ struct SavedGeneration: Identifiable, Codable, Equatable, Hashable {
             createdAt: createdAt, pageCount: pageCount, lastReadPageIndex: lastReadPageIndex,
             lastReadChunkIndex: lastReadChunkIndex, lastReadChunkCount: lastReadChunkCount,
             source: source,
-            shelfDisplayMode: shelfDisplayMode, shelfOrder: shelfOrder)
+            shelfDisplayMode: shelfDisplayMode, shelfOrder: shelfOrder, isArchived: isArchived)
     }
 
 }
@@ -171,7 +179,7 @@ extension SavedGeneration {
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
         case lastReadChunkIndex, lastReadChunkCount
-        case shelfDisplayMode, shelfOrder
+        case shelfDisplayMode, shelfOrder, isArchived
     }
 
     /// Existing V2 projects predate resume position and should continue at
@@ -202,6 +210,7 @@ extension SavedGeneration {
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
         shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
     }
 }
 
@@ -218,6 +227,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
     var source: SavedProjectSource = .unknown
     var shelfDisplayMode: ShelfDisplayMode = .cover
     var shelfOrder: Int?
+    var isArchived: Bool = false
 
     init(
         id: UUID,
@@ -231,7 +241,8 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         lastReadChunkCount: Int = 0,
         source: SavedProjectSource = .unknown,
         shelfDisplayMode: ShelfDisplayMode = .cover,
-        shelfOrder: Int? = nil
+        shelfOrder: Int? = nil,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -245,12 +256,13 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         self.source = source
         self.shelfDisplayMode = shelfDisplayMode
         self.shelfOrder = shelfOrder
+        self.isArchived = isArchived
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, engine, voiceName, createdAt, pageCount, lastReadPageIndex, source
         case lastReadChunkIndex, lastReadChunkCount
-        case shelfDisplayMode, shelfOrder
+        case shelfDisplayMode, shelfOrder, isArchived
     }
 
     /// Existing indexes did not record an origin. Leave those entries out of
@@ -272,6 +284,7 @@ struct SavedGenerationSummary: Identifiable, Codable, Equatable {
         shelfDisplayMode =
             try container.decodeIfPresent(ShelfDisplayMode.self, forKey: .shelfDisplayMode) ?? .cover
         shelfOrder = try container.decodeIfPresent(Int.self, forKey: .shelfOrder)
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
     }
 
     /// A continuous, perceptual thickness curve keeps short documents close

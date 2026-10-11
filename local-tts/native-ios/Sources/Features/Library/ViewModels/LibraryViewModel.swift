@@ -228,6 +228,58 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
+    /// Renames a book. Normalization mirrors
+    /// `BookShelfLayoutStore.renameShelf` (collapse whitespace, reject an
+    /// empty result) with a cap sized for a real book title rather than a
+    /// short shelf label — 120, not that method's 40.
+    @discardableResult
+    func updateTitle(_ proposedTitle: String, for projectID: UUID) -> Bool {
+        let title = String(
+            proposedTitle
+                .split(whereSeparator: \.isWhitespace)
+                .joined(separator: " ")
+                .prefix(120))
+        guard !title.isEmpty, var project = project(for: projectID) else { return false }
+        guard project.title != title else { return true }
+        project.title = title
+        guard let data = try? JSONEncoder().encode(project) else { return false }
+
+        do {
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[index] = project.summary
+                Self.persistIndex(savedGenerations)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Archiving hides a book from Library's default pills and from My
+    /// Shelf (`BookShelfView.completedBooks`) until unarchived — it never
+    /// touches the project's files, unlike `delete`. One Bool setter rather
+    /// than separate archive()/unarchive() methods, so both directions of
+    /// the Library sheet's toggle go through the same write path.
+    @discardableResult
+    func updateArchived(_ isArchived: Bool, for projectID: UUID) -> Bool {
+        guard var project = project(for: projectID) else { return false }
+        guard project.isArchived != isArchived else { return true }
+        project.isArchived = isArchived
+        guard let data = try? JSONEncoder().encode(project) else { return false }
+
+        do {
+            try data.write(to: SavedGeneration.projectFileURL(id: projectID), options: .atomic)
+            if let index = savedGenerations.firstIndex(where: { $0.id == projectID }) {
+                savedGenerations[index] = project.summary
+                Self.persistIndex(savedGenerations)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func delete(_ generation: SavedGenerationSummary) {
         savedGenerations.removeAll { $0.id == generation.id }
         Self.persistIndex(savedGenerations)

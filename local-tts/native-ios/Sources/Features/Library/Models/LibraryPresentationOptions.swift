@@ -29,6 +29,43 @@ enum LibraryFormatFilter: String, CaseIterable, Identifiable {
     }
 }
 
+/// Whether Library is showing the live collection or the archive — a
+/// separate axis from `LibraryFormatFilter`, since a book's format and
+/// whether it's archived are independent. Deliberately not a 5th
+/// `LibraryFormatFilter` case: that `includes(_:)` is a pure function of
+/// format, and an `.archived` case would force it to take a whole summary
+/// and give every other case a second, unrelated responsibility.
+enum LibraryArchiveScope: String {
+    case active
+    case archived
+}
+
+/// One pill in Library's filter row. The row is single-select, so these two
+/// independent axes collapse into this one type for rendering/selection
+/// only — neither `LibraryFormatFilter` nor `LibraryArchiveScope` is itself
+/// persisted through it.
+enum LibraryFilterPill: Hashable, Identifiable {
+    case format(LibraryFormatFilter)
+    case archived
+
+    static let allPills: [LibraryFilterPill] =
+        LibraryFormatFilter.allCases.map(Self.format) + [.archived]
+
+    var id: String {
+        switch self {
+        case let .format(filter): "format-\(filter.rawValue)"
+        case .archived: "archived"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case let .format(filter): filter.title
+        case .archived: "Archived"
+        }
+    }
+}
+
 enum LibrarySortOrder: String {
     case recent
     case alphabetical
