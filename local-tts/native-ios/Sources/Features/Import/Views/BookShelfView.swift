@@ -45,6 +45,11 @@ struct BookShelfView: View {
     /// hero to fly back down first; the now-playing screen presents
     /// immediately and the modal dismisses underneath it.
     let onListen: (SavedGenerationSummary) -> Void
+    /// This project just became unplayable — here, deleted. Same closure
+    /// seam Library uses, for the same reason: the shelf announces it and
+    /// `RootTabView`'s player decides, rather than this view subscribing to
+    /// playback state it never renders.
+    let onProjectUnavailable: (UUID) -> Void
 
     @State private var selectedBook: SavedGenerationSummary?
     // Fraction of pages completed for the currently-open book's detail
@@ -333,6 +338,9 @@ struct BookShelfView: View {
                     arrangingBook = nil
                     arrangeLiftOffset = 0
                 }
+                // Before the files go — `delete` removes the page bodies the
+                // player streams from.
+                onProjectUnavailable(book.id)
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
                     library.delete(book)
                 }
@@ -1894,6 +1902,7 @@ private struct GlassBookShelf: View {
             readingStats: app.readingStats,
             isDetailPresented: .constant(false),
             onOpenBook: { _ in },
-            onListen: { _ in })
+            onListen: { _ in },
+            onProjectUnavailable: { _ in })
     }
 }

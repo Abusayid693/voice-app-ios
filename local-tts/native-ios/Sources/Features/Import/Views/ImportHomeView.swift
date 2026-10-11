@@ -33,7 +33,10 @@ struct ImportHomeView: View {
                         project: project,
                         initialPageIndex: nil,
                         initialSurfaceMode: .audio))
-            })
+            },
+            // `app` is held as a plain `let` here, so reaching the player
+            // through it to call one method subscribes this view to nothing.
+            onProjectUnavailable: { app.player.stopIfActive(projectID: $0) })
         .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
             ShelfTopBlur().ignoresSafeArea(edges: .top)

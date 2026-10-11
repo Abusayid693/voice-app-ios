@@ -12,6 +12,11 @@ struct LibraryTabView: View {
     /// keeps `ReaderRoute`/`ReaderSurfaceMode` out of this feature's
     /// vocabulary entirely.
     let onListenToProject: (SavedGeneration) -> Void
+    /// This project just became unplayable — archived out of sight, or
+    /// deleted. A closure rather than the player itself: Library only needs
+    /// to *announce* it, and holding `BookAudioPlayer` as an `@ObservedObject`
+    /// here would re-render the whole book list on every playback publish.
+    let onProjectUnavailable: (UUID) -> Void
 
     @AppStorage("library.formatFilter") private var formatFilterRawValue = LibraryFormatFilter.all.rawValue
     @AppStorage("library.sortOrder") private var sortOrderRawValue = LibrarySortOrder.recent.rawValue
@@ -128,6 +133,10 @@ struct LibraryTabView: View {
             Button("Delete Book", role: .destructive) {
                 guard let generation = deleteCandidate else { return }
                 deleteCandidate = nil
+                // Before the files go — `delete` removes the page bodies the
+                // player streams from, so a session left running on this
+                // book would read from a directory that no longer exists.
+                onProjectUnavailable(generation.id)
                 withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
                     viewModel.delete(generation)
                 }
@@ -189,6 +198,11 @@ struct LibraryTabView: View {
         case let .confirmDelete(generation):
             deleteCandidate = generation
         case let .setArchived(generation, isArchived):
+            // Only on the way *in*: a book you've just put out of sight
+            // shouldn't keep playing in the mini player, where tapping it
+            // would open a reader for something Library and My Shelf both
+            // now hide. Unarchiving breaks nothing, so it stops nothing.
+            if isArchived { onProjectUnavailable(generation.id) }
             // Archiving republishes `savedGenerations`, which drops this row
             // out of `sortedGenerations` — doing that while the actions
             // sheet was still up would reflow the List behind it.
@@ -534,7 +548,8 @@ private enum LibraryGenerationSectionKey: Hashable {
     let app = AppEnvironment.preview()
     return NavigationStack {
         LibraryTabView(
-            viewModel: app.library, onOpenProject: { _ in }, onListenToProject: { _ in })
+            viewModel: app.library, onOpenProject: { _ in }, onListenToProject: { _ in },
+            onProjectUnavailable: { _ in })
     }
     .preferredColorScheme(.dark)
 }
