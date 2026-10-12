@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Fixed dark palette for the Import screen and its sheets (matches the
-/// supplied mockup) — not theme-adaptive, used deliberately regardless of
-/// system light/dark mode.
+/// Fixed dark app palette — not theme-adaptive, used deliberately regardless
+/// of the system light/dark mode.
 extension Color {
-    static let appBackground = Color(hex: 0x0A0B0F)
-    static let appSecondaryBackground = Color(hex: 0x14161E)
-    static let appPrimaryText = Color(hex: 0xEEEEEE)
-    static let appSecondaryText = Color(hex: 0x949599)
-    static let appTertiaryText = Color(hex: 0x6E6E6E)
+    static let appBackground = Color(hex: 0x161618)
+    static let appSecondaryBackground = Color(hex: 0x232427)
+    static let appTertiaryBackground = Color(hex: 0x404144)
+
+    static let appPrimaryText = Color(hex: 0xD1D3D6)
+    static let appSecondaryText = Color(hex: 0x989CA4)
+    static let appTertiaryText = Color(hex: 0x969AA2)
     // Deliberately its own value, not derived from appTertiaryText — the
     // finest metadata tier (timestamps, file sizes) reads as its own
     // color, not just a dimmer tertiary.
@@ -151,7 +152,7 @@ struct TexturedDarkBackground: View {
     /// page's actual background *is* `appBackground`, not two opaque layers
     /// painted over it; the composited result previously crushed to
     /// near-black (~0x010101) well before reaching `appBackground`'s own
-    /// 0x0A0B0F, which the gradient+flatten pair never let show through.
+    /// 0x161618, which the gradient+flatten pair never let show through.
     private var skipsSharedGradient: Bool {
         if case .topGlow = variant { return true }
         return false

@@ -1,13 +1,16 @@
 import SwiftUI
 
-/// Opened from the actions sheet's Edit row (or directly from a row's swipe
-/// Edit button) to rename a book. Styled after `AddCatalogSheet`'s own
-/// text-field treatment — the app's only other styled `TextField`.
+/// Opened from either a Library row's swipe Edit action or Book Options.
+/// Its back control dismisses this sheet; `LibraryTabView` then reopens Book
+/// Options from the shared post-dismissal queue so two sheets never compete
+/// for presentation in the same frame.
 struct LibraryRenameBookSheet: View {
     let generation: SavedGenerationSummary
     let onSave: (String) -> Void
+    let onBack: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
@@ -18,9 +21,14 @@ struct LibraryRenameBookSheet: View {
     /// safe; this cap exists only to stop a pathological paste.
     private static let maxLength = 120
 
-    init(generation: SavedGenerationSummary, onSave: @escaping (String) -> Void) {
+    init(
+        generation: SavedGenerationSummary,
+        onSave: @escaping (String) -> Void,
+        onBack: @escaping () -> Void
+    ) {
         self.generation = generation
         self.onSave = onSave
+        self.onBack = onBack
         // Seeded here, not in `.onAppear` — seeding on appear races the
         // first render and can flash an empty field.
         _draft = State(initialValue: generation.title)
@@ -38,7 +46,14 @@ struct LibraryRenameBookSheet: View {
     }
 
     var body: some View {
-        StandardBottomSheet(title: "Rename Book", detents: [.height(330)]) {
+        StandardBottomSheet(
+            title: "Rename Book",
+            detents: [.height(330)],
+            onBack: {
+                onBack()
+                dismiss()
+            }
+        ) {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 7) {
                     Text("Title")
@@ -86,6 +101,7 @@ struct LibraryRenameBookSheet: View {
                 generation: SavedGenerationSummary(
                     id: UUID(), title: "The Great Gatsby", engine: .kokoroAne,
                     voiceName: "af_heart", createdAt: Date(), pageCount: 214),
-                onSave: { _ in })
+                onSave: { _ in },
+                onBack: {})
         }
 }

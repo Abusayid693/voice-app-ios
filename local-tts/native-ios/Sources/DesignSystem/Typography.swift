@@ -1,5 +1,21 @@
 import SwiftUI
 
+/// The app's bundled editorial serif. Keep the PostScript names here rather
+/// than scattering string literals through feature views, so replacing or
+/// extending the family remains a DesignSystem concern.
+enum AppEditorialFont {
+    static let regularName = "AveriaSerifLibre-Regular"
+    static let italicName = "AveriaSerifLibre-Italic"
+
+    static func regular(size: CGFloat, relativeTo textStyle: Font.TextStyle) -> Font {
+        .custom(regularName, size: size, relativeTo: textStyle)
+    }
+
+    static func italic(size: CGFloat, relativeTo textStyle: Font.TextStyle) -> Font {
+        .custom(italicName, size: size, relativeTo: textStyle)
+    }
+}
+
 /// Persistable reading-size choices used by long-form reader surfaces.
 /// Medium preserves the app's original 17-point reading size.
 enum ReaderFontSize: String, CaseIterable, Identifiable {

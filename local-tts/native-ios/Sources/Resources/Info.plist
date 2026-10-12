@@ -24,8 +24,8 @@
 	<string>1</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>EBGaramond-Italic.ttf</string>
-		<string>EBGaramond-Regular.ttf</string>
+		<string>AveriaSerifLibre-Italic.ttf</string>
+		<string>AveriaSerifLibre-Regular.ttf</string>
 		<string>Inter-Variable.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>

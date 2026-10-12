@@ -331,7 +331,7 @@ private struct JourneyCaption: View {
     var body: some View {
         VStack(spacing: 7) {
             Text(step.title)
-                .font(.custom("EBGaramond-Regular", size: 30, relativeTo: .title))
+                .font(AppEditorialFont.regular(size: 30, relativeTo: .title))
                 .foregroundStyle(Color.appPrimaryText)
 
             Text(step.description)

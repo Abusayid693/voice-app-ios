@@ -6,7 +6,7 @@ import SwiftUI
 /// Adopting the shared chrome means adopting its conventions too: no
 /// persistent close button (drag-down dismisses, like every other
 /// `StandardBottomSheet`), and the shared literal-24pt serif title in place
-/// of this sheet's former bespoke 30pt EB Garamond Italic header.
+/// of this sheet's former bespoke 30pt editorial italic header.
 struct AddCatalogSheet: View {
     let onAdd: (String, String) -> Result<CatalogSource, CatalogSourceValidationError>
 

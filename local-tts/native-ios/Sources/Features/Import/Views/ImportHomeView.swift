@@ -76,16 +76,11 @@ struct ImportHomeView: View {
 
     private var addBooksButton: some View {
         Button(action: onAddBooks) {
-            Text("+")
-                .font(.custom("EBGaramond-Italic", size: 32, relativeTo: .title))
-                .fontWeight(.medium)
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(Color.white)
-                // EB Garamond's ascender metrics leave the visible plus low
-                // inside a square frame; compensate optically without moving
-                // the button's hit target or glass surface.
-                .offset(y: -3)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+                .frame(width: 66, height: 39)
+                .contentShape(Capsule())
         }
         .buttonStyle(.pressOpacity)
         .modifier(ShelfAddBooksSurface())
@@ -98,7 +93,8 @@ struct ImportHomeView: View {
 private struct ShelfAddBooksSurface: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(Color.tabSelected, in: Circle())
+            .background(Color.tabSelected, in: Capsule())
+            .shadow(color: Color.tabSelected.opacity(0.24), radius: 7, y: 5)
     }
 }
 

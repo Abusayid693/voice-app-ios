@@ -167,7 +167,7 @@ struct ReadingStatsView: View {
     private var monthsGraphSection: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Last 6 months")
-                .font(.custom("EBGaramond-Regular", size: 20, relativeTo: .title3))
+                .font(AppEditorialFont.regular(size: 20, relativeTo: .title3))
                 .foregroundStyle(Color.appPrimaryText)
 
             if viewModel.days.isEmpty {

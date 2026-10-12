@@ -59,7 +59,7 @@ struct CatalogBrowserView: View {
                     }
 
                     Text(viewModel.source.name)
-                        .font(.custom("EBGaramond-Italic", size: 28, relativeTo: .title2))
+                        .font(AppEditorialFont.italic(size: 28, relativeTo: .title2))
                         .fontWeight(.medium)
                         .foregroundStyle(Color.appPrimaryText)
                         .lineLimit(1)
