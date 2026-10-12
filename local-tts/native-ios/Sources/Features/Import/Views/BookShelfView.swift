@@ -93,8 +93,7 @@ struct BookShelfView: View {
     @State private var frozenDragRows: [[ShelfEntry]]?
     @State private var isSettlingDrag = false
     @State private var longPressDragID: UUID?
-    @State private var editingShelfIndex: Int?
-    @State private var shelfTitleDraft = ""
+    @State private var renameShelfRequest: ShelfRenameRequest?
     @Environment(\.scenePhase) private var scenePhase
     private let arrangeLiftDistance: CGFloat = 18
     /// Height of `ImportHomeView`'s floating header controls (4pt top pad +
@@ -307,16 +306,10 @@ struct BookShelfView: View {
         } message: {
             Text(shelfLayout.errorMessage ?? "")
         }
-        .alert("Rename Shelf", isPresented: Binding(
-            get: { editingShelfIndex != nil },
-            set: { if !$0 { editingShelfIndex = nil } })
-        ) {
-            TextField("Shelf name", text: $shelfTitleDraft)
-            Button("Cancel", role: .cancel) { editingShelfIndex = nil }
-            Button("Save") { saveShelfTitle() }
-                .disabled(normalizedShelfTitle.isEmpty)
-        } message: {
-            Text("Choose a name for this shelf.")
+        .sheet(item: $renameShelfRequest) { request in
+            RenameShelfSheet(initialTitle: request.title) { title in
+                _ = shelfLayout.renameShelf(at: request.index, to: title)
+            }
         }
         .confirmationDialog(
             "Delete “\(deleteCandidate?.title ?? "")”?",
@@ -370,7 +363,7 @@ struct BookShelfView: View {
 
             VStack(spacing: 3) {
                 Text("My Shelf")
-                    .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
+                    .font(AppEditorialFont.italic(size: 36, relativeTo: .title))
                     .fontWeight(.medium)
                     .foregroundStyle(BookShelfPalette.primaryText)
                     .accessibilityAddTraits(.isHeader)
@@ -438,21 +431,11 @@ struct BookShelfView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var normalizedShelfTitle: String {
-        shelfTitleDraft.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    }
-
     private func beginRenamingShelf(_ shelf: Int) {
         guard selectedBook == nil, arrangingBook == nil else { return }
-        shelfTitleDraft = shelfLayout.title(for: shelf)
-        editingShelfIndex = shelf
-    }
-
-    private func saveShelfTitle() {
-        guard let shelf = editingShelfIndex else { return }
-        let title = normalizedShelfTitle
-        editingShelfIndex = nil
-        _ = shelfLayout.renameShelf(at: shelf, to: title)
+        renameShelfRequest = ShelfRenameRequest(
+            index: shelf,
+            title: shelfLayout.title(for: shelf))
     }
 
     // Lift, spine turn, and travel share a spring; the card expands after arrival.
@@ -945,6 +928,13 @@ private struct ShelfHeaderBackdrop: View {
     }
 }
 
+private struct ShelfRenameRequest: Identifiable {
+    let index: Int
+    let title: String
+
+    var id: Int { index }
+}
+
 private struct ShelfEntry: Identifiable {
     let saved: SavedGenerationSummary?
     let importing: PDFImportShelfItem?
@@ -1021,11 +1011,11 @@ private struct BookShelfRow: View {
             Button(action: onRenameShelf) {
                 Text(shelfTitle)
                     .lineLimit(1)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(BookShelfPalette.secondaryText)
-                .padding(.horizontal, 8)
-                .frame(minHeight: 30)
-                .contentShape(Rectangle())
+                    .font(.system(.caption, design: .serif, weight: .semibold))
+                    .foregroundStyle(BookShelfPalette.secondaryText)
+                    .padding(.horizontal, 8)
+                    .frame(minHeight: 30)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(arrangingBookID != nil)

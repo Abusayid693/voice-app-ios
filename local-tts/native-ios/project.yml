@@ -118,11 +118,11 @@ targets:
         # next generate. Settings > About reads this back via
         # Bundle.main.infoDictionary.
         CFBundleShortVersionString: "0.1.0"
-        # Bundled reading-surface fonts: EB Garamond styles the Shelf title,
+        # Bundled reading-surface fonts: Averia Serif Libre styles editorial UI,
         # while Inter styles book names in the expanded detail card.
         UIAppFonts:
-          - EBGaramond-Italic.ttf
-          - EBGaramond-Regular.ttf
+          - AveriaSerifLibre-Italic.ttf
+          - AveriaSerifLibre-Regular.ttf
           - Inter-Variable.ttf
     settings:
       base:

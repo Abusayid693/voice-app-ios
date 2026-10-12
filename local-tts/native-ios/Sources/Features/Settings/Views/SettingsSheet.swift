@@ -24,7 +24,7 @@ struct SettingsSheet: View {
                     }
 
                     Text("Make it yours")
-                        .font(.custom("EBGaramond-Regular", size: 52, relativeTo: .largeTitle))
+                        .font(AppEditorialFont.regular(size: 36, relativeTo: .largeTitle))
                         .foregroundStyle(Color.appPrimaryText)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .multilineTextAlignment(.center)

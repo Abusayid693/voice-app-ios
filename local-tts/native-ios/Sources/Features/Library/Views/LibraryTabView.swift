@@ -29,11 +29,10 @@ struct LibraryTabView: View {
     /// are both classic silent-no-present failures in SwiftUI.
     @State private var activeSheet: LibrarySheet?
     /// What to do once `activeSheet` has actually finished dismissing —
-    /// Rename/Listen/Delete all need the actions sheet fully gone first
-    /// (pushing a reader or raising a dialog while a sheet is still
-    /// animating out puts it underneath). Consumed and nil'd in
-    /// `runPendingAction()` *before* acting, so a cancelled re-entry can't
-    /// replay it.
+    /// routes, dialogs, and replacement sheets all need the current sheet
+    /// fully gone first or SwiftUI can silently drop the next presentation.
+    /// Consumed and nil'd in `runPendingAction()` *before* acting, so a
+    /// cancelled re-entry can't replay it.
     @State private var pendingAction: PendingLibraryAction?
     @State private var deleteCandidate: SavedGenerationSummary?
 
@@ -52,8 +51,9 @@ struct LibraryTabView: View {
     }
 
     private enum PendingLibraryAction {
-        case rename(SavedGenerationSummary)
         case listen(SavedGenerationSummary)
+        case rename(SavedGenerationSummary)
+        case showActions(SavedGenerationSummary)
         case confirmDelete(SavedGenerationSummary)
         case setArchived(SavedGenerationSummary, Bool)
     }
@@ -180,6 +180,9 @@ struct LibraryTabView: View {
                 generation: generation,
                 onSave: { newTitle in
                     viewModel.updateTitle(newTitle, for: generation.id)
+                },
+                onBack: {
+                    pendingAction = .showActions(generation)
                 })
         }
     }
@@ -191,10 +194,12 @@ struct LibraryTabView: View {
         guard let action = pendingAction else { return }
         pendingAction = nil
         switch action {
-        case let .rename(generation):
-            activeSheet = .rename(generation)
         case let .listen(generation):
             openProject(generation, listening: true)
+        case let .rename(generation):
+            activeSheet = .rename(generation)
+        case let .showActions(generation):
+            activeSheet = .actions(generation)
         case let .confirmDelete(generation):
             deleteCandidate = generation
         case let .setArchived(generation, isArchived):
@@ -215,7 +220,7 @@ struct LibraryTabView: View {
     private var header: some View {
         HStack(alignment: .center) {
             Text("Library")
-                .font(.custom("EBGaramond-Regular", size: 38, relativeTo: .largeTitle))
+                .font(AppEditorialFont.regular(size: 36, relativeTo: .largeTitle))
                 .foregroundStyle(Color.appPrimaryText)
                 .accessibilityAddTraits(.isHeader)
 

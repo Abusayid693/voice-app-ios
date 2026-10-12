@@ -73,8 +73,7 @@ struct VoiceSettingsSheet: View {
 
             HStack {
                 Text("Voice Library")
-                    .font(.custom("EBGaramond-Italic", size: 36, relativeTo: .title))
-                    .fontWeight(.medium)
+                    .font(AppEditorialFont.regular(size: 36, relativeTo: .title))
                     .foregroundStyle(Color.appPrimaryText)
                     .accessibilityAddTraits(.isHeader)
 

@@ -31,15 +31,15 @@ struct ToolsView: View {
                     header
 
                     toolGridSection("Create & Import", onTapHeader: showCatalogExplanation) {
-                        ToolGridCard(icon: .pencil, title: "Write a Text") {
+                        ToolGridCard(icon: .pencil, title: "Write text") {
                             isWriteTextPresented = true
                         }
 
-                        ToolGridCard(icon: .upload, title: "Upload File", onTap: onAddBooks)
+                        ToolGridCard(icon: .upload, title: "Add file", onTap: onAddBooks)
 
                         ToolGridCard(icon: .link, title: "Share Link", isEnabled: false) {}
 
-                        ToolGridCard(icon: .image, title: "Upload Image", isEnabled: false) {}
+                        ToolGridCard(icon: .image, title: "Add Image", isEnabled: false) {}
                     }
 
                     catalogSection
@@ -93,14 +93,14 @@ struct ToolsView: View {
 
     private var header: some View {
         Text("Tools")
-            .font(.custom("EBGaramond-Regular", size: 38, relativeTo: .largeTitle))
+            .font(AppEditorialFont.regular(size: 36, relativeTo: .largeTitle))
             .foregroundStyle(Color.appPrimaryText)
             .accessibilityAddTraits(.isHeader)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Two-column grid of `ToolGridCard`s — Write a Text, Upload File, and
-    /// the "Coming Soon" actions (Share Link, Upload Image) folded into one
+    /// Two-column grid of `ToolGridCard`s — Write text, Add file, and
+    /// the "Coming Soon" actions (Share Link, Add Image) folded into one
     /// section rather than two, matching a picked reference screenshot's
     /// own category-tile layout (icon-tile-plus-label cards in a grid) over
     /// this app's own colors — the reference's book-cover collages are
@@ -235,7 +235,7 @@ struct ToolsView: View {
     }
 }
 
-/// One "Create & Import" grid cell: a square icon tile beside a 2-line
+/// One "Create & Import" grid cell: a square icon tile beside a single-line
 /// label, inside an outlined (not solid-filled) rounded card — the shape
 /// the reference screenshot's own category tiles use, kept to this app's
 /// `appBackground`/`appSecondaryBackground`/`appPrimaryText` palette rather
@@ -247,9 +247,9 @@ private struct ToolGridCard: View {
     let onTap: () -> Void
 
     // A 2-column grid leaves roughly 170-190pt per card — the tile has to
-    // stay small enough that the label still gets real width to wrap at
-    // word boundaries. The first pass used 92pt here, which left ~50pt for
-    // text and forced mid-word breaks ("Writ" / "e a…").
+    // stay small enough that the label retains enough width for one line.
+    // The first pass used 92pt here, which left ~50pt for text and forced
+    // mid-word breaks ("Writ" / "e a…").
     private let tileSize: CGFloat = 56
 
     var body: some View {
@@ -260,7 +260,8 @@ private struct ToolGridCard: View {
                 Text(title)
                     .font(.system(size: 15, weight: .medium, design: .rounded))
                     .foregroundStyle(Color.appPrimaryText)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                     .multilineTextAlignment(.leading)
 
                 Spacer(minLength: 0)

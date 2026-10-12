@@ -23,7 +23,7 @@ struct SignatureText: View {
         _ text: String,
         isRevealed: Bool,
         color: Color,
-        fontName: String = "EBGaramond-Italic",
+        fontName: String = AppEditorialFont.italicName,
         fontSize: CGFloat = 36,
         fontWeight: UIFont.Weight = .medium,
         duration: TimeInterval = 1.15,
