@@ -1,6 +1,8 @@
-# voice-app-ios
+# Listen-here-ios
 
-A native iOS app for on-device text-to-speech, built on [FluidAudio](https://github.com/FluidInference/FluidAudio)'s Swift SDK. Everything runs locally on-device — no server round-trip for synthesis.
+**A free, open-source alternative to paid reading apps like Speechify and ElevenLabs, running entirely on your iPhone.**
+
+Import a PDF or EPUB and press play: a natural-sounding voice reads it to you and each word lights up as it's spoken. Everything runs on-device on the Apple Neural Engine, so no text leaves your phone, there's no account, and it works in airplane mode.
 
 ## Screenshots
 
@@ -10,12 +12,19 @@ A native iOS app for on-device text-to-speech, built on [FluidAudio](https://git
 
 <p align="center"><sub>Lock Screen · Library · <b>My Shelf</b> · Read Along · Reading Stats</sub></p>
 
-## What it does
+## Why not Speechify or ElevenLabs?
 
-- **Two on-device TTS engines**: Kokoro-ANE (28 English voices, CoreML, runs on the Neural Engine) and Pocket TTS (26 voices, flow-matching + neural codec, streaming synthesis).
-- **Voice cloning**: record (or import) a short sample of your own voice and get a reusable, on-device cloned voice back — no cloud processing.
-- **Consumer-facing import flow**: write text (paste-a-link/upload-a-file/scan-text are UI-only for now), pick a voice, generate and listen — with chunked playback for long text and streaming playback for Pocket TTS.
-- **Voice previews**: browse every available voice with a short spoken sample before picking one.
+They're great apps, but they're paid subscriptions, they need an account, and they send your text to their servers to generate speech. This app takes a different approach:
+
+| | **voice-app-ios** | Typical paid TTS reader |
+|---|---|---|
+| Price | Free, forever | Monthly subscription |
+| Where speech is generated | On your iPhone | In the cloud |
+| Your books leave your device | Never | Uploaded for processing |
+| Works offline | ✅ | Limited or no |
+| Account required | No | Yes |
+| Listening limits | None | Often capped by plan |
+| Source code | Open (MIT) | Closed |
 
 ## Project structure
 
